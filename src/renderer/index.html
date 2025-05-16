@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'"
+  />
+  <meta
+    http-equiv="X-Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'"
+  />
+  <link rel="stylesheet" href="./css/styles.css">
+  <title>Junior - LinkedIn Automation</title>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo-container">
+        <img src="../../assets/icons/icon.svg" alt="Junior Logo" class="logo">
+      </div>
+      <nav class="main-nav">
+        <ul>
+          <li><a href="#" data-view="dashboard" class="active">Dashboard</a></li>
+          <li><a href="#" data-view="automation">Automation</a></li>
+          <li><a href="#" data-view="comments">Comments</a></li>
+          <li><a href="#" data-view="profile">Profile</a></li>
+          <li><a href="#" data-view="settings">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="user-menu">
+        <div class="user-profile">
+          <span class="user-name">Guest</span>
+          <div class="avatar-placeholder"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <!-- View containers -->
+      <section id="login-view" class="view">
+        <div class="auth-container">
+          <h2>Login to Junior</h2>
+          <form id="login-form" class="auth-form">
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Login</button>
+              <a href="#" id="show-register">Need an account? Register</a>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="register-view" class="view hidden">
+        <div class="auth-container">
+          <h2>Create an Account</h2>
+          <form id="register-form" class="auth-form">
+            <div class="form-group">
+              <label for="reg-email">Email</label>
+              <input type="email" id="reg-email" name="email" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Password</label>
+              <input type="password" id="reg-password" name="password" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-confirm-password">Confirm Password</label>
+              <input type="password" id="reg-confirm-password" name="confirmPassword" required>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Register</button>
+              <a href="#" id="show-login">Already have an account? Login</a>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="dashboard-view" class="view hidden">
+        <h2>Dashboard</h2>
+        <div class="dashboard-stats">
+          <div class="stat-card">
+            <h3>Comments Generated</h3>
+            <p class="stat-value" id="comments-count">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Subscription Status</h3>
+            <p class="stat-value" id="subscription-status">Inactive</p>
+          </div>
+        </div>
+        <div class="recent-activity">
+          <h3>Recent Activity</h3>
+          <div id="activity-list" class="activity-list">
+            <p class="empty-state">No recent activity</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="automation-view" class="view hidden">
+        <h2>LinkedIn Automation</h2>
+        <div class="automation-controls">
+          <div class="form-group">
+            <label for="post-url">LinkedIn Post URL</label>
+            <input type="url" id="post-url" name="postUrl" placeholder="https://www.linkedin.com/feed/update/...">
+          </div>
+          <button id="start-automation" class="btn btn-primary">Start Automation</button>
+          <button id="stop-automation" class="btn btn-danger" disabled>Stop Automation</button>
+        </div>
+        <div class="automation-status">
+          <h3>Status</h3>
+          <p id="automation-status-text">Ready to start</p>
+        </div>
+        <div class="automation-log">
+          <h3>Activity Log</h3>
+          <div id="log-container" class="log-container"></div>
+        </div>
+      </section>
+
+      <section id="comments-view" class="view hidden">
+        <h2>Generated Comments</h2>
+        <div class="comment-tools">
+          <button id="generate-comment" class="btn btn-primary">Generate New Comment</button>
+        </div>
+        <div id="comments-list" class="comments-list">
+          <p class="empty-state">No comments generated yet</p>
+        </div>
+      </section>
+
+      <section id="profile-view" class="view hidden">
+        <h2>Professional Profile</h2>
+        <div class="profile-form-container">
+          <form id="profile-form">
+            <div class="form-group">
+              <label for="profile-url">LinkedIn Profile URL</label>
+              <input type="url" id="profile-url" name="profileUrl" placeholder="https://www.linkedin.com/in/your-profile">
+            </div>
+            <div class="form-group">
+              <label for="bio">Professional Bio</label>
+              <textarea id="bio" name="bio" rows="5" placeholder="Write a brief professional bio"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Resume</label>
+              <div class="resume-upload">
+                <input type="file" id="resume-file" name="resumeFile" accept=".pdf,.doc,.docx">
+                <button type="button" id="upload-resume" class="btn btn-secondary">Upload Resume</button>
+              </div>
+              <div id="resume-list" class="resume-list"></div>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Profile</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="settings-view" class="view hidden">
+        <h2>Settings</h2>
+        <div class="settings-container">
+          <div class="settings-group">
+            <h3>Subscription</h3>
+            <div id="subscription-info"></div>
+            <button id="manage-subscription" class="btn btn-primary">Manage Subscription</button>
+          </div>
+          <div class="settings-group">
+            <h3>Comment Prompts</h3>
+            <div id="prompts-container">
+              <p class="empty-state">No custom prompts created</p>
+            </div>
+            <button id="add-prompt" class="btn btn-secondary">Add Custom Prompt</button>
+          </div>
+          <div class="settings-group">
+            <h3>Account</h3>
+            <button id="logout" class="btn btn-danger">Logout</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal components -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal Title</h3>
+        <button id="modal-close" class="modal-close">&times;</button>
+      </div>
+      <div id="modal-content" class="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="./js/app.js" type="module"></script>
+</body>
+</html>

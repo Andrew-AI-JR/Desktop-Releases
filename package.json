@@ -1,0 +1,27 @@
+{
+  "name": "junior-desktop",
+  "version": "1.0.0",
+  "description": "The desktop app for Junior",
+  "license": "ISC",
+  "author": "Robert Hall",
+  "type": "commonjs",
+  "main": "./src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "electron-store": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "puppeteer-core": "^22.0.0"
+  },
+  "devDependencies": {
+    "electron": "^36.2.1",
+    "electron-builder": "^24.9.1",
+    "electron-reloader": "^1.2.3",
+    "eslint": "^8.56.0"
+  }
+}

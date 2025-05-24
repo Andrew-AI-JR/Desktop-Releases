@@ -17,6 +17,11 @@ const profileService = {
         "Get profile error:",
         error.response?.data || error.message
       );
+      console.log("Get profile req:", {
+        headers: error.request?.headers,
+        data: error.request?.data,
+        url: error.request?.url,
+      });
       throw {
         message: error.response?.data?.detail || "Failed to get profile",
         status: error.response?.status || 500,

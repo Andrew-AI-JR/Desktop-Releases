@@ -1,6 +1,3 @@
-/**
- * Handles comment generation functionality in the UI
- */
 export class CommentController {
   constructor(viewManager, modalManager) {
     this.viewManager = viewManager;
@@ -21,15 +18,14 @@ export class CommentController {
    * Set up event listeners for comment-related elements
    */
   setupEventListeners() {
-    this.generateCommentButton.addEventListener(
-      "click",
-      this.showGenerateCommentModal.bind(this)
-    );
-
+    // this.generateCommentButton.addEventListener(
+    //   "click",
+    //   this.showGenerateCommentModal.bind(this)
+    // );
     // Listen for user login event to load comments
-    document.addEventListener("user:loggedin", () => {
-      this.loadComments();
-    });
+    // document.addEventListener("user:loggedin", () => {
+    //   this.loadComments();
+    // });
   }
 
   /**

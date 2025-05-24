@@ -1,6 +1,3 @@
-/**
- * Handles authentication-related functionality in the UI
- */
 export class AuthController {
   constructor(viewManager, modalManager) {
     this.viewManager = viewManager;

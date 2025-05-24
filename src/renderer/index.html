@@ -25,7 +25,6 @@
         <ul>
           <li><a href="#" data-view="dashboard" class="active">Dashboard</a></li>
           <li><a href="#" data-view="automation">Automation</a></li>
-          <li><a href="#" data-view="comments">Comments</a></li>
           <li><a href="#" data-view="profile">Profile</a></li>
           <li><a href="#" data-view="settings">Settings</a></li>
         </ul>
@@ -105,32 +104,23 @@
       </section>
 
       <section id="automation-view" class="view hidden">
-        <h2>LinkedIn Automation</h2>
-        <div class="automation-controls">
-          <div class="form-group">
-            <label for="post-url">LinkedIn Post URL</label>
-            <input type="url" id="post-url" name="postUrl" placeholder="https://www.linkedin.com/feed/update/...">
+        <div class="automation-container">
+          <div class="automation-header">
+            <h2>LinkedIn Automation</h2>
+            <div class="status-bar">
+              <span id="automation-status-text">Ready to start</span>
+            </div>
           </div>
-          <button id="start-automation" class="btn btn-primary">Start Automation</button>
-          <button id="stop-automation" class="btn btn-danger" disabled>Stop Automation</button>
-        </div>
-        <div class="automation-status">
-          <h3>Status</h3>
-          <p id="automation-status-text">Ready to start</p>
-        </div>
-        <div class="automation-log">
-          <h3>Activity Log</h3>
-          <div id="log-container" class="log-container"></div>
-        </div>
-      </section>
-
-      <section id="comments-view" class="view hidden">
-        <h2>Generated Comments</h2>
-        <div class="comment-tools">
-          <button id="generate-comment" class="btn btn-primary">Generate New Comment</button>
-        </div>
-        <div id="comments-list" class="comments-list">
-          <p class="empty-state">No comments generated yet</p>
+          
+          <div class="automation-actions">
+            <button id="start-automation" class="btn btn-primary">Start Automation</button>
+            <button id="stop-automation" class="btn btn-danger" disabled>Stop Automation</button>
+          </div>
+          
+          <div class="automation-log">
+            <h3>Activity Log</h3>
+            <div id="log-container" class="log-container"></div>
+          </div>
         </div>
       </section>
 

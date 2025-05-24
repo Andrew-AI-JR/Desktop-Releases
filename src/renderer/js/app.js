@@ -48,7 +48,7 @@ class App {
    */
   setupNavigation() {
     const navLinks = document.querySelectorAll(".main-nav a");
-
+    console.log("Setting up navigation links:", navLinks);
     navLinks.forEach((link) => {
       link.addEventListener("click", (event) => {
         event.preventDefault();

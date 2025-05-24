@@ -1,6 +1,3 @@
-/**
- * Handles settings-related functionality in the UI
- */
 export class SettingsController {
   constructor(viewManager, modalManager) {
     this.viewManager = viewManager;

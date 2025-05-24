@@ -1,0 +1,32 @@
+{
+  "linkedin": {
+    "email": "",
+    "password": "",
+    "search_urls": [
+      "https://www.linkedin.com/search/results/content/?keywords=hiring&origin=GLOBAL_SEARCH_HEADER&sortBy=recency",
+      "https://www.linkedin.com/search/results/content/?keywords=job%20opening&origin=GLOBAL_SEARCH_HEADER&sortBy=recency"
+    ],
+    "max_posts_per_url": 20
+  },
+  "ai": {
+    "use_local_model": true,
+    "local_model_name": "llama2",
+    "api_key": "",
+    "api_url": "https://api.openai.com/v1/chat/completions"
+  },
+  "browser": {
+    "headless": false,
+    "user_data_dir": "chrome_profile"
+  },
+  "automation": {
+    "max_comments_per_run": 10,
+    "max_comments_per_day": 30,
+    "min_delay_between_comments": 30,
+    "max_delay_between_comments": 90,
+    "run_during_hours": [0, 1, 2, 3, 4, 5],
+    "timezone": "America/New_York",
+    "scroll_count": 3,
+    "post_types_to_comment": [1, 2, 4],
+    "user_bio": "Experienced professional with expertise in my field. Looking to connect with other professionals and explore new opportunities."
+  }
+} 

@@ -1,9 +1,10 @@
 const axios = require("axios");
 const tokenManager = require("../auth/tokenManager");
+require("dotenv").config();
 
 // Create base axios instance
 const apiClient = axios.create({
-  baseURL: process.env.API_URL || "https://api.junior.app", // Replace with your actual API URL
+  baseURL: process.env.API_URL, // TODO: Is there a default we need?
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -11,7 +12,6 @@ const apiClient = axios.create({
   },
 });
 
-// Add request interceptor to add auth token
 apiClient.interceptors.request.use(
   async (config) => {
     // Check if we need to refresh the token

@@ -36,6 +36,13 @@ const authService = {
    */
   async register(userData) {
     try {
+      console.log(
+        "Attempting to register at ",
+        apiClient.defaults.baseURL,
+        "path",
+        "/api/users/register"
+      );
+      console.log("User data:", userData);
       const response = await apiClient.post("/api/users/register", userData);
       return response.data;
     } catch (error) {

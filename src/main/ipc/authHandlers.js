@@ -32,7 +32,7 @@ module.exports = {
     try {
       return await authService.register(userData);
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("[authHandler] Registration error:", error);
       throw {
         message: error.message || "Registration failed",
         status: error.status || 500,

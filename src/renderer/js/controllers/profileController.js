@@ -1,6 +1,3 @@
-/**
- * Handles professional profile functionality in the UI
- */
 export class ProfileController {
   constructor(viewManager, modalManager) {
     this.viewManager = viewManager;

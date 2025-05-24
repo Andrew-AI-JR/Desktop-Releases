@@ -18,7 +18,7 @@ export class ViewManager {
     }
 
     const targetView = document.getElementById(viewId);
-
+    console.log("showView: ", viewId, targetView);
     if (!targetView) {
       console.error(`View not found: ${viewId}`);
       return null;

@@ -1,6 +1,3 @@
-/**
- * Handles automation-related functionality in the UI
- */
 export class AutomationController {
   constructor(viewManager, modalManager) {
     this.viewManager = viewManager;

@@ -2,7 +2,6 @@ const authHandlers = require("./authHandlers");
 const profileHandlers = require("./profileHandlers");
 const paymentHandlers = require("./paymentHandlers");
 const resumeHandlers = require("./resumeHandlers");
-const commentHandlers = require("./commentHandlers");
 const promptHandlers = require("./promptHandlers");
 const automationHandlers = require("./automationHandlers");
 
@@ -36,9 +35,6 @@ function setupIpcHandlers(ipcMain) {
   ipcMain.handle("resumes:download", resumeHandlers.download);
   ipcMain.handle("resumes:delete", resumeHandlers.delete);
 
-  // Comment handlers
-  ipcMain.handle("comments:generate", commentHandlers.generate);
-
   // Prompt handlers
   ipcMain.handle("prompts:create", promptHandlers.create);
   ipcMain.handle("prompts:list", promptHandlers.list);
@@ -49,6 +45,7 @@ function setupIpcHandlers(ipcMain) {
   // Automation handlers
   ipcMain.handle("automation:runLinkedIn", automationHandlers.runLinkedIn);
   ipcMain.handle("automation:stop", automationHandlers.stop);
+  ipcMain.handle("automation:loadConfig", automationHandlers.loadConfig);
 }
 
 module.exports = { setupIpcHandlers };

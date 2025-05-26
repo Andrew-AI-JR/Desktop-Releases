@@ -1,6 +1,5 @@
 import { AuthController } from "./controllers/authController.js";
 import { AutomationController } from "./controllers/automationController.js";
-import { CommentController } from "./controllers/commentController.js";
 import { ProfileController } from "./controllers/profileController.js";
 import { SettingsController } from "./controllers/settingsController.js";
 import { ViewManager } from "./utils/viewManager.js";
@@ -23,10 +22,7 @@ class App {
       this.viewManager,
       this.modalManager
     );
-    this.commentController = new CommentController(
-      this.viewManager,
-      this.modalManager
-    );
+
     this.profileController = new ProfileController(
       this.viewManager,
       this.modalManager
@@ -114,9 +110,6 @@ class App {
 
       // Load subscription status
       this.settingsController.loadSubscriptionInfo();
-
-      // Load comments
-      this.commentController.loadComments();
 
       // Load custom prompts
       this.settingsController.loadPrompts();

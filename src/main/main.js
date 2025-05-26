@@ -46,6 +46,10 @@ const createWindow = () => {
 // Create window when Electron is ready
 app.whenReady().then(() => {
   createWindow();
+
+  // Make the mainWindow available globally for IPC events
+  global.mainWindow = mainWindow;
+
   setupIpcHandlers(ipcMain);
 
   // On macOS, re-create a window when dock icon is clicked

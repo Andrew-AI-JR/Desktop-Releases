@@ -1,0 +1,5 @@
+pytz
+selenium
+webdriver-manager
+ollama
+regex

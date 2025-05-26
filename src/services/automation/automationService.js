@@ -1,11 +1,19 @@
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const { app } = require("electron");
+const { app, BrowserWindow } = require("electron");
+const pythonDependencyService = require("./pythonDependencyService");
 
 // Track the running process
 let pythonProcess = null;
 let isRunning = false;
+
+// Persistent configuration path
+const getPersistentConfigPath = () => {
+  const juniorDir = path.join(app.getPath("userData"), "JuniorAI");
+  fs.mkdirSync(juniorDir, { recursive: true });
+  return path.join(juniorDir, "persistent_config.json");
+};
 
 /**
  * Service for LinkedIn automation
@@ -21,7 +29,12 @@ const automationService = {
       throw new Error("Automation is already running");
     }
 
-    return new Promise((resolve, reject) => {
+    // Save configuration for future use if remember credentials is checked
+    if (config.rememberCredentials) {
+      this.savePersistentConfig(config);
+    }
+
+    return new Promise(async (resolve, reject) => {
       try {
         isRunning = true;
 
@@ -31,30 +44,97 @@ const automationService = {
         // Find the Python script path
         const scriptPath = this.findScriptPath();
 
+        // Send log messages to renderer
+        const sendLogMessage = (message) => {
+          if (global.mainWindow) {
+            global.mainWindow.webContents.send("automation-log", {
+              type: "stdout",
+              message,
+            });
+          } else {
+            // Fallback to any open window
+            const windows = BrowserWindow.getAllWindows();
+            if (windows.length > 0) {
+              windows[0].webContents.send("automation-log", {
+                type: "stdout",
+                message,
+              });
+            }
+          }
+        };
+
+        // Check and install Python dependencies
+        sendLogMessage("Checking Python dependencies...");
+
+        const dependenciesInstalled =
+          await pythonDependencyService.ensureDependencies((message) => {
+            sendLogMessage(message);
+          });
+
+        if (!dependenciesInstalled) {
+          isRunning = false;
+          reject({
+            message: "Failed to install required Python dependencies",
+            status: 500,
+          });
+          return;
+        }
+
+        sendLogMessage("Dependencies verified. Starting automation...");
+
         // Set up the Python process
         const pythonExecutable =
           process.platform === "win32" ? "python" : "python3";
-        pythonProcess = spawn(pythonExecutable, [
-          scriptPath,
-          "--config",
-          configPath,
-        ]);
+
+        // Create a custom environment with the Chrome profile path
+        const env = { ...process.env };
+        const chromeProfilePath = this.getChromeProfilePath();
+        env.LINKEDIN_CHROME_PROFILE_PATH = chromeProfilePath;
+
+        pythonProcess = spawn(
+          pythonExecutable,
+          [scriptPath, "--config", configPath],
+          {
+            env: env,
+          }
+        );
 
         // Handle process output
         let stdoutData = "";
         let stderrData = "";
 
+        // Get any BrowserWindows to send log events
+        const { BrowserWindow } = require("electron");
+
         pythonProcess.stdout.on("data", (data) => {
           const output = data.toString();
           stdoutData += output;
+          console.log("Python stdout:", output);
 
           // Parse status updates from Python
           this.parseStatusUpdates(output);
+
+          // Send log to renderer process
+          if (global.mainWindow) {
+            global.mainWindow.webContents.send("automation-log", {
+              type: "stdout",
+              message: output,
+            });
+          }
         });
 
         pythonProcess.stderr.on("data", (data) => {
-          stderrData += data.toString();
-          console.error("Python stderr:", data.toString());
+          const output = data.toString();
+          stderrData += output;
+          console.error("Python stderr:", output);
+
+          // Send error log to renderer process
+          if (global.mainWindow) {
+            global.mainWindow.webContents.send("automation-log", {
+              type: "stderr",
+              message: output,
+            });
+          }
         });
 
         pythonProcess.on("close", (code) => {
@@ -92,7 +172,11 @@ const automationService = {
         });
       } catch (error) {
         isRunning = false;
-        this.cleanupConfigFile(config.configPath);
+
+        // Safely cleanup config file if it was created
+        if (config && config.configPath) {
+          this.cleanupConfigFile(config.configPath);
+        }
 
         reject({
           message: error.message || "Automation failed",
@@ -154,7 +238,11 @@ const automationService = {
    */
   createConfigFile(config) {
     try {
-      const configDir = path.join(app.getPath("userData"), "configs");
+      // Create JuniorAI directory in platform-appropriate user data location
+      const juniorDir = path.join(app.getPath("userData"), "JuniorAI");
+
+      // Create configs subdirectory
+      const configDir = path.join(juniorDir, "configs");
       fs.mkdirSync(configDir, { recursive: true });
 
       const configPath = path.join(
@@ -163,27 +251,31 @@ const automationService = {
       );
 
       // Transform the config object to match the Python script's expectations
+      // Process keywords from string to the format the Python script expects
+      const keywords = config.userInfo?.jobKeywords || "";
+
+      // Get a platform-appropriate Chrome profile path
+      const chromeProfilePath = this.getChromeProfilePath();
+
       const pythonConfig = {
-        credentials: {
-          linkedin_email: config.credentials?.email || "",
-          linkedin_password: config.credentials?.password || "",
+        linkedin_credentials: {
+          email: config.credentials?.email || "",
+          password: config.credentials?.password || "",
         },
-        limits: {
-          max_daily_comments: config.limits?.dailyComments || 15,
-          max_session_comments: config.limits?.sessionComments || 5,
-          max_comments: config.limits?.commentsPerCycle || 3,
+        browser_config: {
+          chrome_profile_path: chromeProfilePath,
+          headless: false,
         },
-        user_info: {
-          calendly_link: config.userInfo?.calendlyLink || "",
-          job_search_keywords: config.userInfo?.jobKeywords || [],
-          user_bio: config.userInfo?.bio || "",
-        },
-        timing: {
-          scroll_pause_time: config.timing?.scrollPauseTime || 5,
-          short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
-        },
-        search_urls: config.searchUrls || [],
+        chrome_profile_path: chromeProfilePath, // Additional field for the Python script
         debug_mode: config.debugMode !== undefined ? config.debugMode : true,
+        max_daily_comments: config.limits?.dailyComments || 50,
+        max_session_comments: config.limits?.sessionComments || 10,
+        calendly_url: config.userInfo?.calendlyLink || "",
+        keywords: keywords, // Pass keywords as a string - the script will split it
+        user_bio: config.userInfo?.bio || "",
+        scroll_pause_time: config.timing?.scrollPauseTime || 5,
+        short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
+        max_comments: config.limits?.commentsPerCycle || 3,
       };
 
       fs.writeFileSync(configPath, JSON.stringify(pythonConfig, null, 2));
@@ -223,10 +315,18 @@ const automationService = {
       ),
       path.join(app.getAppPath(), "scripts", "linkedin_commenter.py"),
       path.join(app.getPath("userData"), "scripts", "linkedin_commenter.py"),
+      path.join(
+        app.getAppPath(),
+        "src",
+        "resources",
+        "scripts",
+        "linkedin_commenter.py"
+      ),
     ];
 
     for (const scriptPath of possiblePaths) {
       if (fs.existsSync(scriptPath)) {
+        console.log(`Found LinkedIn automation script at: ${scriptPath}`);
         return scriptPath;
       }
     }
@@ -274,6 +374,103 @@ const automationService = {
       }
     } catch (error) {
       console.error("Error parsing status updates:", error);
+    }
+  },
+
+  /**
+   * Save configuration for future use
+   * @param {Object} config - Configuration to save
+   * @returns {boolean} Success status
+   */
+  savePersistentConfig(config) {
+    try {
+      const configPath = getPersistentConfigPath();
+
+      // Prepare configuration for persistent storage
+      const persistentConfig = {
+        credentials: config.rememberCredentials
+          ? {
+              email: config.credentials?.email || "",
+              password: config.credentials?.password || "",
+            }
+          : {
+              email: config.credentials?.email || "",
+              password: "", // Don't save password if not requested
+            },
+        rememberCredentials: !!config.rememberCredentials,
+        userInfo: {
+          calendlyLink: config.userInfo?.calendlyLink || "",
+          bio: config.userInfo?.bio || "",
+          jobKeywords: config.userInfo?.jobKeywords || "",
+        },
+        limits: {
+          dailyComments: config.limits?.dailyComments || 50,
+          sessionComments: config.limits?.sessionComments || 10,
+          commentsPerCycle: config.limits?.commentsPerCycle || 3,
+        },
+        timing: {
+          scrollPauseTime: config.timing?.scrollPauseTime || 5,
+          shortSleepSeconds: config.timing?.shortSleepSeconds || 180,
+        },
+        debugMode: config.debugMode !== undefined ? config.debugMode : true,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(persistentConfig, null, 2));
+      console.log(`Configuration saved to ${configPath}`);
+      return true;
+    } catch (error) {
+      console.error("Error saving persistent configuration:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Load saved configuration
+   * @returns {Object|null} Loaded configuration or null
+   */
+  loadPersistentConfig() {
+    try {
+      const configPath = getPersistentConfigPath();
+      if (!fs.existsSync(configPath)) {
+        console.log("No persistent configuration found");
+        return null;
+      }
+      console.log("Loading persistent configuration from:", configPath);
+      const configData = fs.readFileSync(configPath, "utf8");
+      const config = JSON.parse(configData);
+      console.log("Loaded persistent configuration");
+      return config;
+    } catch (error) {
+      console.error("Error loading persistent configuration:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Create and get the path to a Chrome profile directory in the user data location
+   * @returns {string} Path to Chrome profile directory
+   */
+  getChromeProfilePath() {
+    try {
+      // Create a "JuniorAI" subdirectory in the platform-appropriate user data directory
+      const juniorDir = path.join(app.getPath("userData"), "JuniorAI");
+
+      // Create a dedicated directory for Chrome profiles
+      const chromeProfileDir = path.join(juniorDir, "chrome_profiles");
+
+      // Create a unique profile for each session (optional - you can also reuse the same profile)
+      const sessionProfileDir = path.join(chromeProfileDir, "selenium_profile");
+
+      // Ensure the directory exists
+      fs.mkdirSync(sessionProfileDir, { recursive: true });
+
+      console.log(`Chrome profile directory: ${sessionProfileDir}`);
+      return sessionProfileDir;
+    } catch (error) {
+      console.error("Error creating Chrome profile directory:", error);
+      // Return a default path in case of error
+      return path.join(app.getPath("temp"), "JuniorAI", "chrome_profile");
     }
   },
 };

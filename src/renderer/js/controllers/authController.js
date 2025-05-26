@@ -46,7 +46,7 @@ export class AuthController {
    */
   async handleLogin(event) {
     event.preventDefault();
-
+    console.log("Login form submitted");
     const email = this.loginForm.email.value.trim();
     const password = this.loginForm.password.value;
 

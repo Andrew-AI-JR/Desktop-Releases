@@ -11,6 +11,7 @@ const authService = {
    * @returns {Promise<Object>} Token data
    */
   async login(credentials) {
+    console.log("Attempting to login with credentials:", credentials);
     try {
       const response = await apiClient.post("/api/users/token", credentials);
 

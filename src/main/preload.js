@@ -56,5 +56,7 @@ contextBridge.exposeInMainWorld("api", {
     runLinkedInAutomation: (config) =>
       ipcRenderer.invoke("automation:runLinkedIn", config),
     stopAutomation: () => ipcRenderer.invoke("automation:stop"),
+    loadPersistentConfig: () => ipcRenderer.invoke("automation:loadConfig"),
+    onLog: (callback) => ipcRenderer.on("automation-log", callback),
   },
 });

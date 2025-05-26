@@ -23,6 +23,27 @@ module.exports = {
   },
 
   /**
+   * Load persistent configuration
+   * @param {Electron.IpcMainInvokeEvent} event
+   * @returns {Promise<Object>} Loaded configuration
+   */
+  loadConfig: async (event) => {
+    try {
+      const config = automationService.loadPersistentConfig();
+      return {
+        success: !!config,
+        config,
+      };
+    } catch (error) {
+      console.error("Load automation config error:", error);
+      throw {
+        message: error.message || "Failed to load automation configuration",
+        status: error.status || 500,
+      };
+    }
+  },
+
+  /**
    * Stop running automation
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Stop status

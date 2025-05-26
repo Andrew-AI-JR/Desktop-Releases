@@ -112,6 +112,45 @@
             </div>
           </div>
           
+          <div class="automation-config">
+            <h3>Configuration</h3>
+            <form id="automation-config-form">
+              <div class="config-section">
+                <h4>LinkedIn Credentials</h4>
+                <div class="form-group">
+                  <label for="linkedin-email">LinkedIn Email</label>
+                  <input type="email" id="linkedin-email" name="linkedin-email" placeholder="Your LinkedIn email">
+                </div>
+                <div class="form-group">
+                  <label for="linkedin-password">LinkedIn Password</label>
+                  <input type="password" id="linkedin-password" name="linkedin-password" placeholder="Your LinkedIn password">
+                </div>
+                <div class="form-group">
+                  <label for="remember-credentials">
+                    <input type="checkbox" id="remember-credentials" name="remember-credentials">
+                    Remember credentials (stored securely)
+                  </label>
+                </div>
+              </div>
+              
+              <div class="config-section">
+                <h4>Profile Information</h4>
+                <div class="form-group">
+                  <label for="calendly-url">Calendly URL</label>
+                  <input type="url" id="calendly-url" name="calendly-url" placeholder="https://calendly.com/your-username">
+                </div>
+                <div class="form-group">
+                  <label for="user-bio">Professional Bio</label>
+                  <textarea id="user-bio" name="user-bio" rows="4" placeholder="Write a brief professional bio to personalize comments"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="keywords">Job Keywords (comma-separated)</label>
+                  <input type="text" id="keywords" name="keywords" placeholder="python, machine learning, data science">
+                </div>
+              </div>
+            </form>
+          </div>
+          
           <div class="automation-actions">
             <button id="start-automation" class="btn btn-primary">Start Automation</button>
             <button id="stop-automation" class="btn btn-danger" disabled>Stop Automation</button>

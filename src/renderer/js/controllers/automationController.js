@@ -4,17 +4,36 @@ export class AutomationController {
     this.modalManager = modalManager;
 
     // Element references
-    this.postUrlInput = document.getElementById("post-url");
     this.startButton = document.getElementById("start-automation");
     this.stopButton = document.getElementById("stop-automation");
     this.statusText = document.getElementById("automation-status-text");
     this.logContainer = document.getElementById("log-container");
+
+    // Form inputs
+    this.linkedinEmailInput = document.getElementById("linkedin-email");
+    this.linkedinPasswordInput = document.getElementById("linkedin-password");
+    this.rememberCredentialsInput = document.getElementById(
+      "remember-credentials"
+    );
+    this.calendlyUrlInput = document.getElementById("calendly-url");
+    this.userBioInput = document.getElementById("user-bio");
+    this.keywordsInput = document.getElementById("keywords");
 
     // State
     this.isRunning = false;
 
     // Setup event listeners
     this.setupEventListeners();
+
+    // Listen for automation logs from main process
+    window.api.automation.onLog((event, data) => {
+      if (data && data.message) {
+        this.log(data.message);
+      }
+    });
+
+    // Load saved configuration if available
+    this.loadSavedConfig();
   }
 
   /**
@@ -29,61 +48,63 @@ export class AutomationController {
    * Start the automation process
    */
   async startAutomation() {
-    const postUrl = this.postUrlInput.value.trim();
-
-    // Validate input
-    if (!postUrl) {
-      this.modalManager.alert(
-        "Please enter a LinkedIn post URL.",
-        "Validation Error"
-      );
-      return;
-    }
-
-    if (!this.isValidLinkedInUrl(postUrl)) {
-      this.modalManager.alert(
-        "Please enter a valid LinkedIn URL.",
-        "Validation Error"
-      );
-      return;
-    }
-
     try {
-      // Update UI state
-      this.setRunningState(true);
-      this.log("Starting automation...");
-      this.log(`Target URL: ${postUrl}`);
+      // Validate LinkedIn credentials
+      const email = this.linkedinEmailInput.value.trim();
+      const password = this.linkedinPasswordInput.value;
 
-      // Check for stored LinkedIn credentials
-      const credentials = await this.getLinkedInCredentials();
-
-      if (!credentials) {
-        // Prompt for credentials if not stored
-        const credentialsProvided = await this.promptForCredentials();
-        if (!credentialsProvided) {
-          this.setRunningState(false);
-          this.log("Automation cancelled - no credentials provided.");
-          return;
-        }
+      if (!email || !password) {
+        this.modalManager.alert(
+          "Please enter your LinkedIn email and password.",
+          "Validation Error"
+        );
+        return;
       }
 
+      // Get other configuration values
+      const calendlyLink = this.calendlyUrlInput.value.trim();
+      const userBio = this.userBioInput.value.trim();
+      const jobKeywords = this.keywordsInput.value.trim();
+      const rememberCredentials = this.rememberCredentialsInput.checked;
+
+      // Update UI state
+      this.setRunningState(true);
+      this.log("Starting LinkedIn automation...");
+
+      // Create configuration object
+      const config = {
+        credentials: {
+          email,
+          password,
+        },
+        rememberCredentials: rememberCredentials,
+        userInfo: {
+          calendlyLink,
+          bio: userBio,
+          jobKeywords,
+        },
+        limits: {
+          dailyComments: 50, // Using hardcoded values as requested
+          sessionComments: 10,
+          commentsPerCycle: 3,
+        },
+        timing: {
+          scrollPauseTime: 5,
+          shortSleepSeconds: 180,
+        },
+        debugMode: true,
+        searchUrls: [], // The Python script will generate these based on keywords
+      };
+
       // Start automation through the API
-      const result = await window.api.automation.runLinkedInAutomation({
-        postUrl,
-        credentials,
-      });
+      const result = await window.api.automation.runLinkedInAutomation(config);
 
       // Handle result
       if (result && result.success) {
-        this.log("Automation completed successfully!");
-        this.log(`Generated comment: "${result.comment}"`);
+        this.log("Automation started successfully!");
 
-        // Show success message
-        this.statusText.textContent = "Automation completed";
-        this.modalManager.alert(
-          "Automation completed successfully!",
-          "Success"
-        );
+        // Note: We've moved credential saving to the main process
+        // using the persistent configuration file
       } else {
         throw new Error(result.message || "Unknown error");
       }
@@ -95,7 +116,7 @@ export class AutomationController {
         error.message || "Automation failed. Please try again.",
         "Automation Error"
       );
-    } finally {
+
       // Reset UI state
       this.setRunningState(false);
     }
@@ -136,8 +157,13 @@ export class AutomationController {
     this.startButton.disabled = isRunning;
     this.stopButton.disabled = !isRunning;
 
-    // Update input
-    this.postUrlInput.disabled = isRunning;
+    // Update inputs
+    this.linkedinEmailInput.disabled = isRunning;
+    this.linkedinPasswordInput.disabled = isRunning;
+    this.calendlyUrlInput.disabled = isRunning;
+    this.userBioInput.disabled = isRunning;
+    this.keywordsInput.disabled = isRunning;
+    this.rememberCredentialsInput.disabled = isRunning;
 
     // Update status
     this.statusText.textContent = isRunning ? "Running..." : "Ready to start";
@@ -180,8 +206,14 @@ export class AutomationController {
    */
   async getLinkedInCredentials() {
     try {
-      // In a real app, you would get this from a secure store
-      // For now, we'll just return null to prompt the user
+      // In a real app, these should be stored securely
+      // For now, just using localStorage for demo purposes
+      if (window.localStorage) {
+        const storedCredentials = localStorage.getItem("linkedinCredentials");
+        if (storedCredentials) {
+          return JSON.parse(storedCredentials);
+        }
+      }
       return null;
     } catch (error) {
       console.error("Error getting LinkedIn credentials:", error);
@@ -190,92 +222,98 @@ export class AutomationController {
   }
 
   /**
-   * Prompt the user for LinkedIn credentials
-   * @returns {Promise<boolean>} True if credentials were provided
-   */
-  async promptForCredentials() {
-    // Create modal content with a form
-    const formContainer = document.createElement("div");
-    formContainer.innerHTML = `
-      <form id="credentials-form" class="auth-form">
-        <div class="form-group">
-          <label for="linkedin-email">LinkedIn Email</label>
-          <input type="email" id="linkedin-email" name="email" required>
-        </div>
-        <div class="form-group">
-          <label for="linkedin-password">LinkedIn Password</label>
-          <input type="password" id="linkedin-password" name="password" required>
-        </div>
-        <div class="form-group">
-          <label for="remember-credentials">
-            <input type="checkbox" id="remember-credentials" name="remember">
-            Remember credentials (stored securely)
-          </label>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Continue</button>
-          <button type="button" class="btn" id="cancel-credentials">Cancel</button>
-        </div>
-      </form>
-    `;
-
-    // Show the modal
-    const modalPromise = this.modalManager.showModal(
-      "LinkedIn Credentials",
-      formContainer
-    );
-
-    // Handle form submission
-    const form = formContainer.querySelector("#credentials-form");
-    const cancelButton = formContainer.querySelector("#cancel-credentials");
-
-    let credentialsResult = null;
-
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const email = form.email.value.trim();
-      const password = form.password.value;
-      const remember = form.remember.checked;
-
-      if (email && password) {
-        credentialsResult = { email, password, remember };
-        this.modalManager.closeModal(true);
-      }
-    });
-
-    cancelButton.addEventListener("click", () => {
-      this.modalManager.closeModal(false);
-    });
-
-    // Wait for modal to close
-    const result = await modalPromise;
-
-    if (result && credentialsResult) {
-      // Save credentials if requested
-      if (credentialsResult.remember) {
-        this.saveLinkedInCredentials(credentialsResult);
-      }
-
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
    * Save LinkedIn credentials
    * @param {Object} credentials - LinkedIn credentials
    */
   async saveLinkedInCredentials(credentials) {
     try {
-      // In a real app, you would save this securely
-      // For demo purposes, we'll just log it
-      console.log("Would save credentials for:", credentials.email);
+      // In a real app, these should be stored securely
+      // For now, just using localStorage for demo purposes
+      if (window.localStorage) {
+        localStorage.setItem(
+          "linkedinCredentials",
+          JSON.stringify({
+            email: credentials.email,
+            password: credentials.password,
+          })
+        );
+      }
 
-      this.log("Credentials saved for future use");
+      // Also save other configuration
+      if (this.calendlyUrlInput.value) {
+        localStorage.setItem("calendlyUrl", this.calendlyUrlInput.value);
+      }
+
+      if (this.userBioInput.value) {
+        localStorage.setItem("userBio", this.userBioInput.value);
+      }
+
+      if (this.keywordsInput.value) {
+        localStorage.setItem("jobKeywords", this.keywordsInput.value);
+      }
+
+      this.log("Configuration saved for future use");
     } catch (error) {
       console.error("Error saving credentials:", error);
+    }
+  }
+
+  /**
+   * Load saved configuration if available
+   */
+  async loadSavedConfig() {
+    try {
+      // First try to load from the persistent storage via the main process
+      const result = await window.api.automation.loadPersistentConfig();
+      console.log("Loaded persistent config:", result);
+      if (result && result.success && result.config) {
+        const config = result.config;
+
+        // Set credentials if available
+        if (config.credentials) {
+          this.linkedinEmailInput.value = config.credentials.email || "";
+          this.linkedinPasswordInput.value = config.credentials.password || "";
+          this.rememberCredentialsInput.checked = !!config.rememberCredentials;
+        }
+
+        // Set user info if available
+        if (config.userInfo) {
+          this.calendlyUrlInput.value = config.userInfo.calendlyLink || "";
+          this.userBioInput.value = config.userInfo.bio || "";
+          this.keywordsInput.value = config.userInfo.jobKeywords || "";
+        }
+
+        return;
+      }
+
+      // Fallback to old localStorage method if persistent config not found
+      const credentials = await this.getLinkedInCredentials();
+
+      if (credentials) {
+        this.linkedinEmailInput.value = credentials.email || "";
+        this.linkedinPasswordInput.value = credentials.password || "";
+        this.rememberCredentialsInput.checked = true;
+      }
+
+      // Load other saved configurations from localStorage
+      if (window.localStorage) {
+        const calendlyUrl = localStorage.getItem("calendlyUrl");
+        if (calendlyUrl) {
+          this.calendlyUrlInput.value = calendlyUrl;
+        }
+
+        const userBio = localStorage.getItem("userBio");
+        if (userBio) {
+          this.userBioInput.value = userBio;
+        }
+
+        const keywords = localStorage.getItem("jobKeywords");
+        if (keywords) {
+          this.keywordsInput.value = keywords;
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved config:", error);
     }
   }
 }

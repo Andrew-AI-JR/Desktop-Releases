@@ -4,11 +4,11 @@ export class AuthController {
     this.modalManager = modalManager;
 
     // Element references
-    this.loginForm = document.getElementById("login-form");
-    this.registerForm = document.getElementById("register-form");
-    this.showRegisterLink = document.getElementById("show-register");
-    this.showLoginLink = document.getElementById("show-login");
-    this.logoutButton = document.getElementById("logout");
+    this.loginForm = document.getElementById('login-form');
+    this.registerForm = document.getElementById('register-form');
+    this.showRegisterLink = document.getElementById('show-register');
+    this.showLoginLink = document.getElementById('show-login');
+    this.logoutButton = document.getElementById('logout');
 
     // Bind event handlers
     this.setupEventListeners();
@@ -19,25 +19,25 @@ export class AuthController {
    */
   setupEventListeners() {
     // Switch between login and register views
-    this.showRegisterLink.addEventListener("click", (e) => {
+    this.showRegisterLink.addEventListener('click', (e) => {
       e.preventDefault();
-      this.viewManager.showView("register");
+      this.viewManager.showView('register');
     });
 
-    this.showLoginLink.addEventListener("click", (e) => {
+    this.showLoginLink.addEventListener('click', (e) => {
       e.preventDefault();
-      this.viewManager.showView("login");
+      this.viewManager.showView('login');
     });
 
     // Handle form submissions
-    this.loginForm.addEventListener("submit", this.handleLogin.bind(this));
+    this.loginForm.addEventListener('submit', this.handleLogin.bind(this));
     this.registerForm.addEventListener(
-      "submit",
+      'submit',
       this.handleRegister.bind(this)
     );
 
     // Handle logout
-    this.logoutButton.addEventListener("click", this.handleLogout.bind(this));
+    this.logoutButton.addEventListener('click', this.handleLogout.bind(this));
   }
 
   /**
@@ -46,15 +46,15 @@ export class AuthController {
    */
   async handleLogin(event) {
     event.preventDefault();
-    console.log("Login form submitted");
+    console.log('Login form submitted');
     const email = this.loginForm.email.value.trim();
     const password = this.loginForm.password.value;
 
     // Simple validation
     if (!email || !password) {
       this.modalManager.alert(
-        "Please enter both email and password.",
-        "Login Error"
+        'Please enter both email and password.',
+        'Login Error'
       );
       return;
     }
@@ -77,16 +77,16 @@ export class AuthController {
         this.updateUserInfo(user);
 
         // Switch to dashboard view
-        this.viewManager.showView("dashboard");
+        this.viewManager.showView('dashboard');
 
         // Load initial data
         this.loadInitialData();
       }
     } catch (error) {
-      console.error("Login error:", error);
+      console.error('Login error:', error);
       this.modalManager.alert(
-        error.message || "Login failed. Please try again.",
-        "Login Error"
+        error.message || 'Login failed. Please try again.',
+        'Login Error'
       );
     } finally {
       // Remove loading state
@@ -108,14 +108,14 @@ export class AuthController {
     // Simple validation
     if (!email || !password || !confirmPassword) {
       this.modalManager.alert(
-        "Please fill out all fields.",
-        "Registration Error"
+        'Please fill out all fields.',
+        'Registration Error'
       );
       return;
     }
 
     if (password !== confirmPassword) {
-      this.modalManager.alert("Passwords do not match.", "Registration Error");
+      this.modalManager.alert('Passwords do not match.', 'Registration Error');
       return;
     }
 
@@ -132,16 +132,16 @@ export class AuthController {
 
         // Show success message and redirect to login
         await this.modalManager.alert(
-          "Registration successful! Please log in.",
-          "Success"
+          'Registration successful! Please log in.',
+          'Success'
         );
-        this.viewManager.showView("login");
+        this.viewManager.showView('login');
       }
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error('Registration error:', error);
       this.modalManager.alert(
-        error.message || "Registration failed. Please try again.",
-        "Registration Error"
+        error.message || 'Registration failed. Please try again.',
+        'Registration Error'
       );
     } finally {
       // Remove loading state
@@ -154,7 +154,7 @@ export class AuthController {
    */
   async handleLogout() {
     const confirmed = await this.modalManager.confirm(
-      "Are you sure you want to log out?"
+      'Are you sure you want to log out?'
     );
 
     if (confirmed) {
@@ -163,13 +163,13 @@ export class AuthController {
         await window.api.auth.logout();
 
         // Reset UI to login view
-        this.viewManager.showView("login");
-        document.querySelector(".user-name").textContent = "Guest";
+        this.viewManager.showView('login');
+        document.querySelector('.user-name').textContent = 'Guest';
       } catch (error) {
-        console.error("Logout error:", error);
+        console.error('Logout error:', error);
         this.modalManager.alert(
-          "An error occurred during logout.",
-          "Logout Error"
+          'An error occurred during logout.',
+          'Logout Error'
         );
       }
     }
@@ -183,7 +183,7 @@ export class AuthController {
     try {
       return await window.api.auth.getUser();
     } catch (error) {
-      console.error("Get user error:", error);
+      console.error('Get user error:', error);
       throw error;
     }
   }
@@ -206,9 +206,9 @@ export class AuthController {
    * @param {Object} user - User data
    */
   updateUserInfo(user) {
-    const userNameElement = document.querySelector(".user-name");
+    const userNameElement = document.querySelector('.user-name');
     if (userNameElement && user.email) {
-      userNameElement.textContent = user.email.split("@")[0]; // Display username part of email
+      userNameElement.textContent = user.email.split('@')[0]; // Display username part of email
     }
   }
 
@@ -222,11 +222,11 @@ export class AuthController {
 
     if (isLoading) {
       submitButton.disabled = true;
-      submitButton.textContent = "Loading...";
+      submitButton.textContent = 'Loading...';
     } else {
       submitButton.disabled = false;
       submitButton.textContent =
-        form.id === "login-form" ? "Login" : "Register";
+        form.id === 'login-form' ? 'Login' : 'Register';
     }
   }
 
@@ -235,7 +235,7 @@ export class AuthController {
    */
   loadInitialData() {
     // Dispatch custom event for other controllers to listen to
-    const event = new CustomEvent("user:loggedin");
+    const event = new CustomEvent('user:loggedin');
     document.dispatchEvent(event);
   }
 }

@@ -63,7 +63,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} User data or error
    */
-  getUser: async (event) => {
+  getUser: async (_event) => {
     try {
       return await authService.getCurrentUser();
     } catch (error) {
@@ -98,7 +98,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Bio response or error
    */
-  getBio: async (event) => {
+  getBio: async (_event) => {
     try {
       return await authService.getBio();
     } catch (error) {

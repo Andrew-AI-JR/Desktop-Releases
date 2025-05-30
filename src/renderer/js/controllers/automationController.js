@@ -101,7 +101,7 @@ export class AutomationController {
 
       // Handle result
       if (result && result.success) {
-        this.log("Automation started successfully!");
+        this.log("LinkedIn automation process completed successfully!");
 
         // Note: We've moved credential saving to the main process
         // using the persistent configuration file
@@ -110,12 +110,19 @@ export class AutomationController {
       }
     } catch (error) {
       console.error("Automation error:", error);
-      this.log(`Error: ${error.message || "Unknown error"}`);
+
+      // Better error message extraction
+      let errorMessage = this.extractErrorMessage(error);
+
+      // Log detailed error information
+      this.log(`Error: ${errorMessage}`);
+      if (error.stack) {
+        console.error("Error stack:", error.stack);
+        this.log(`Stack trace: ${error.stack}`);
+      }
+
       this.statusText.textContent = "Automation failed";
-      this.modalManager.alert(
-        error.message || "Automation failed. Please try again.",
-        "Automation Error"
-      );
+      this.modalManager.alert(errorMessage, "Automation Error");
 
       // Reset UI state
       this.setRunningState(false);
@@ -139,7 +146,11 @@ export class AutomationController {
       }
     } catch (error) {
       console.error("Stop automation error:", error);
-      this.log(`Error stopping automation: ${error.message}`);
+
+      // Use helper function for better error message extraction
+      const errorMessage = this.extractErrorMessage(error);
+
+      this.log(`Error stopping automation: ${errorMessage}`);
     } finally {
       // Reset UI state
       this.setRunningState(false);
@@ -314,6 +325,46 @@ export class AutomationController {
       }
     } catch (error) {
       console.error("Error loading saved config:", error);
+
+      // Use helper function for better error message extraction
+      const errorMessage = this.extractErrorMessage(error);
+
+      this.log(`Warning: Could not load saved configuration: ${errorMessage}`);
     }
+  }
+
+  /**
+   * Extract a meaningful error message from various error types
+   * @param {*} error - Error object, string, or other type
+   * @returns {string} Human-readable error message
+   */
+  extractErrorMessage(error) {
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (error && error.message) {
+      return error.message;
+    }
+
+    if (error && typeof error === "object") {
+      // Try to get useful information from error object
+      if (error.code || error.status) {
+        const parts = [];
+        if (error.code) parts.push(`Code: ${error.code}`);
+        if (error.status) parts.push(`Status: ${error.status}`);
+        if (error.type) parts.push(`Type: ${error.type}`);
+        return parts.join(", ");
+      }
+
+      // Last resort: stringify the object
+      try {
+        return JSON.stringify(error);
+      } catch {
+        return String(error);
+      }
+    }
+
+    return "Unknown error occurred";
   }
 }

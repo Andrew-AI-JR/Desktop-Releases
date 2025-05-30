@@ -1,5 +1,5 @@
-const apiClient = require("../api/apiClient");
-const FormData = require("form-data");
+const apiClient = require('../api/apiClient');
+const FormData = require('form-data');
 
 /**
  * Service for resume-related operations
@@ -17,7 +17,7 @@ const resumeService = {
     try {
       // Create form data
       const formData = new FormData();
-      formData.append("file", fileBuffer, {
+      formData.append('file', fileBuffer, {
         filename: fileName,
         contentType: this.getContentType(fileType),
         knownLength: fileSize,
@@ -26,20 +26,20 @@ const resumeService = {
       // Set form data headers
       const headers = {
         ...formData.getHeaders(),
-        "Content-Length": formData.getLengthSync(),
+        'Content-Length': formData.getLengthSync(),
       };
 
-      const response = await apiClient.post("/api/resumes/upload", formData, {
+      const response = await apiClient.post('/api/resumes/upload', formData, {
         headers,
       });
       return response.data;
     } catch (error) {
       console.error(
-        "Resume upload error:",
+        'Resume upload error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to upload resume",
+        message: error.response?.data?.detail || 'Failed to upload resume',
         status: error.response?.status || 500,
       };
     }
@@ -51,15 +51,15 @@ const resumeService = {
    */
   async listResumes() {
     try {
-      const response = await apiClient.get("/api/resumes/list");
+      const response = await apiClient.get('/api/resumes/list');
       return response.data;
     } catch (error) {
       console.error(
-        "List resumes error:",
+        'List resumes error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to list resumes",
+        message: error.response?.data?.detail || 'Failed to list resumes',
         status: error.response?.status || 500,
       };
     }
@@ -76,11 +76,11 @@ const resumeService = {
       return response.data;
     } catch (error) {
       console.error(
-        "Resume download error:",
+        'Resume download error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to download resume",
+        message: error.response?.data?.detail || 'Failed to download resume',
         status: error.response?.status || 500,
       };
     }
@@ -96,11 +96,11 @@ const resumeService = {
       await apiClient.delete(`/api/resumes/${resumeId}`);
     } catch (error) {
       console.error(
-        "Resume delete error:",
+        'Resume delete error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to delete resume",
+        message: error.response?.data?.detail || 'Failed to delete resume',
         status: error.response?.status || 500,
       };
     }
@@ -113,14 +113,14 @@ const resumeService = {
    */
   getContentType(fileType) {
     switch (fileType.toLowerCase()) {
-      case ".pdf":
-        return "application/pdf";
-      case ".doc":
-        return "application/msword";
-      case ".docx":
-        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      case '.pdf':
+        return 'application/pdf';
+      case '.doc':
+        return 'application/msword';
+      case '.docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       default:
-        return "application/octet-stream";
+        return 'application/octet-stream';
     }
   },
 };

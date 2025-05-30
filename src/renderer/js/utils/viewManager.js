@@ -3,7 +3,7 @@
  */
 export class ViewManager {
   constructor() {
-    this.views = Array.from(document.querySelectorAll(".view"));
+    this.views = Array.from(document.querySelectorAll('.view'));
     this.currentView = null;
   }
 
@@ -13,22 +13,22 @@ export class ViewManager {
    * @returns {HTMLElement} The shown view element
    */
   showView(viewId) {
-    if (!viewId.endsWith("-view")) {
+    if (!viewId.endsWith('-view')) {
       viewId = `${viewId}-view`;
     }
 
     const targetView = document.getElementById(viewId);
-    console.log("showView: ", viewId, targetView);
+    console.log('showView: ', viewId, targetView);
     if (!targetView) {
       console.error(`View not found: ${viewId}`);
       return null;
     }
 
     // Hide all views
-    this.views.forEach((view) => view.classList.add("hidden"));
+    this.views.forEach((view) => view.classList.add('hidden'));
 
     // Show target view
-    targetView.classList.remove("hidden");
+    targetView.classList.remove('hidden');
     this.currentView = targetView;
 
     return targetView;
@@ -50,7 +50,7 @@ export class ViewManager {
     if (!this.currentView) return null;
 
     const fullId = this.currentView.id;
-    return fullId.replace("-view", "");
+    return fullId.replace('-view', '');
   }
 
   /**

@@ -4,16 +4,16 @@ export class ProfileController {
     this.modalManager = modalManager;
 
     // Element references
-    this.profileForm = document.getElementById("profile-form");
-    this.profileUrlInput = document.getElementById("profile-url");
-    this.bioTextarea = document.getElementById("bio");
-    this.resumeFileInput = document.getElementById("resume-file");
-    this.uploadResumeButton = document.getElementById("upload-resume");
-    this.resumeList = document.getElementById("resume-list");
+    this.profileForm = document.getElementById('profile-form');
+    this.profileUrlInput = document.getElementById('profile-url');
+    this.bioTextarea = document.getElementById('bio');
+    this.resumeFileInput = document.getElementById('resume-file');
+    this.uploadResumeButton = document.getElementById('upload-resume');
+    this.resumeList = document.getElementById('resume-list');
 
     // State
     this.profile = null;
-    this.bio = "";
+    this.bio = '';
     this.resumes = [];
 
     // Setup event listeners
@@ -26,18 +26,18 @@ export class ProfileController {
   setupEventListeners() {
     // Profile form submission
     this.profileForm.addEventListener(
-      "submit",
+      'submit',
       this.handleProfileFormSubmit.bind(this)
     );
 
     // Resume upload button
     this.uploadResumeButton.addEventListener(
-      "click",
+      'click',
       this.handleResumeUpload.bind(this)
     );
 
     // Listen for user login event to load profile data
-    document.addEventListener("user:loggedin", () => {
+    document.addEventListener('user:loggedin', () => {
       this.loadProfileData();
     });
   }
@@ -67,10 +67,10 @@ export class ProfileController {
       this.resumes = resumes || [];
       this.renderResumeList();
     } catch (error) {
-      console.error("Error loading profile data:", error);
+      console.error('Error loading profile data:', error);
       this.modalManager.alert(
-        "Failed to load profile data. Please try again later.",
-        "Profile Error"
+        'Failed to load profile data. Please try again later.',
+        'Profile Error'
       );
     }
   }
@@ -88,8 +88,8 @@ export class ProfileController {
     // Validate URL
     if (profileUrl && !this.isValidUrl(profileUrl)) {
       this.modalManager.alert(
-        "Please enter a valid LinkedIn profile URL.",
-        "Validation Error"
+        'Please enter a valid LinkedIn profile URL.',
+        'Validation Error'
       );
       return;
     }
@@ -110,15 +110,15 @@ export class ProfileController {
       }
 
       // Show success message
-      this.modalManager.alert("Profile updated successfully!", "Success");
+      this.modalManager.alert('Profile updated successfully!', 'Success');
 
       // Reload profile data
       await this.loadProfileData();
     } catch (error) {
-      console.error("Profile update error:", error);
+      console.error('Profile update error:', error);
       this.modalManager.alert(
-        error.message || "Failed to update profile. Please try again.",
-        "Profile Error"
+        error.message || 'Failed to update profile. Please try again.',
+        'Profile Error'
       );
     } finally {
       // Remove loading state
@@ -134,8 +134,8 @@ export class ProfileController {
 
     if (!fileInput.files || fileInput.files.length === 0) {
       this.modalManager.alert(
-        "Please select a file to upload.",
-        "Validation Error"
+        'Please select a file to upload.',
+        'Validation Error'
       );
       return;
     }
@@ -143,14 +143,14 @@ export class ProfileController {
     const file = fileInput.files[0];
 
     // Validate file type
-    const allowedTypes = [".pdf", ".doc", ".docx"];
+    const allowedTypes = ['.pdf', '.doc', '.docx'];
     const fileExt = file.name
-      .substring(file.name.lastIndexOf("."))
+      .substring(file.name.lastIndexOf('.'))
       .toLowerCase();
     if (!allowedTypes.includes(fileExt)) {
       this.modalManager.alert(
-        "Please upload a PDF or Word document.",
-        "File Type Error"
+        'Please upload a PDF or Word document.',
+        'File Type Error'
       );
       return;
     }
@@ -158,7 +158,7 @@ export class ProfileController {
     try {
       // Show loading state
       this.uploadResumeButton.disabled = true;
-      this.uploadResumeButton.textContent = "Uploading...";
+      this.uploadResumeButton.textContent = 'Uploading...';
 
       // In a real implementation, this would need to use a proper file upload mechanism
       // Electron would need to read the file and send its contents to the API
@@ -174,21 +174,21 @@ export class ProfileController {
         this.renderResumeList();
 
         // Clear file input
-        fileInput.value = "";
+        fileInput.value = '';
 
         // Show success message
-        this.modalManager.alert("Resume uploaded successfully!", "Success");
+        this.modalManager.alert('Resume uploaded successfully!', 'Success');
       }
     } catch (error) {
-      console.error("Resume upload error:", error);
+      console.error('Resume upload error:', error);
       this.modalManager.alert(
-        error.message || "Failed to upload resume. Please try again.",
-        "Upload Error"
+        error.message || 'Failed to upload resume. Please try again.',
+        'Upload Error'
       );
     } finally {
       // Remove loading state
       this.uploadResumeButton.disabled = false;
-      this.uploadResumeButton.textContent = "Upload Resume";
+      this.uploadResumeButton.textContent = 'Upload Resume';
     }
   }
 
@@ -199,7 +199,7 @@ export class ProfileController {
   async deleteResume(resumeId) {
     try {
       const confirmed = await this.modalManager.confirm(
-        "Are you sure you want to delete this resume?"
+        'Are you sure you want to delete this resume?'
       );
 
       if (confirmed) {
@@ -210,13 +210,13 @@ export class ProfileController {
         this.renderResumeList();
 
         // Show success message
-        this.modalManager.alert("Resume deleted successfully!", "Success");
+        this.modalManager.alert('Resume deleted successfully!', 'Success');
       }
     } catch (error) {
-      console.error("Resume delete error:", error);
+      console.error('Resume delete error:', error);
       this.modalManager.alert(
-        error.message || "Failed to delete resume. Please try again.",
-        "Delete Error"
+        error.message || 'Failed to delete resume. Please try again.',
+        'Delete Error'
       );
     }
   }
@@ -232,15 +232,15 @@ export class ProfileController {
       if (response && response.download_url) {
         // Open download URL in default browser
         // In a real implementation, this would use Electron APIs to download the file
-        this.modalManager.alert("Resume download started!", "Download");
+        this.modalManager.alert('Resume download started!', 'Download');
       } else {
-        throw new Error("Failed to generate download URL");
+        throw new Error('Failed to generate download URL');
       }
     } catch (error) {
-      console.error("Resume download error:", error);
+      console.error('Resume download error:', error);
       this.modalManager.alert(
-        error.message || "Failed to download resume. Please try again.",
-        "Download Error"
+        error.message || 'Failed to download resume. Please try again.',
+        'Download Error'
       );
     }
   }
@@ -250,7 +250,7 @@ export class ProfileController {
    */
   renderResumeList() {
     // Clear current content
-    this.resumeList.innerHTML = "";
+    this.resumeList.innerHTML = '';
 
     if (!this.resumes || this.resumes.length === 0) {
       this.resumeList.innerHTML =
@@ -260,8 +260,8 @@ export class ProfileController {
 
     // Create resume items
     for (const resume of this.resumes) {
-      const resumeItem = document.createElement("div");
-      resumeItem.classList.add("resume-item");
+      const resumeItem = document.createElement('div');
+      resumeItem.classList.add('resume-item');
 
       resumeItem.innerHTML = `
         <div class="resume-info">
@@ -273,7 +273,7 @@ export class ProfileController {
                 ? `<span class="resume-size">${this.formatFileSize(
                     resume.file_size
                   )}</span>`
-                : ""
+                : ''
             }
             <span class="resume-date">${new Date(
               resume.created_at
@@ -287,13 +287,13 @@ export class ProfileController {
       `;
 
       // Add event listeners to buttons
-      const downloadButton = resumeItem.querySelector(".download-resume");
-      downloadButton.addEventListener("click", () => {
+      const downloadButton = resumeItem.querySelector('.download-resume');
+      downloadButton.addEventListener('click', () => {
         this.downloadResume(resume.id);
       });
 
-      const deleteButton = resumeItem.querySelector(".delete-resume");
-      deleteButton.addEventListener("click", () => {
+      const deleteButton = resumeItem.querySelector('.delete-resume');
+      deleteButton.addEventListener('click', () => {
         this.deleteResume(resume.id);
       });
 
@@ -312,10 +312,10 @@ export class ProfileController {
 
     if (isLoading) {
       submitButton.disabled = true;
-      submitButton.textContent = "Saving...";
+      submitButton.textContent = 'Saving...';
     } else {
       submitButton.disabled = false;
-      submitButton.textContent = "Save Profile";
+      submitButton.textContent = 'Save Profile';
     }
   }
 
@@ -327,7 +327,7 @@ export class ProfileController {
   isValidUrl(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.protocol === "http:" || urlObj.protocol === "https:";
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
     } catch (error) {
       return false;
     }
@@ -339,12 +339,12 @@ export class ProfileController {
    * @returns {string} Formatted file size
    */
   formatFileSize(bytes) {
-    if (bytes === 0) return "0 Bytes";
+    if (bytes === 0) return '0 Bytes';
 
     const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 }

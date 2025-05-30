@@ -1,14 +1,14 @@
-const axios = require("axios");
-const tokenManager = require("../auth/tokenManager");
-require("dotenv").config();
+const axios = require('axios');
+const tokenManager = require('../auth/tokenManager');
+require('dotenv').config();
 
 // Create base axios instance
 const apiClient = axios.create({
   baseURL: process.env.API_URL, // TODO: Is there a default we need?
   timeout: 10000,
   headers: {
-    "Content-Type": "application/json",
-    Accept: "application/json",
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
   },
 });
 
@@ -24,14 +24,14 @@ apiClient.interceptors.request.use(
             baseURL: config.baseURL,
             timeout: config.timeout,
             headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
             },
           });
 
           // Attempt to refresh token
           const response = await refreshClient.post(
-            "/api/users/token/refresh",
+            '/api/users/token/refresh',
             {
               refresh_token: refreshToken,
             }
@@ -42,7 +42,7 @@ apiClient.interceptors.request.use(
           }
         }
       } catch (error) {
-        console.error("Token refresh failed in interceptor:", error);
+        console.error('Token refresh failed in interceptor:', error);
         // Clear tokens if refresh fails
         await tokenManager.clearTokens();
       }

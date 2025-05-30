@@ -4,12 +4,12 @@ export class SettingsController {
     this.modalManager = modalManager;
 
     // Element references
-    this.subscriptionInfo = document.getElementById("subscription-info");
+    this.subscriptionInfo = document.getElementById('subscription-info');
     this.manageSubscriptionButton = document.getElementById(
-      "manage-subscription"
+      'manage-subscription'
     );
-    this.promptsContainer = document.getElementById("prompts-container");
-    this.addPromptButton = document.getElementById("add-prompt");
+    this.promptsContainer = document.getElementById('prompts-container');
+    this.addPromptButton = document.getElementById('add-prompt');
 
     // State
     this.subscription = null;
@@ -24,16 +24,16 @@ export class SettingsController {
    */
   setupEventListeners() {
     this.manageSubscriptionButton.addEventListener(
-      "click",
+      'click',
       this.showManageSubscriptionModal.bind(this)
     );
     this.addPromptButton.addEventListener(
-      "click",
+      'click',
       this.showAddPromptModal.bind(this)
     );
 
     // Listen for user login event to load settings data
-    document.addEventListener("user:loggedin", () => {
+    document.addEventListener('user:loggedin', () => {
       this.loadSubscriptionInfo();
       this.loadPrompts();
     });
@@ -47,8 +47,8 @@ export class SettingsController {
       // In a real implementation, you would fetch subscription data from API
       // For demo purposes, we'll simulate a subscription
       this.subscription = {
-        plan: "Basic",
-        status: "active",
+        plan: 'Basic',
+        status: 'active',
         current_period_end: new Date(
           Date.now() + 30 * 24 * 60 * 60 * 1000
         ).toISOString(), // 30 days from now
@@ -56,7 +56,7 @@ export class SettingsController {
 
       this.renderSubscriptionInfo();
     } catch (error) {
-      console.error("Error loading subscription info:", error);
+      console.error('Error loading subscription info:', error);
       this.renderSubscriptionInfo();
     }
   }
@@ -103,10 +103,10 @@ export class SettingsController {
    * Show modal for managing subscription
    */
   async showManageSubscriptionModal() {
-    const content = document.createElement("div");
-    content.classList.add("subscription-modal");
+    const content = document.createElement('div');
+    content.classList.add('subscription-modal');
 
-    if (!this.subscription || this.subscription.status !== "active") {
+    if (!this.subscription || this.subscription.status !== 'active') {
       // Show subscription plans
       content.innerHTML = `
         <div class="subscription-plans">
@@ -166,26 +166,26 @@ export class SettingsController {
     }
 
     // Show the modal
-    this.modalManager.showModal("Manage Subscription", content);
+    this.modalManager.showModal('Manage Subscription', content);
 
     // Handle button clicks
-    if (!this.subscription || this.subscription.status !== "active") {
-      const planButtons = content.querySelectorAll(".select-plan");
+    if (!this.subscription || this.subscription.status !== 'active') {
+      const planButtons = content.querySelectorAll('.select-plan');
 
       planButtons.forEach((button) => {
-        button.addEventListener("click", async () => {
-          const planId = button.getAttribute("data-plan-id");
+        button.addEventListener('click', async () => {
+          const planId = button.getAttribute('data-plan-id');
           await this.createSubscription(planId);
         });
       });
     } else {
-      const cancelButton = content.querySelector(".cancel-subscription");
-      const upgradeButton = content.querySelector(".upgrade-subscription");
+      const cancelButton = content.querySelector('.cancel-subscription');
+      const upgradeButton = content.querySelector('.upgrade-subscription');
 
       if (cancelButton) {
-        cancelButton.addEventListener("click", async () => {
+        cancelButton.addEventListener('click', async () => {
           const confirmed = await this.modalManager.confirm(
-            "Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your current billing period."
+            'Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your current billing period.'
           );
 
           if (confirmed) {
@@ -195,7 +195,7 @@ export class SettingsController {
       }
 
       if (upgradeButton) {
-        upgradeButton.addEventListener("click", () => {
+        upgradeButton.addEventListener('click', () => {
           this.showUpgradePlanOptions();
         });
       }
@@ -210,7 +210,7 @@ export class SettingsController {
     try {
       // Show loading state
       this.modalManager.showModal(
-        "Creating Subscription",
+        'Creating Subscription',
         '<div class="loading-indicator">Processing your subscription...</div>'
       );
 
@@ -229,15 +229,15 @@ export class SettingsController {
 
         // Show success message
         this.modalManager.alert(
-          "Subscription created successfully!",
-          "Success"
+          'Subscription created successfully!',
+          'Success'
         );
       }
     } catch (error) {
-      console.error("Create subscription error:", error);
+      console.error('Create subscription error:', error);
       this.modalManager.alert(
-        error.message || "Failed to create subscription. Please try again.",
-        "Subscription Error"
+        error.message || 'Failed to create subscription. Please try again.',
+        'Subscription Error'
       );
     }
   }
@@ -250,22 +250,22 @@ export class SettingsController {
       // In a real implementation, this would call the API to cancel the subscription
       // For demo purposes, we'll just update the local state
 
-      this.subscription.status = "canceling";
+      this.subscription.status = 'canceling';
       this.renderSubscriptionInfo();
 
       // Show success message
       this.modalManager.alert(
-        "Your subscription has been cancelled. You will have access until the end of your current billing period.",
-        "Subscription Cancelled"
+        'Your subscription has been cancelled. You will have access until the end of your current billing period.',
+        'Subscription Cancelled'
       );
 
       // Close the modal
       this.modalManager.closeModal();
     } catch (error) {
-      console.error("Cancel subscription error:", error);
+      console.error('Cancel subscription error:', error);
       this.modalManager.alert(
-        error.message || "Failed to cancel subscription. Please try again.",
-        "Subscription Error"
+        error.message || 'Failed to cancel subscription. Please try again.',
+        'Subscription Error'
       );
     }
   }
@@ -277,8 +277,8 @@ export class SettingsController {
     // In a real implementation, this would show available upgrade options
     // For demo purposes, we'll just show a message
     this.modalManager.alert(
-      "Upgrade options are not available in this demo.",
-      "Upgrade Options"
+      'Upgrade options are not available in this demo.',
+      'Upgrade Options'
     );
   }
 
@@ -293,7 +293,7 @@ export class SettingsController {
 
       this.renderPromptsContainer();
     } catch (error) {
-      console.error("Error loading prompts:", error);
+      console.error('Error loading prompts:', error);
       this.renderPromptsContainer();
     }
   }
@@ -303,7 +303,7 @@ export class SettingsController {
    */
   renderPromptsContainer() {
     // Clear current content
-    this.promptsContainer.innerHTML = "";
+    this.promptsContainer.innerHTML = '';
 
     if (!this.prompts || this.prompts.length === 0) {
       this.promptsContainer.innerHTML =
@@ -312,12 +312,12 @@ export class SettingsController {
     }
 
     // Create a list of prompts
-    const promptList = document.createElement("div");
-    promptList.classList.add("prompt-list");
+    const promptList = document.createElement('div');
+    promptList.classList.add('prompt-list');
 
     for (const prompt of this.prompts) {
-      const promptItem = document.createElement("div");
-      promptItem.classList.add("prompt-item");
+      const promptItem = document.createElement('div');
+      promptItem.classList.add('prompt-item');
 
       promptItem.innerHTML = `
         <div class="prompt-header">
@@ -327,7 +327,7 @@ export class SettingsController {
             ${
               prompt.scope
                 ? `<span class="prompt-scope">${prompt.scope}</span>`
-                : ""
+                : ''
             }
           </div>
         </div>
@@ -342,13 +342,13 @@ export class SettingsController {
       `;
 
       // Add event listeners to buttons
-      const editButton = promptItem.querySelector(".edit-prompt");
-      editButton.addEventListener("click", () => {
+      const editButton = promptItem.querySelector('.edit-prompt');
+      editButton.addEventListener('click', () => {
         this.showEditPromptModal(prompt);
       });
 
-      const deleteButton = promptItem.querySelector(".delete-prompt");
-      deleteButton.addEventListener("click", () => {
+      const deleteButton = promptItem.querySelector('.delete-prompt');
+      deleteButton.addEventListener('click', () => {
         this.deletePrompt(prompt.id);
       });
 
@@ -362,7 +362,7 @@ export class SettingsController {
    * Show modal for adding a new prompt
    */
   async showAddPromptModal() {
-    const formContainer = document.createElement("div");
+    const formContainer = document.createElement('div');
     formContainer.innerHTML = `
       <form id="prompt-form" class="prompt-form">
         <div class="form-group">
@@ -398,12 +398,12 @@ export class SettingsController {
     `;
 
     // Show the modal
-    this.modalManager.showModal("Add Custom Prompt", formContainer);
+    this.modalManager.showModal('Add Custom Prompt', formContainer);
 
     // Handle form submission
-    const form = formContainer.querySelector("#prompt-form");
+    const form = formContainer.querySelector('#prompt-form');
 
-    form.addEventListener("submit", async (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
 
       const name = form.name.value.trim();
@@ -414,8 +414,8 @@ export class SettingsController {
 
       if (!name || !promptType || !text) {
         this.modalManager.alert(
-          "Please fill out all required fields.",
-          "Validation Error"
+          'Please fill out all required fields.',
+          'Validation Error'
         );
         return;
       }
@@ -424,7 +424,7 @@ export class SettingsController {
         // Show loading state
         const submitButton = form.querySelector('button[type="submit"]');
         submitButton.disabled = true;
-        submitButton.textContent = "Saving...";
+        submitButton.textContent = 'Saving...';
 
         // Create prompt
         const promptData = {
@@ -446,19 +446,19 @@ export class SettingsController {
           this.renderPromptsContainer();
 
           // Show success message
-          this.modalManager.alert("Prompt created successfully!", "Success");
+          this.modalManager.alert('Prompt created successfully!', 'Success');
         }
       } catch (error) {
-        console.error("Create prompt error:", error);
+        console.error('Create prompt error:', error);
         this.modalManager.alert(
-          error.message || "Failed to create prompt. Please try again.",
-          "Prompt Error"
+          error.message || 'Failed to create prompt. Please try again.',
+          'Prompt Error'
         );
 
         // Reset button
         const submitButton = form.querySelector('button[type="submit"]');
         submitButton.disabled = false;
-        submitButton.textContent = "Save Prompt";
+        submitButton.textContent = 'Save Prompt';
       }
     });
   }
@@ -468,7 +468,7 @@ export class SettingsController {
    * @param {Object} prompt - Prompt data
    */
   async showEditPromptModal(prompt) {
-    const formContainer = document.createElement("div");
+    const formContainer = document.createElement('div');
     formContainer.innerHTML = `
       <form id="prompt-edit-form" class="prompt-form">
         <div class="form-group">
@@ -481,20 +481,20 @@ export class SettingsController {
           <label for="prompt-type">Type</label>
           <select id="prompt-type" name="promptType" required>
             <option value="comment" ${
-              prompt.prompt_type === "comment" ? "selected" : ""
+              prompt.prompt_type === 'comment' ? 'selected' : ''
             }>Comment</option>
             <option value="response" ${
-              prompt.prompt_type === "response" ? "selected" : ""
+              prompt.prompt_type === 'response' ? 'selected' : ''
             }>Response</option>
             <option value="message" ${
-              prompt.prompt_type === "message" ? "selected" : ""
+              prompt.prompt_type === 'message' ? 'selected' : ''
             }>Message</option>
           </select>
         </div>
         <div class="form-group">
           <label for="prompt-scope">Scope (Optional)</label>
           <input type="text" id="prompt-scope" name="scope" placeholder="e.g. professional, casual, etc." value="${
-            prompt.scope || ""
+            prompt.scope || ''
           }">
         </div>
         <div class="form-group">
@@ -506,7 +506,7 @@ export class SettingsController {
         <div class="form-group">
           <label>
             <input type="checkbox" id="prompt-default" name="isUserDefault" ${
-              prompt.is_user_default ? "checked" : ""
+              prompt.is_user_default ? 'checked' : ''
             }>
             Set as default for this type
           </label>
@@ -518,12 +518,12 @@ export class SettingsController {
     `;
 
     // Show the modal
-    this.modalManager.showModal("Edit Custom Prompt", formContainer);
+    this.modalManager.showModal('Edit Custom Prompt', formContainer);
 
     // Handle form submission
-    const form = formContainer.querySelector("#prompt-edit-form");
+    const form = formContainer.querySelector('#prompt-edit-form');
 
-    form.addEventListener("submit", async (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
 
       const name = form.name.value.trim();
@@ -534,8 +534,8 @@ export class SettingsController {
 
       if (!name || !promptType || !text) {
         this.modalManager.alert(
-          "Please fill out all required fields.",
-          "Validation Error"
+          'Please fill out all required fields.',
+          'Validation Error'
         );
         return;
       }
@@ -544,7 +544,7 @@ export class SettingsController {
         // Show loading state
         const submitButton = form.querySelector('button[type="submit"]');
         submitButton.disabled = true;
-        submitButton.textContent = "Updating...";
+        submitButton.textContent = 'Updating...';
 
         // Update prompt
         const promptData = {
@@ -569,19 +569,19 @@ export class SettingsController {
           this.renderPromptsContainer();
 
           // Show success message
-          this.modalManager.alert("Prompt updated successfully!", "Success");
+          this.modalManager.alert('Prompt updated successfully!', 'Success');
         }
       } catch (error) {
-        console.error("Update prompt error:", error);
+        console.error('Update prompt error:', error);
         this.modalManager.alert(
-          error.message || "Failed to update prompt. Please try again.",
-          "Prompt Error"
+          error.message || 'Failed to update prompt. Please try again.',
+          'Prompt Error'
         );
 
         // Reset button
         const submitButton = form.querySelector('button[type="submit"]');
         submitButton.disabled = false;
-        submitButton.textContent = "Update Prompt";
+        submitButton.textContent = 'Update Prompt';
       }
     });
   }
@@ -593,7 +593,7 @@ export class SettingsController {
   async deletePrompt(promptId) {
     try {
       const confirmed = await this.modalManager.confirm(
-        "Are you sure you want to delete this prompt?"
+        'Are you sure you want to delete this prompt?'
       );
 
       if (confirmed) {
@@ -604,13 +604,13 @@ export class SettingsController {
         this.renderPromptsContainer();
 
         // Show success message
-        this.modalManager.alert("Prompt deleted successfully!", "Success");
+        this.modalManager.alert('Prompt deleted successfully!', 'Success');
       }
     } catch (error) {
-      console.error("Delete prompt error:", error);
+      console.error('Delete prompt error:', error);
       this.modalManager.alert(
-        error.message || "Failed to delete prompt. Please try again.",
-        "Prompt Error"
+        error.message || 'Failed to delete prompt. Please try again.',
+        'Prompt Error'
       );
     }
   }

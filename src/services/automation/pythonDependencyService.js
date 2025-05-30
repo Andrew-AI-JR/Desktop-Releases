@@ -1,7 +1,7 @@
-const { spawn } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const { app } = require("electron");
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const { app } = require('electron');
 
 /**
  * Service to manage Python dependencies for the automation scripts
@@ -14,16 +14,16 @@ const pythonDependencyService = {
   async isPythonInstalled() {
     return new Promise((resolve) => {
       const pythonExecutable =
-        process.platform === "win32" ? "python" : "python3";
+        process.platform === 'win32' ? 'python' : 'python3';
 
-      const pythonProcess = spawn(pythonExecutable, ["--version"]);
+      const pythonProcess = spawn(pythonExecutable, ['--version']);
 
-      pythonProcess.on("error", () => {
+      pythonProcess.on('error', () => {
         // Python not found
         resolve(false);
       });
 
-      pythonProcess.on("close", (code) => {
+      pythonProcess.on('close', (code) => {
         resolve(code === 0);
       });
     });
@@ -31,17 +31,20 @@ const pythonDependencyService = {
 
   /**
    * Get the path to the requirements.txt file
-   * @returns {string} Path to requirements.txt
+   * @returns {string|null} Path to requirements.txt or null if not found
    */
   getRequirementsPath() {
     const possiblePaths = [
-      path.join(app.getAppPath(), "resources", "scripts", "requirements.txt"),
+      // Production build locations
+      path.join(process.resourcesPath, 'requirements.txt'),
+      path.join(app.getAppPath(), 'resources', 'scripts', 'requirements.txt'),
+      // Development locations
       path.join(
         app.getAppPath(),
-        "src",
-        "resources",
-        "scripts",
-        "requirements.txt"
+        'src',
+        'resources',
+        'scripts',
+        'requirements.txt'
       ),
     ];
 
@@ -52,7 +55,8 @@ const pythonDependencyService = {
       }
     }
 
-    throw new Error("requirements.txt not found");
+    console.log('requirements.txt not found in any expected location');
+    return null;
   },
 
   /**
@@ -66,42 +70,50 @@ const pythonDependencyService = {
       if (!isPythonAvailable) {
         return {
           success: false,
-          message: "Python not found. Please install Python 3.x and try again.",
+          message: 'Python not found. Please install Python 3.x and try again.',
         };
       }
 
       const requirementsPath = this.getRequirementsPath();
 
+      if (!requirementsPath) {
+        return {
+          success: false,
+          message:
+            'requirements.txt not found. This is expected in production builds with bundled Python.',
+        };
+      }
+
       return new Promise((resolve) => {
         const pythonExecutable =
-          process.platform === "win32" ? "python" : "python3";
-        const pipArgs = ["-m", "pip", "install", "-r", requirementsPath];
+          process.platform === 'win32' ? 'python' : 'python3';
+        const pipArgs = ['-m', 'pip', 'install', '-r', requirementsPath];
 
         console.log(
           `Installing Python dependencies: ${pythonExecutable} ${pipArgs.join(
-            " "
+            ' '
           )}`
         );
 
         const pipProcess = spawn(pythonExecutable, pipArgs);
 
-        let stdoutData = "";
-        let stderrData = "";
+        let stdoutData = '';
+        let stderrData = '';
 
-        pipProcess.stdout.on("data", (data) => {
+        pipProcess.stdout.on('data', (data) => {
           const output = data.toString();
           stdoutData += output;
-          console.log("pip stdout:", output);
+          console.log('pip stdout:', output);
         });
 
-        pipProcess.stderr.on("data", (data) => {
+        pipProcess.stderr.on('data', (data) => {
           const output = data.toString();
           stderrData += output;
-          console.error("pip stderr:", output);
+          console.error('pip stderr:', output);
         });
 
-        pipProcess.on("error", (error) => {
-          console.error("pip process error:", error);
+        pipProcess.on('error', (error) => {
+          console.error('pip process error:', error);
           resolve({
             success: false,
             message: `Failed to start pip: ${error.message}`,
@@ -109,11 +121,11 @@ const pythonDependencyService = {
           });
         });
 
-        pipProcess.on("close", (code) => {
+        pipProcess.on('close', (code) => {
           if (code === 0) {
             resolve({
               success: true,
-              message: "Dependencies installed successfully",
+              message: 'Dependencies installed successfully',
               output: stdoutData,
             });
           } else {
@@ -126,10 +138,10 @@ const pythonDependencyService = {
         });
       });
     } catch (error) {
-      console.error("Error installing dependencies:", error);
+      console.error('Error installing dependencies:', error);
       return {
         success: false,
-        message: error.message || "Failed to install dependencies",
+        message: error.message || 'Failed to install dependencies',
       };
     }
   },
@@ -142,7 +154,7 @@ const pythonDependencyService = {
   async ensureDependencies(progressCallback = null) {
     try {
       if (progressCallback) {
-        progressCallback("Checking for Python installation...");
+        progressCallback('Checking for Python installation...');
       }
 
       const isPythonAvailable = await this.isPythonInstalled();
@@ -150,14 +162,14 @@ const pythonDependencyService = {
       if (!isPythonAvailable) {
         if (progressCallback) {
           progressCallback(
-            "Python not found. Please install Python 3.x and try again."
+            'Python not found. Please install Python 3.x and try again.'
           );
         }
         return false;
       }
 
       if (progressCallback) {
-        progressCallback("Installing required Python packages...");
+        progressCallback('Installing required Python packages...');
       }
 
       const result = await this.installDependencies();
@@ -168,7 +180,7 @@ const pythonDependencyService = {
 
       return result.success;
     } catch (error) {
-      console.error("Error ensuring dependencies:", error);
+      console.error('Error ensuring dependencies:', error);
       if (progressCallback) {
         progressCallback(`Error: ${error.message}`);
       }

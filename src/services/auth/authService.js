@@ -1,5 +1,5 @@
-const apiClient = require("../api/apiClient");
-const tokenManager = require("./tokenManager");
+const apiClient = require('../api/apiClient');
+const tokenManager = require('./tokenManager');
 
 /**
  * Service for authentication-related operations
@@ -11,9 +11,9 @@ const authService = {
    * @returns {Promise<Object>} Token data
    */
   async login(credentials) {
-    console.log("Attempting to login with credentials:", credentials);
+    console.log('Attempting to login with credentials:', credentials);
     try {
-      const response = await apiClient.post("/api/users/token", credentials);
+      const response = await apiClient.post('/api/users/token', credentials);
 
       // Store tokens for future use
       if (response.data && response.data.access_token) {
@@ -22,9 +22,9 @@ const authService = {
 
       return response.data;
     } catch (error) {
-      console.error("Login error:", error.response?.data || error.message);
+      console.error('Login error:', error.response?.data || error.message);
       throw {
-        message: error.response?.data?.detail || "Login failed",
+        message: error.response?.data?.detail || 'Login failed',
         status: error.response?.status || 500,
       };
     }
@@ -38,21 +38,21 @@ const authService = {
   async register(userData) {
     try {
       console.log(
-        "Attempting to register at ",
+        'Attempting to register at ',
         apiClient.defaults.baseURL,
-        "path",
-        "/api/users/register"
+        'path',
+        '/api/users/register'
       );
-      console.log("User data:", userData);
-      const response = await apiClient.post("/api/users/register", userData);
+      console.log('User data:', userData);
+      const response = await apiClient.post('/api/users/register', userData);
       return response.data;
     } catch (error) {
       console.error(
-        "Registration error:",
+        'Registration error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Registration failed",
+        message: error.response?.data?.detail || 'Registration failed',
         status: error.response?.status || 500,
       };
     }
@@ -65,7 +65,7 @@ const authService = {
    */
   async refreshToken(refreshToken) {
     try {
-      const response = await apiClient.post("/api/users/token/refresh", {
+      const response = await apiClient.post('/api/users/token/refresh', {
         refresh_token: refreshToken,
       });
 
@@ -77,11 +77,11 @@ const authService = {
       return response.data;
     } catch (error) {
       console.error(
-        "Token refresh error:",
+        'Token refresh error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Token refresh failed",
+        message: error.response?.data?.detail || 'Token refresh failed',
         status: error.response?.status || 500,
       };
     }
@@ -93,12 +93,12 @@ const authService = {
    */
   async getCurrentUser() {
     try {
-      const response = await apiClient.get("/api/users/me");
+      const response = await apiClient.get('/api/users/me');
       return response.data;
     } catch (error) {
-      console.error("Get user error:", error.response?.data || error.message);
+      console.error('Get user error:', error.response?.data || error.message);
       throw {
-        message: error.response?.data?.detail || "Failed to get user data",
+        message: error.response?.data?.detail || 'Failed to get user data',
         status: error.response?.status || 500,
       };
     }
@@ -111,12 +111,12 @@ const authService = {
    */
   async updateBio(bioData) {
     try {
-      const response = await apiClient.put("/api/users/bio", bioData);
+      const response = await apiClient.put('/api/users/bio', bioData);
       return response.data;
     } catch (error) {
-      console.error("Update bio error:", error.response?.data || error.message);
+      console.error('Update bio error:', error.response?.data || error.message);
       throw {
-        message: error.response?.data?.detail || "Failed to update bio",
+        message: error.response?.data?.detail || 'Failed to update bio',
         status: error.response?.status || 500,
       };
     }
@@ -128,12 +128,12 @@ const authService = {
    */
   async getBio() {
     try {
-      const response = await apiClient.get("/api/users/bio");
+      const response = await apiClient.get('/api/users/bio');
       return response.data;
     } catch (error) {
-      console.error("Get bio error:", error.response?.data || error.message);
+      console.error('Get bio error:', error.response?.data || error.message);
       throw {
-        message: error.response?.data?.detail || "Failed to get bio",
+        message: error.response?.data?.detail || 'Failed to get bio',
         status: error.response?.status || 500,
       };
     }
@@ -147,9 +147,9 @@ const authService = {
     try {
       await tokenManager.clearTokens();
     } catch (error) {
-      console.error("Logout error:", error.message);
+      console.error('Logout error:', error.message);
       throw {
-        message: "Logout failed",
+        message: 'Logout failed',
         status: 500,
       };
     }

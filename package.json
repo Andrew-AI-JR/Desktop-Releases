@@ -9,8 +9,17 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
-    "lint": "eslint ."
+    "build": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=never",
+    "build:dmg": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
+    "build:python": "node scripts/build-python-cross-platform.js",
+    "build:python:force": "rm -rf resources/python-executables && npm run build:python",
+    "build:win": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --win --publish=never",
+    "build:mac": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
+    "build:linux": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --linux --publish=never",
+    "release": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=always",
+    "clean": "rm -rf dist build resources/python-executables node_modules/.cache",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -24,5 +33,108 @@
     "electron-builder": "^24.9.1",
     "electron-reloader": "^1.2.3",
     "eslint": "^8.56.0"
+  },
+  "build": {
+    "appId": "com.junior.desktop",
+    "productName": "Junior Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "buildDependenciesFromSource": false,
+    "nodeGypRebuild": false,
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/python-executables",
+        "to": "python-executables",
+        "filter": "**/*"
+      },
+      {
+        "from": "src/resources/scripts/requirements.txt",
+        "to": "requirements.txt"
+      },
+      {
+        "from": "src/resources/scripts/linkedin_commenter.py",
+        "to": "linkedin_commenter.py"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Junior Desktop",
+      "icon": null,
+      "background": null,
+      "format": "UDBZ",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 250
+        },
+        {
+          "x": 400,
+          "y": 250,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icons/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "assets/icons/icon.png",
+      "category": "Office",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

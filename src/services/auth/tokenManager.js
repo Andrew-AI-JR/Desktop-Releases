@@ -1,10 +1,10 @@
-const Store = require("electron-store");
-const jwt = require("jsonwebtoken");
+const Store = require('electron-store');
+const jwt = require('jsonwebtoken');
 
 // Create a secure store for tokens
 const tokenStore = new Store({
-  name: "auth-tokens",
-  encryptionKey: "junior-secure-app-token-encryption",
+  name: 'auth-tokens',
+  encryptionKey: 'junior-secure-app-token-encryption',
 });
 
 /**
@@ -18,10 +18,10 @@ const tokenManager = {
    */
   async storeTokens(tokens) {
     try {
-      tokenStore.set("tokens", tokens);
+      tokenStore.set('tokens', tokens);
     } catch (error) {
-      console.error("Error storing tokens:", error);
-      throw new Error("Failed to store tokens");
+      console.error('Error storing tokens:', error);
+      throw new Error('Failed to store tokens');
     }
   },
 
@@ -31,10 +31,10 @@ const tokenManager = {
    */
   async getAccessToken() {
     try {
-      const tokens = tokenStore.get("tokens");
+      const tokens = tokenStore.get('tokens');
       return tokens?.access_token || null;
     } catch (error) {
-      console.error("Error getting access token:", error);
+      console.error('Error getting access token:', error);
       return null;
     }
   },
@@ -45,10 +45,10 @@ const tokenManager = {
    */
   async getRefreshToken() {
     try {
-      const tokens = tokenStore.get("tokens");
+      const tokens = tokenStore.get('tokens');
       return tokens?.refresh_token || null;
     } catch (error) {
-      console.error("Error getting refresh token:", error);
+      console.error('Error getting refresh token:', error);
       return null;
     }
   },
@@ -59,10 +59,10 @@ const tokenManager = {
    */
   async clearTokens() {
     try {
-      tokenStore.delete("tokens");
+      tokenStore.delete('tokens');
     } catch (error) {
-      console.error("Error clearing tokens:", error);
-      throw new Error("Failed to clear tokens");
+      console.error('Error clearing tokens:', error);
+      throw new Error('Failed to clear tokens');
     }
   },
 
@@ -84,7 +84,7 @@ const tokenManager = {
       const currentTime = Math.floor(Date.now() / 1000);
       return decoded.exp <= currentTime + 30;
     } catch (error) {
-      console.error("Error checking token expiration:", error);
+      console.error('Error checking token expiration:', error);
       return true; // Consider expired on error
     }
   },

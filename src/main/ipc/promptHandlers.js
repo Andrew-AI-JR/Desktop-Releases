@@ -1,4 +1,4 @@
-const promptService = require("../../services/prompts/promptService");
+const promptService = require('../../services/prompts/promptService');
 
 /**
  * Handlers for prompt-related IPC calls
@@ -14,9 +14,9 @@ module.exports = {
     try {
       return await promptService.createPrompt(promptData);
     } catch (error) {
-      console.error("Create prompt error:", error);
+      console.error('Create prompt error:', error);
       throw {
-        message: error.message || "Failed to create prompt",
+        message: error.message || 'Failed to create prompt',
         status: error.status || 500,
       };
     }
@@ -32,9 +32,9 @@ module.exports = {
     try {
       return await promptService.listPrompts(filters);
     } catch (error) {
-      console.error("List prompts error:", error);
+      console.error('List prompts error:', error);
       throw {
-        message: error.message || "Failed to list prompts",
+        message: error.message || 'Failed to list prompts',
         status: error.status || 500,
       };
     }
@@ -50,9 +50,9 @@ module.exports = {
     try {
       return await promptService.getPrompt(promptId);
     } catch (error) {
-      console.error("Get prompt error:", error);
+      console.error('Get prompt error:', error);
       throw {
-        message: error.message || "Failed to get prompt",
+        message: error.message || 'Failed to get prompt',
         status: error.status || 500,
       };
     }
@@ -69,9 +69,9 @@ module.exports = {
     try {
       return await promptService.updatePrompt(promptId, promptData);
     } catch (error) {
-      console.error("Update prompt error:", error);
+      console.error('Update prompt error:', error);
       throw {
-        message: error.message || "Failed to update prompt",
+        message: error.message || 'Failed to update prompt',
         status: error.status || 500,
       };
     }
@@ -88,9 +88,9 @@ module.exports = {
       await promptService.deletePrompt(promptId);
       return { success: true };
     } catch (error) {
-      console.error("Delete prompt error:", error);
+      console.error('Delete prompt error:', error);
       throw {
-        message: error.message || "Failed to delete prompt",
+        message: error.message || 'Failed to delete prompt',
         status: error.status || 500,
       };
     }

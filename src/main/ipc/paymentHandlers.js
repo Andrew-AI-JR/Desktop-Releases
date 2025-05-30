@@ -9,7 +9,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Success status
    */
-  createCustomer: async (event) => {
+  createCustomer: async (_event) => {
     try {
       return await paymentService.createCustomer();
     } catch (error) {

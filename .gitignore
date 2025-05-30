@@ -134,3 +134,30 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Electron build outputs
+dist/
+build/
+
+# Python bundling build artifacts
+build/pyinstaller/
+resources/python-executables/
+*.spec.orig
+
+# Python cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Application logs
+*.log

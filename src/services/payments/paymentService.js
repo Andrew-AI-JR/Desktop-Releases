@@ -1,4 +1,4 @@
-const apiClient = require("../api/apiClient");
+const apiClient = require('../api/apiClient');
 
 /**
  * Service for payment-related operations
@@ -10,15 +10,15 @@ const paymentService = {
    */
   async createCustomer() {
     try {
-      const response = await apiClient.post("/api/payments/create-customer");
+      const response = await apiClient.post('/api/payments/create-customer');
       return response.data;
     } catch (error) {
       console.error(
-        "Create customer error:",
+        'Create customer error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to create customer",
+        message: error.response?.data?.detail || 'Failed to create customer',
         status: error.response?.status || 500,
       };
     }
@@ -32,18 +32,18 @@ const paymentService = {
   async createSubscription(subscriptionData) {
     try {
       const response = await apiClient.post(
-        "/api/payments/create-subscription",
+        '/api/payments/create-subscription',
         subscriptionData
       );
       return response.data;
     } catch (error) {
       console.error(
-        "Create subscription error:",
+        'Create subscription error:',
         error.response?.data || error.message
       );
       throw {
         message:
-          error.response?.data?.detail || "Failed to create subscription",
+          error.response?.data?.detail || 'Failed to create subscription',
         status: error.response?.status || 500,
       };
     }

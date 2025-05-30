@@ -46,38 +46,55 @@ junior-desktop/
 
 ## Development
 
-### Prerequisites
+### Quick Start
+
+For detailed setup instructions, see **[Developer Setup Guide](docs/DEVELOPER_SETUP.md)**.
+
+#### Prerequisites
 
 - Node.js (v16+)
-- npm or yarn
-- Electron v36+
+- Python (v3.8+)
+- Platform-specific build tools
 
-### Setup
-
-1. Clone the repository
-2. Install dependencies:
+#### Basic Setup
 
 ```bash
+# Clone and install dependencies
 npm install
-```
 
-3. Run the application:
+# Build Python automation components
+npm run build:python
 
-```bash
-# Development mode with DevTools
+# Run in development mode
 npm run dev
-
-# Production mode
-npm start
 ```
 
 ### Building
 
-To build the application for distribution:
+```bash
+# Build for current platform
+npm run build
+
+# Platform-specific builds
+npm run build:mac     # macOS
+npm run build:win     # Windows
+npm run build:linux   # Linux
+npm run build:dmg     # macOS DMG
+```
+
+### Code Quality
 
 ```bash
-npm run build
+npm run lint          # Check code style
+npm run lint:fix      # Auto-fix issues
 ```
+
+## Documentation
+
+- **[Developer Setup Guide](docs/DEVELOPER_SETUP.md)** - Complete setup instructions for new developers
+- **[Python Bundling Guide](docs/PYTHON_BUNDLING.md)** - Python automation component details
+- **[DMG Build Troubleshooting](docs/DMG_BUILD_TROUBLESHOOTING.md)** - macOS build issues and solutions
+- **[Cross-Platform Development](docs/CROSS_PLATFORM_DEVELOPMENT.md)** - Multi-platform development guide
 
 ## API Integration
 

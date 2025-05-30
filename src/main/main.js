@@ -1,22 +1,22 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
-const path = require("path");
-const { setupIpcHandlers } = require("./ipc/ipcHandlers");
-require("dotenv").config();
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const { setupIpcHandlers } = require('./ipc/ipcHandlers');
+require('dotenv').config();
 
 // Hot reload setup in development mode
 try {
-  if (process.argv.includes("--dev")) {
-    require("electron-reloader")(module, {
+  if (process.argv.includes('--dev')) {
+    require('electron-reloader')(module, {
       // Add directories to watch for changes
       watchRenderer: true, // Watch renderer process files
       ignore: [
         /node_modules|[/\\]\.git|[/\\]\.vscode|package.json|package-lock.json/,
       ],
     });
-    console.log("Hot reload enabled");
+    console.log('Hot reload enabled');
   }
 } catch (err) {
-  console.error("Error setting up hot reload:", err);
+  console.error('Error setting up hot reload:', err);
 }
 
 // Keep a global reference of the window object to prevent garbage collection
@@ -30,15 +30,15 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
   // Load the index.html of the app
-  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   // Open DevTools in development mode
-  if (process.argv.includes("--dev")) {
+  if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
   }
 };
@@ -53,12 +53,12 @@ app.whenReady().then(() => {
   setupIpcHandlers(ipcMain);
 
   // On macOS, re-create a window when dock icon is clicked
-  app.on("activate", () => {
+  app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 // Quit the app when all windows are closed (except on macOS)
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
 });

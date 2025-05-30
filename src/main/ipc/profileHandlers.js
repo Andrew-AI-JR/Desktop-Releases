@@ -9,7 +9,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Profile data or error
    */
-  getProfile: async (event) => {
+  getProfile: async (_event) => {
     try {
       return await profileService.getProfile();
     } catch (error) {

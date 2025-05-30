@@ -53,7 +53,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Array>} List of resumes
    */
-  list: async (event) => {
+  list: async (_event) => {
     try {
       return await resumeService.listResumes();
     } catch (error) {

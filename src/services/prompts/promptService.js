@@ -1,4 +1,4 @@
-const apiClient = require("../api/apiClient");
+const apiClient = require('../api/apiClient');
 
 /**
  * Service for prompt-related operations
@@ -11,15 +11,15 @@ const promptService = {
    */
   async createPrompt(promptData) {
     try {
-      const response = await apiClient.post("/api/prompts/", promptData);
+      const response = await apiClient.post('/api/prompts/', promptData);
       return response.data;
     } catch (error) {
       console.error(
-        "Create prompt error:",
+        'Create prompt error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to create prompt",
+        message: error.response?.data?.detail || 'Failed to create prompt',
         status: error.response?.status || 500,
       };
     }
@@ -35,26 +35,26 @@ const promptService = {
       const queryParams = new URLSearchParams();
 
       if (filters.prompt_type) {
-        queryParams.append("prompt_type", filters.prompt_type);
+        queryParams.append('prompt_type', filters.prompt_type);
       }
 
       if (filters.scope) {
-        queryParams.append("scope", filters.scope);
+        queryParams.append('scope', filters.scope);
       }
 
       const url = `/api/prompts/${
-        queryParams.toString() ? `?${queryParams.toString()}` : ""
+        queryParams.toString() ? `?${queryParams.toString()}` : ''
       }`;
       const response = await apiClient.get(url);
 
       return response.data;
     } catch (error) {
       console.error(
-        "List prompts error:",
+        'List prompts error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to list prompts",
+        message: error.response?.data?.detail || 'Failed to list prompts',
         status: error.response?.status || 500,
       };
     }
@@ -70,9 +70,9 @@ const promptService = {
       const response = await apiClient.get(`/api/prompts/${promptId}`);
       return response.data;
     } catch (error) {
-      console.error("Get prompt error:", error.response?.data || error.message);
+      console.error('Get prompt error:', error.response?.data || error.message);
       throw {
-        message: error.response?.data?.detail || "Failed to get prompt",
+        message: error.response?.data?.detail || 'Failed to get prompt',
         status: error.response?.status || 500,
       };
     }
@@ -93,11 +93,11 @@ const promptService = {
       return response.data;
     } catch (error) {
       console.error(
-        "Update prompt error:",
+        'Update prompt error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to update prompt",
+        message: error.response?.data?.detail || 'Failed to update prompt',
         status: error.response?.status || 500,
       };
     }
@@ -113,11 +113,11 @@ const promptService = {
       await apiClient.delete(`/api/prompts/${promptId}`);
     } catch (error) {
       console.error(
-        "Delete prompt error:",
+        'Delete prompt error:',
         error.response?.data || error.message
       );
       throw {
-        message: error.response?.data?.detail || "Failed to delete prompt",
+        message: error.response?.data?.detail || 'Failed to delete prompt',
         status: error.response?.status || 500,
       };
     }

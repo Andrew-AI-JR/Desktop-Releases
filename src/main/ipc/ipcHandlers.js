@@ -1,8 +1,4 @@
 const authHandlers = require('./authHandlers');
-const profileHandlers = require('./profileHandlers');
-const paymentHandlers = require('./paymentHandlers');
-const resumeHandlers = require('./resumeHandlers');
-const promptHandlers = require('./promptHandlers');
 const automationHandlers = require('./automationHandlers');
 
 /**
@@ -17,30 +13,9 @@ function setupIpcHandlers(ipcMain) {
   ipcMain.handle('auth:getUser', authHandlers.getUser);
   ipcMain.handle('auth:updateBio', authHandlers.updateBio);
   ipcMain.handle('auth:getBio', authHandlers.getBio);
-
-  // Profile handlers
-  ipcMain.handle('profile:get', profileHandlers.getProfile);
-  ipcMain.handle('profile:update', profileHandlers.updateProfile);
-
-  // Payment handlers
-  ipcMain.handle('payments:createCustomer', paymentHandlers.createCustomer);
-  ipcMain.handle(
-    'payments:createSubscription',
-    paymentHandlers.createSubscription
-  );
-
-  // Resume handlers
-  ipcMain.handle('resumes:upload', resumeHandlers.upload);
-  ipcMain.handle('resumes:list', resumeHandlers.list);
-  ipcMain.handle('resumes:download', resumeHandlers.download);
-  ipcMain.handle('resumes:delete', resumeHandlers.delete);
-
-  // Prompt handlers
-  ipcMain.handle('prompts:create', promptHandlers.create);
-  ipcMain.handle('prompts:list', promptHandlers.list);
-  ipcMain.handle('prompts:get', promptHandlers.get);
-  ipcMain.handle('prompts:update', promptHandlers.update);
-  ipcMain.handle('prompts:delete', promptHandlers.delete);
+  ipcMain.handle('auth:setTokens', authHandlers.setTokens);
+  ipcMain.handle('auth:getAccessToken', authHandlers.getAccessToken);
+  ipcMain.handle('auth:clearTokens', authHandlers.clearTokens);
 
   // Automation handlers
   ipcMain.handle('automation:runLinkedIn', automationHandlers.runLinkedIn);

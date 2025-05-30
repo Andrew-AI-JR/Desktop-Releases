@@ -24,9 +24,24 @@ let mainWindow;
 
 // Create the browser window
 const createWindow = () => {
+  // Determine the appropriate icon path based on platform
+  let iconPath;
+  if (process.platform === 'darwin') {
+    // macOS - use ICNS
+    iconPath = path.join(__dirname, '../../assets/icons/icon.icns');
+  } else if (process.platform === 'win32') {
+    // Windows - use ICO (you'll need to create this)
+    iconPath = path.join(__dirname, '../../assets/icons/icon.ico');
+  } else {
+    // Linux and others - use PNG (you'll need to create this)
+    iconPath = path.join(__dirname, '../../assets/icons/icon.png');
+  }
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: 'Junior Desktop',
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

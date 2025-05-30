@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('api', {
     getUser: () => ipcRenderer.invoke('auth:getUser'),
     updateBio: (bio) => ipcRenderer.invoke('auth:updateBio', bio),
     getBio: () => ipcRenderer.invoke('auth:getBio'),
+    setTokens: (accessToken, refreshToken) => 
+      ipcRenderer.invoke('auth:setTokens', { access_token: accessToken, refresh_token: refreshToken }),
+    getAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
+    clearTokens: () => ipcRenderer.invoke('auth:clearTokens'),
   },
 
   // Profile
@@ -58,5 +62,15 @@ contextBridge.exposeInMainWorld('api', {
     stopAutomation: () => ipcRenderer.invoke('automation:stop'),
     loadPersistentConfig: () => ipcRenderer.invoke('automation:loadConfig'),
     onLog: (callback) => ipcRenderer.on('automation-log', callback),
+  },
+});
+
+// Also expose as electronAPI for backward compatibility
+contextBridge.exposeInMainWorld('electronAPI', {
+  auth: {
+    setTokens: (accessToken, refreshToken) => 
+      ipcRenderer.invoke('auth:setTokens', { access_token: accessToken, refresh_token: refreshToken }),
+    getAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
+    clearTokens: () => ipcRenderer.invoke('auth:clearTokens'),
   },
 });

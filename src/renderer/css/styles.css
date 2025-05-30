@@ -516,3 +516,85 @@ button:disabled {
 .modal-content {
   padding: var(--spacing-lg);
 }
+
+/* ===== LOGIN OVERLAY ===== */
+.login-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.login-content {
+  background-color: var(--card-background);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-xl);
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-logo {
+  margin-bottom: var(--spacing-xl);
+}
+
+.logo-large {
+  height: 80px;
+  width: auto;
+}
+
+.error-message {
+  background-color: #fee;
+  color: var(--danger-color);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-md);
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+/* ===== USER MENU & LOGOUT ===== */
+.user-profile {
+  position: relative;
+  cursor: pointer;
+}
+
+.user-profile:hover .logout-dropdown {
+  display: block !important;
+}
+
+.logout-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-xs);
+  min-width: 120px;
+  z-index: 1000;
+}
+
+.logout-btn {
+  background: none;
+  border: none;
+  width: 100%;
+  padding: var(--spacing-sm);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.logout-btn:hover {
+  background-color: var(--input-background);
+}

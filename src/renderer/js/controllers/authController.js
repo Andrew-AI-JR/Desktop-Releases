@@ -8,7 +8,10 @@ export class AuthController {
     this.registerForm = document.getElementById('register-form');
     this.showRegisterLink = document.getElementById('show-register');
     this.showLoginLink = document.getElementById('show-login');
-    this.logoutButton = document.getElementById('logout');
+    this.loginOverlay = document.getElementById('login-overlay');
+    this.registerOverlay = document.getElementById('register-overlay');
+    this.mainApp = document.getElementById('main-app');
+    this.userProfile = document.getElementById('user-profile');
 
     // Bind event handlers
     this.setupEventListeners();
@@ -19,14 +22,14 @@ export class AuthController {
    */
   setupEventListeners() {
     // Switch between login and register views
-    this.showRegisterLink.addEventListener('click', (e) => {
+    this.showRegisterLink.addEventListener('click', e => {
       e.preventDefault();
-      this.viewManager.showView('register');
+      this.showRegisterOverlay();
     });
 
-    this.showLoginLink.addEventListener('click', (e) => {
+    this.showLoginLink.addEventListener('click', e => {
       e.preventDefault();
-      this.viewManager.showView('login');
+      this.showLoginOverlay();
     });
 
     // Handle form submissions
@@ -36,8 +39,79 @@ export class AuthController {
       this.handleRegister.bind(this)
     );
 
-    // Handle logout
-    this.logoutButton.addEventListener('click', this.handleLogout.bind(this));
+    // Setup logout functionality - will be bound when user is logged in
+  }
+
+  /**
+   * Setup logout functionality after login
+   */
+  setupLogoutEventListener() {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', this.handleLogout.bind(this));
+    }
+  }
+
+  /**
+   * Show login overlay
+   */
+  showLoginOverlay() {
+    this.loginOverlay.classList.remove('hidden');
+    this.registerOverlay.classList.add('hidden');
+    this.clearErrors();
+  }
+
+  /**
+   * Show register overlay
+   */
+  showRegisterOverlay() {
+    this.registerOverlay.classList.remove('hidden');
+    this.loginOverlay.classList.add('hidden');
+    this.clearErrors();
+  }
+
+  /**
+   * Show main app (user is authenticated)
+   */
+  showMainApp() {
+    this.loginOverlay.classList.add('hidden');
+    this.registerOverlay.classList.add('hidden');
+    this.mainApp.classList.remove('hidden');
+  }
+
+  /**
+   * Clear all error messages
+   */
+  clearErrors() {
+    const loginError = document.getElementById('login-error');
+    const registerError = document.getElementById('register-error');
+    if (loginError) {
+      loginError.classList.add('hidden');
+      loginError.textContent = '';
+    }
+    if (registerError) {
+      registerError.classList.add('hidden');
+      registerError.textContent = '';
+    }
+  }
+
+  /**
+   * Display user-friendly error message
+   * @param {string} elementId - ID of error element
+   * @param {string} userMessage - User-friendly message
+   * @param {Error} originalError - Original error for console logging
+   */
+  showError(elementId, userMessage, originalError = null) {
+    const errorElement = document.getElementById(elementId);
+    if (errorElement) {
+      errorElement.textContent = userMessage;
+      errorElement.classList.remove('hidden');
+    }
+
+    // Log detailed error to console for debugging
+    if (originalError) {
+      console.error('Detailed error:', originalError);
+    }
   }
 
   /**
@@ -46,50 +120,44 @@ export class AuthController {
    */
   async handleLogin(event) {
     event.preventDefault();
-    console.log('Login form submitted');
+    this.clearErrors();
+
     const email = this.loginForm.email.value.trim();
     const password = this.loginForm.password.value;
 
-    // Simple validation
     if (!email || !password) {
-      this.modalManager.alert(
-        'Please enter both email and password.',
-        'Login Error'
-      );
+      this.showError('login-error', 'Please enter both email and password.');
       return;
     }
 
+    this.setFormLoading(this.loginForm, true);
+
     try {
-      // Show loading state
-      this.setFormLoading(this.loginForm, true);
+      const response = await window.api.auth.login({ email, password });
 
-      // Call API to login
-      const result = await window.api.auth.login({ email, password });
+      // Load user data and show main app
+      await this.loadUserData();
+      this.showMainApp();
+      this.setupLogoutEventListener();
 
-      if (result) {
-        // Clear form
-        this.loginForm.reset();
-
-        // Get user info
-        const user = await this.getCurrentUser();
-
-        // Update UI with user info
-        this.updateUserInfo(user);
-
-        // Switch to dashboard view
-        this.viewManager.showView('dashboard');
-
-        // Load initial data
-        this.loadInitialData();
-      }
+      // Trigger loading of initial data
+      this.loadInitialData();
     } catch (error) {
-      console.error('Login error:', error);
-      this.modalManager.alert(
-        error.message || 'Login failed. Please try again.',
-        'Login Error'
-      );
+      let userMessage = 'Login failed. Please try again.';
+
+      if (error.status === 401) {
+        userMessage = 'Invalid email or password.';
+      } else if (error.status === 429) {
+        userMessage = 'Too many login attempts. Please try again later.';
+      } else if (error.status >= 500) {
+        userMessage = 'Server error. Please try again later.';
+      } else if (error.message && error.message.includes('network')) {
+        userMessage =
+          'Unable to connect to server. Please check your internet connection.';
+      }
+
+      this.showError('login-error', userMessage, error);
     } finally {
-      // Remove loading state
       this.setFormLoading(this.loginForm, false);
     }
   }
@@ -100,52 +168,77 @@ export class AuthController {
    */
   async handleRegister(event) {
     event.preventDefault();
+    this.clearErrors();
 
     const email = this.registerForm.email.value.trim();
     const password = this.registerForm.password.value;
     const confirmPassword = this.registerForm.confirmPassword.value;
 
-    // Simple validation
     if (!email || !password || !confirmPassword) {
-      this.modalManager.alert(
-        'Please fill out all fields.',
-        'Registration Error'
-      );
+      this.showError('register-error', 'Please fill out all fields.');
       return;
     }
 
     if (password !== confirmPassword) {
-      this.modalManager.alert('Passwords do not match.', 'Registration Error');
+      this.showError('register-error', 'Passwords do not match.');
       return;
     }
 
+    this.setFormLoading(this.registerForm, true);
+
     try {
-      // Show loading state
-      this.setFormLoading(this.registerForm, true);
+      await window.api.auth.register({ email, password });
 
-      // Call API to register
-      const result = await window.api.auth.register({ email, password });
+      // Clear form and show success
+      this.registerForm.reset();
+      this.showLoginOverlay();
 
-      if (result) {
-        // Clear form
-        this.registerForm.reset();
-
-        // Show success message and redirect to login
-        await this.modalManager.alert(
-          'Registration successful! Please log in.',
-          'Success'
+      // Show success in login form
+      setTimeout(() => {
+        this.showError(
+          'login-error',
+          'Registration successful! Please log in with your credentials.'
         );
-        this.viewManager.showView('login');
-      }
+        const loginErrorElement = document.getElementById('login-error');
+        if (loginErrorElement) {
+          loginErrorElement.style.backgroundColor = '#d4edda';
+          loginErrorElement.style.color = '#155724';
+        }
+      }, 100);
     } catch (error) {
-      console.error('Registration error:', error);
-      this.modalManager.alert(
-        error.message || 'Registration failed. Please try again.',
-        'Registration Error'
-      );
+      let userMessage = 'Registration failed. Please try again.';
+
+      if (error.status === 409) {
+        userMessage =
+          'This email is already registered. Please use a different email or try logging in.';
+      } else if (error.status === 422) {
+        userMessage = 'Invalid email or password format.';
+      } else if (error.status === 429) {
+        userMessage = 'Too many registration attempts. Please try again later.';
+      } else if (error.status >= 500) {
+        userMessage = 'Server error. Please try again later.';
+      } else if (error.message && error.message.includes('network')) {
+        userMessage =
+          'Unable to connect to server. Please check your internet connection.';
+      }
+
+      this.showError('register-error', userMessage, error);
     } finally {
-      // Remove loading state
       this.setFormLoading(this.registerForm, false);
+    }
+  }
+
+  /**
+   * Load user data from API and update UI
+   */
+  async loadUserData() {
+    try {
+      const userData = await window.api.auth.getUser();
+      this.updateUserInfo(userData);
+      return userData;
+    } catch (error) {
+      console.error('Load user data error:', error);
+      throw error;
     }
   }
 
@@ -153,25 +246,29 @@ export class AuthController {
    * Handle logout button click
    */
   async handleLogout() {
-    const confirmed = await this.modalManager.confirm(
-      'Are you sure you want to log out?'
-    );
+    try {
+      // Clear tokens from storage
+      await window.api.auth.clearTokens();
 
-    if (confirmed) {
-      try {
-        // Call API to logout
-        await window.api.auth.logout();
+      // Reset UI to login overlay
+      this.showLoginOverlay();
 
-        // Reset UI to login view
-        this.viewManager.showView('login');
-        document.querySelector('.user-name').textContent = 'Guest';
-      } catch (error) {
-        console.error('Logout error:', error);
-        this.modalManager.alert(
-          'An error occurred during logout.',
-          'Logout Error'
-        );
+      // Clear user info
+      const userNameElement = document.querySelector('.user-name');
+      if (userNameElement) {
+        userNameElement.textContent = 'Guest';
       }
+
+      // Clear any form data
+      this.loginForm.reset();
+      this.registerForm.reset();
+      this.clearErrors();
+    } catch (error) {
+      console.error('Logout error:', error);
+      this.showError(
+        'login-error',
+        'An error occurred during logout. Please try again.'
+      );
     }
   }
 
@@ -194,6 +291,9 @@ export class AuthController {
    */
   async isLoggedIn() {
     try {
+      const accessToken = await window.api.auth.getAccessToken();
+      if (!accessToken) return false;
+
       const user = await this.getCurrentUser();
       return !!(user && user.id);
     } catch (error) {
@@ -206,9 +306,25 @@ export class AuthController {
    * @param {Object} user - User data
    */
   updateUserInfo(user) {
+    // Update user name in header
     const userNameElement = document.querySelector('.user-name');
     if (userNameElement && user.email) {
       userNameElement.textContent = user.email.split('@')[0]; // Display username part of email
+    }
+
+    // Update subscription status if element exists
+    const subscriptionElement = document.querySelector('.subscription-status');
+    if (subscriptionElement && user.is_active !== undefined) {
+      subscriptionElement.textContent = user.is_active ? 'Active' : 'Inactive';
+      subscriptionElement.className = `subscription-status ${
+        user.is_active ? 'active' : 'inactive'
+      }`;
+    }
+
+    // Update full email if element exists
+    const emailElement = document.querySelector('.user-email');
+    if (emailElement && user.email) {
+      emailElement.textContent = user.email;
     }
   }
 

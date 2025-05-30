@@ -36,7 +36,7 @@
   },
   "build": {
     "appId": "com.junior.desktop",
-    "productName": "Junior Desktop",
+    "productName": "Junior",
     "directories": {
       "output": "dist"
     },
@@ -45,6 +45,7 @@
     "npmRebuild": false,
     "files": [
       "src/**/*",
+      "assets/**/*",
       "node_modules/**/*",
       "resources/**/*",
       "package.json"
@@ -65,6 +66,7 @@
       }
     ],
     "mac": {
+      "icon": "assets/icons/icon.icns",
       "category": "public.app-category.productivity",
       "target": [
         {
@@ -77,7 +79,7 @@
     },
     "dmg": {
       "title": "Junior Desktop",
-      "icon": null,
+      "icon": "assets/icons/icon.icns",
       "background": null,
       "format": "UDBZ",
       "window": {

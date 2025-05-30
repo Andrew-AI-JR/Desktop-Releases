@@ -64,7 +64,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} User data or error
    */
-  getUser: async (_event) => {
+  getUser: async _event => {
     try {
       return await authService.getCurrentUser();
     } catch (error) {
@@ -99,7 +99,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Bio response or error
    */
-  getBio: async (_event) => {
+  getBio: async _event => {
     try {
       return await authService.getBio();
     } catch (error) {
@@ -134,7 +134,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<string|null>} Access token or null
    */
-  getAccessToken: async (_event) => {
+  getAccessToken: async _event => {
     try {
       return await tokenManager.getAccessToken();
     } catch (error) {
@@ -148,7 +148,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<void>}
    */
-  clearTokens: async (_event) => {
+  clearTokens: async _event => {
     try {
       await tokenManager.clearTokens();
     } catch (error) {

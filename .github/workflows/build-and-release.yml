@@ -3,9 +3,9 @@ name: Build and Release Application
 on:
   push:
     branches: [main, develop]
-    tags: ["v*"]
+    tags: ['v*']
   pull_request:
-    branches: [main, test]
+    branches: [main]
 
 jobs:
   build:
@@ -34,13 +34,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "npm"
+          node-version: '18'
+          cache: 'npm'
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install Node.js dependencies
         run: npm ci
@@ -107,9 +107,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_LINK: ""
-          CSC_KEY_PASSWORD: ""
-          CSC_NAME: ""
+          CSC_LINK: ''
+          CSC_KEY_PASSWORD: ''
+          CSC_NAME: ''
           CSC_FOR_PULL_REQUEST: true
 
       - name: Upload build artifacts

@@ -86,15 +86,13 @@ jobs:
           }
         shell: powershell
 
-      - name: Build Electron app (Linux)
-        if: matrix.platform == 'linux'
-        run: npm run build:linux
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build Electron app (Windows)
         if: matrix.platform == 'win32'
-        run: npm run build:win
+        run: |
+          npm run build:python
+          $env:NODE_OPTIONS = '--max-old-space-size=4096'
+          npx electron-builder --win --publish=never
+        shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

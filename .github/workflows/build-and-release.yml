@@ -5,7 +5,7 @@ on:
     branches: [main, develop]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [main, test]
 
 jobs:
   build:
@@ -57,6 +57,19 @@ jobs:
           chmod +x scripts/setup-python-bundling.sh
           ./scripts/setup-python-bundling.sh
 
+      - name: Debug build environment (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          echo "Platform: ${{ matrix.platform }}"
+          echo "Architecture: ${{ matrix.arch }}"
+          echo "Working directory: $(pwd)"
+          echo "Icon file exists: $(ls -la assets/icons/icon.icns)"
+          echo "Python executable exists: $(ls -la resources/python-executables/*/linkedin_commenter || echo 'Not found')"
+          echo "Code signing environment:"
+          echo "CSC_IDENTITY_AUTO_DISCOVERY: $CSC_IDENTITY_AUTO_DISCOVERY"
+          echo "CSC_LINK: $CSC_LINK"
+          echo "CSC_KEY_PASSWORD: [hidden]"
+
       - name: Build Python executable (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -93,8 +106,11 @@ jobs:
         run: npm run build:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ""
+          CSC_KEY_PASSWORD: ""
+          CSC_NAME: ""
+          CSC_FOR_PULL_REQUEST: true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

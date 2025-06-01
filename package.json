@@ -68,10 +68,13 @@
     "mac": {
       "icon": "assets/icons/icon.icns",
       "category": "public.app-category.productivity",
+      "identity": null,
+      "type": "distribution",
       "target": [
         {
           "target": "dmg",
           "arch": [
+            "x64",
             "arm64"
           ]
         }

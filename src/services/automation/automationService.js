@@ -583,7 +583,7 @@ const automationService = {
           email: config.credentials?.email || '',
           password: config.credentials?.password || '',
         },
-        backend_url: process.env.BACKEND_URL || '',
+        backend_url: process.env.API_URL || '',
         browser_config: {
           chrome_profile_path: chromeProfilePath,
           headless: false,
@@ -599,7 +599,14 @@ const automationService = {
         short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
         max_comments: config.limits?.commentsPerCycle || 3,
       };
-
+      console.log(
+        'Creating config file:',
+        configPath,
+        'with contents',
+        pythonConfig,
+        'from env',
+        process.env
+      );
       fs.writeFileSync(configPath, JSON.stringify(pythonConfig, null, 2));
       return configPath;
     } catch (error) {

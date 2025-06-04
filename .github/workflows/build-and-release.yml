@@ -95,12 +95,14 @@ jobs:
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_URL: ${{ secrets.API_URL }}
 
       - name: Build Electron app (macOS)
         if: matrix.platform == 'darwin'
         run: npm run build:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_URL: ${{ env.API_URL }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           CSC_LINK: ''
           CSC_KEY_PASSWORD: ''

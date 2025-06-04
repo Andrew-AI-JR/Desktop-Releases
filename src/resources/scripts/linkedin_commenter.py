@@ -36,25 +36,7 @@ MAX_COMMENT_WORDS = 200
 
 # API configuration
 API_BASE_URL = None  # Will be set from config
-API_KEY = None
 SESSION_ID = None
-
-# === FALLBACK CONFIGURATION ===
-FALLBACK_CONFIG = {
-    "search_urls": ["https://www.linkedin.com/feed/"],
-    "daily_limit": 20,
-    "session_limit": 10,
-    "comment_delay_seconds": 30,
-    "keywords": ["data science", "machine learning", "ai", "python", "analytics"]
-}
-
-FALLBACK_COMMENT_TEMPLATES = [
-    "Great insights! I'd love to connect and discuss potential opportunities in {field}.",
-    "Interesting perspective! I'm always looking to expand my network in {field}.",
-    "This resonates with my experience in {field}. Would love to chat about opportunities!",
-    "Excellent point! I'm passionate about {field} and always open to new connections.",
-    "Thanks for sharing this! I'm actively exploring opportunities in {field}."
-]
 
 # === PRODUCTION SCORING SYSTEM ===
 def build_scoring_config():
@@ -215,7 +197,7 @@ def calculate_post_score(post_text, author_name=None):
     
     return final_score
 
-def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=40):
+def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=60):
     """Determine if a post is worth commenting on based on score."""
     score = calculate_post_score(post_text, author_name)
     debug_log(f"Post score: {score} (min required: {min_score})", "SCORE")
@@ -294,169 +276,179 @@ def sort_posts_by_priority(driver, posts):
 class BackendClient:
     """Client for interacting with the Junior backend API."""
     
-    def __init__(self, base_url, api_key=None):
+    def __init__(self, base_url, username=None, password=None, access_token=None):
         self.base_url = base_url.rstrip('/')
-        self.api_key = api_key
+        self.username = username
+        self.password = password
+        self.access_token = access_token
+        self.refresh_token = None
         self.session_id = None
         self.user_config = None
         self.tier_limits = None
     
     def authenticate(self, client_name="Desktop Client", client_version="1.0.0"):
-        """Authenticate with the backend API."""
+        """Authenticate with the backend API using JWT tokens."""
         try:
+            # If we already have an access token, verify it works
+            if self.access_token:
+                if self._verify_token():
+                    debug_log("Using existing access token", "AUTH")
+                    return True
+                else:
+                    debug_log("Existing token invalid, getting new one", "AUTH")
+            
+            # Get new access token using username/password
+            if not self.username or not self.password:
+                debug_log("No username/password provided for authentication", "ERROR")
+                return False
+            
             response = requests.post(
-                f"{self.base_url}/api/auth/client/authenticate",
-                json={
-                    "api_key": self.api_key,
-                    "client_name": client_name,
-                    "client_version": client_version
+                f"{self.base_url}/api/users/token",
+                data={
+                    "username": self.username,
+                    "password": self.password
                 },
-                headers=self._get_headers()
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
             response.raise_for_status()
-            data = response.json()
-            self.session_id = data["session_id"]
+            
+            token_data = response.json()
+            self.access_token = token_data.get("access_token")
+            self.refresh_token = token_data.get("refresh_token")
+            
+            if not self.access_token:
+                debug_log("No access token received from authentication", "ERROR")
+                return False
+            
+            debug_log("Successfully authenticated with JWT token", "AUTH")
             return True
+            
         except Exception as e:
             debug_log(f"Authentication failed: {e}", "ERROR")
             return False
     
-    def get_config(self):
-        """Get user configuration from backend."""
+    def _verify_token(self):
+        """Verify that the current access token is valid."""
         try:
             response = requests.get(
-                f"{self.base_url}/api/client/config",
+                f"{self.base_url}/api/users/me",
                 headers=self._get_headers()
             )
+            return response.status_code == 200
+        except Exception:
+            return False
+    
+    def _refresh_access_token(self):
+        """Refresh the access token using the refresh token."""
+        try:
+            if not self.refresh_token:
+                debug_log("No refresh token available", "ERROR")
+                return False
+            
+            response = requests.post(
+                f"{self.base_url}/api/users/token/refresh",
+                json={"refresh_token": self.refresh_token},
+                headers={"Content-Type": "application/json"}
+            )
             response.raise_for_status()
-            self.user_config = response.json()["config_data"]
-            return self.user_config
+            
+            token_data = response.json()
+            self.access_token = token_data.get("access_token")
+            
+            if self.access_token:
+                debug_log("Successfully refreshed access token", "AUTH")
+                return True
+            else:
+                debug_log("No access token received from refresh", "ERROR")
+                return False
+                
         except Exception as e:
-            debug_log(f"Failed to get config: {e}", "ERROR")
-            return {}
+            debug_log(f"Failed to refresh access token: {e}", "ERROR")
+            return False
+    
+    def _make_authenticated_request(self, method, url, **kwargs):
+        """Make an authenticated request with automatic token refresh."""
+        headers = kwargs.get('headers', {})
+        headers.update(self._get_headers())
+        kwargs['headers'] = headers
+        
+        try:
+            response = requests.request(method, url, **kwargs)
+            
+            # If unauthorized, try to refresh token once
+            if response.status_code == 401:
+                debug_log("Received 401, attempting to refresh token", "AUTH")
+                if self._refresh_access_token():
+                    # Update headers with new token and retry
+                    headers.update(self._get_headers())
+                    kwargs['headers'] = headers
+                    response = requests.request(method, url, **kwargs)
+                else:
+                    debug_log("Token refresh failed, re-authenticating", "AUTH")
+                    if self.authenticate():
+                        headers.update(self._get_headers())
+                        kwargs['headers'] = headers
+                        response = requests.request(method, url, **kwargs)
+            
+            return response
+            
+        except Exception as e:
+            debug_log(f"Request failed: {e}", "ERROR")
+            raise
+    
+    def get_config(self):
+        """Get user configuration from backend."""
+        # TODO: This endpoint doesn't exist in current API
+        # May need to use /api/users/bio or /api/profile/ instead
+        debug_log("get_config not implemented - endpoint missing", "WARNING")
+        return {}
     
     def get_tier_limits(self):
         """Get user's tier limits including warmup calculations."""
-        try:
-            response = requests.get(
-                f"{self.base_url}/api/users/subscription-limits",
-                headers=self._get_headers()
-            )
-            response.raise_for_status()
-            self.tier_limits = response.json()
-            return self.tier_limits
-        except Exception as e:
-            debug_log(f"Failed to get tier limits: {e}", "ERROR")
-            return None
+        # TODO: This endpoint doesn't exist in current API
+        debug_log("get_tier_limits not implemented - endpoint missing", "WARNING")
+        return None
     
     def calculate_daily_limit(self):
         """Calculate today's comment limit based on tier and warmup period."""
-        if not self.tier_limits:
-            self.get_tier_limits()
-        
-        if not self.tier_limits:
-            # Fallback to default limits
-            return 10
-        
-        # Check if in warmup period
-        if self.tier_limits.get("is_warmup", False):
-            current_limit = self.tier_limits.get("current_daily_limit", 10)
-            debug_log(f"In warmup period - Daily limit: {current_limit}", "INFO")
-            return current_limit
-        else:
-            # Use full tier limits
-            daily_max = self.tier_limits.get("daily_max", 50)
-            debug_log(f"Full tier access - Daily limit: {daily_max}", "INFO")
-            return daily_max
+        # TODO: Without subscription-limits endpoint, using default
+        debug_log("Using default daily limit (no subscription endpoint)", "WARNING")
+        return 20  # Default fallback
     
     def get_today_comment_count(self):
         """Get the number of comments already made today."""
-        try:
-            today = datetime.now(pytz.UTC).strftime("%Y-%m-%d")
-            response = requests.get(
-                f"{self.base_url}/api/analytics/comment-count",
-                params={"date": today},
-                headers=self._get_headers()
-            )
-            response.raise_for_status()
-            count = response.json().get("count", 0)
-            debug_log(f"Comments made today: {count}", "INFO")
-            return count
-        except Exception as e:
-            debug_log(f"Failed to get today's comment count: {e}", "ERROR")
-            return 0
+        # TODO: This endpoint doesn't exist in current API
+        debug_log("get_today_comment_count not implemented - endpoint missing", "WARNING")
+        return 0  # Default fallback
     
     def start_session(self):
         """Start an analytics session."""
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/analytics/session/start",
-                json={
-                    "session_id": self.session_id,
-                    "client_name": "Desktop Client",
-                    "client_version": "1.0.0",
-                    "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
-                },
-                headers=self._get_headers()
-            )
-            response.raise_for_status()
-            return True
-        except Exception as e:
-            debug_log(f"Failed to start session: {e}", "ERROR")
-            return False
+        # TODO: This endpoint doesn't exist in current API
+        debug_log("start_session not implemented - endpoint missing", "WARNING")
+        return True  # Always return true for now
     
     def add_comment_history(self, linkedin_urn, comment_text, post_text, success=True, failure_reason=None):
         """Record a comment in history."""
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/analytics/comment-history",
-                json={
-                    "linkedin_urn": linkedin_urn,
-                    "comment_text": comment_text,
-                    "post_text": post_text,
-                    "success": success,
-                    "failure_reason": failure_reason
-                },
-                headers=self._get_headers()
-            )
-            response.raise_for_status()
-            return True
-        except Exception as e:
-            debug_log(f"Failed to record comment history: {e}", "ERROR")
-            return False
+        # TODO: This endpoint doesn't exist in current API
+        debug_log("add_comment_history not implemented - endpoint missing", "WARNING")
+        return True  # Always return true for now
     
     def add_search_metrics(self, url, keyword, total_posts, hiring_posts, searches, efficiency):
         """Record search metrics."""
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/analytics/search-metrics",
-                json={
-                    "url": url,
-                    "keyword": keyword,
-                    "total_posts": total_posts,
-                    "hiring_posts": hiring_posts,
-                    "searches": searches,
-                    "efficiency": efficiency,
-                    "time_period": "daily"
-                },
-                headers=self._get_headers()
-            )
-            response.raise_for_status()
-            return True
-        except Exception as e:
-            debug_log(f"Failed to record search metrics: {e}", "ERROR")
-            return False
+        # TODO: This endpoint doesn't exist in current API
+        debug_log("add_search_metrics not implemented - endpoint missing", "WARNING")
+        return True  # Always return true for now
     
     def generate_comment(self, post_text, author_name=None):
         """Generate a comment using the backend API."""
         try:
-            response = requests.post(
+            response = self._make_authenticated_request(
+                'POST',
                 f"{self.base_url}/api/comments/generate",
                 json={
                     "post_text": post_text,
                     "author_name": author_name
-                },
-                headers=self._get_headers()
+                }
             )
             response.raise_for_status()
             return response.json()["comment"]
@@ -469,15 +461,21 @@ class BackendClient:
         headers = {
             "Content-Type": "application/json"
         }
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        if self.session_id:
-            headers["X-Session-ID"] = self.session_id
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
         return headers
 
 def debug_log(message, level="INFO"):
     """Enhanced debug logging with timestamps and levels."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Replace problematic Unicode characters with ASCII alternatives
+    message = (message.replace('\u274c', 'X')  # Replace ❌ with X
+              .replace('✅', '+')  # Replace ✅ with +
+              .replace('⚠️', '!')  # Replace ⚠️ with !
+              .replace('🔄', '->')  # Replace 🔄 with ->
+              .encode('ascii', 'replace').decode())  # Replace any other non-ASCII chars
+    
     log_line = f"[{timestamp}] [{level}] {message}"
     print(log_line)
     
@@ -489,7 +487,7 @@ def debug_log(message, level="INFO"):
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
             
-        with open(log_file, "a", encoding="utf-8") as f:
+        with open(log_file, "a", encoding="ascii") as f:
             f.write(log_line + "\n")
     except Exception as e:
         print(f"Error writing to log file: {e}")
@@ -629,16 +627,24 @@ def process_posts(driver, backend_client):
     # Get daily limit and check how many comments we've already made
     daily_limit = backend_client.calculate_daily_limit()
     today_count = backend_client.get_today_comment_count()
-    remaining_comments = daily_limit - today_count
+    remaining_daily = daily_limit - today_count
     
-    if remaining_comments <= 0:
+    # Get session limit from user config (default to 10 if not specified)
+    session_limit = backend_client.user_config.get("session_limit", 10) if backend_client.user_config else 10
+    
+    # Check daily limit first
+    if remaining_daily <= 0:
         debug_log(f"Daily limit of {daily_limit} comments reached. Stopping.", "WARNING")
         return 0
     
-    debug_log(f"Daily limit: {daily_limit}, Already made: {today_count}, Remaining: {remaining_comments}", "INFO")
+    # Enforce the lower of daily remaining or session limit
+    remaining_comments = min(remaining_daily, session_limit)
     
-    # Get minimum score threshold (default 40)
-    min_score = 40
+    debug_log(f"Daily limit: {daily_limit}, Already made today: {today_count}, Remaining daily: {remaining_daily}", "INFO")
+    debug_log(f"Session limit: {session_limit}, Will process up to: {remaining_comments} comments this session", "INFO")
+    
+    # Get minimum score threshold (default 55)
+    min_score = 55
     
     try:
         debug_log("Searching for visible posts", "SEARCH")
@@ -661,9 +667,12 @@ def process_posts(driver, backend_client):
             return 0
         
         for post_data in high_score_posts:
-            # Check if we've reached the daily limit
+            # Check if we've reached either daily or session limit
             if posts_commented >= remaining_comments:
-                debug_log(f"Reached remaining comment limit ({remaining_comments}). Stopping.", "WARNING")
+                if remaining_comments == remaining_daily:
+                    debug_log(f"Reached daily comment limit ({remaining_comments}). Stopping.", "WARNING")
+                else:
+                    debug_log(f"Reached session comment limit ({remaining_comments}). Stopping.", "WARNING")
                 break
             
             post = post_data['element']
@@ -1254,115 +1263,159 @@ def post_comment(driver, post, message):
         debug_log(traceback.format_exc(), "COMMENT")
         return False
 
-def generate_fallback_comment(post_text, author_name=None):
-    """Generate a simple comment when backend is unavailable."""
-    try:
-        import random
-        
-        # Simple field detection
-        field = "this field"
-        if any(keyword in post_text.lower() for keyword in ["data science", "data scientist"]):
-            field = "data science"
-        elif any(keyword in post_text.lower() for keyword in ["machine learning", "ml", "ai"]):
-            field = "machine learning"
-        elif any(keyword in post_text.lower() for keyword in ["analytics", "analyst"]):
-            field = "analytics"
-        elif any(keyword in post_text.lower() for keyword in ["python", "programming"]):
-            field = "technology"
-        
-        template = random.choice(FALLBACK_COMMENT_TEMPLATES)
-        comment = template.format(field=field)
-        
-        # Add Calendly link for hiring posts
-        if any(keyword in post_text.lower() for keyword in ["hiring", "recruiting", "job", "position", "opening"]):
-            comment += " Happy to discuss further: https://calendly.com/andrew_malinow_phd/intro-call"
-        
-        return comment
-    except Exception as e:
-        debug_log(f"Error generating fallback comment: {e}", "ERROR")
-        return "Great insights! I'd love to connect and discuss potential opportunities."
+def generate_search_urls(config):
+    """Generate search URLs from keywords + 'hiring' with time filters, just like Junior-Beta."""
+    debug_log("Generating dynamic search URLs from keywords", "URL_GEN")
+    
+    # Get keywords from config (check multiple possible locations)
+    keywords = config.get('keywords', [])
+    
+    # If keywords is a string (comma-separated), convert to list
+    if isinstance(keywords, str):
+        keywords = [k.strip() for k in keywords.split(',') if k.strip()]
+    
+    # Also check automation.keywords location (like Junior-Beta)
+    if not keywords:
+        automation_config = config.get('automation', {})
+        keywords = automation_config.get('keywords', [])
+        if isinstance(keywords, str):
+            keywords = [k.strip() for k in keywords.split(',') if k.strip()]
+    
+    if not keywords:
+        debug_log("No keywords found in config, using default search URLs", "URL_GEN")
+        return [{
+            'url': "https://www.linkedin.com/feed/",
+            'keyword': "feed",
+            'time_filter': "none",
+            'description': "LinkedIn Feed"
+        }]
+    
+    search_urls = []
+    
+    # Time filters to use - 24 hours, week, month (same as Junior-Beta)
+    time_filters = [
+        ("past-24h", "Past 24 hours"),
+        ("past-week", "Past week"),
+        ("past-month", "Past month")
+    ]
+    
+    # Generate URLs for each time filter, then each keyword
+    for time_filter, time_desc in time_filters:
+        for keyword in keywords:
+            # Create simple LinkedIn search URL for "keyword hiring" with time filter
+            search_query = f"{keyword} hiring"
+            encoded_query = search_query.replace(' ', '%20')
+            search_url = f"https://www.linkedin.com/search/results/content/?datePosted=%22{time_filter}%22&keywords={encoded_query}&origin=FACETED_SEARCH"
+            search_urls.append({
+                'url': search_url,
+                'keyword': keyword,
+                'time_filter': time_filter,
+                'description': f"{keyword} hiring - {time_desc}"
+            })
+    
+    # Add feed as a fallback (no time filter)
+    search_urls.append({
+        'url': "https://www.linkedin.com/feed/",
+        'keyword': "feed",
+        'time_filter': "none",
+        'description': "LinkedIn Feed"
+    })
+    
+    debug_log(f"Generated {len(search_urls)} search URLs from {len(keywords)} keywords", "URL_GEN")
+    debug_log("Search URL order:", "URL_GEN")
+    debug_log("1. Past 24 hours searches (freshest posts)", "URL_GEN")
+    for item in search_urls:
+        if item['time_filter'] == 'past-24h':
+            debug_log(f"   - {item['description']}", "URL_GEN")
+    debug_log("2. Past week searches", "URL_GEN")
+    for item in search_urls:
+        if item['time_filter'] == 'past-week':
+            debug_log(f"   - {item['description']}", "URL_GEN")
+    debug_log("3. Past month searches", "URL_GEN")
+    for item in search_urls:
+        if item['time_filter'] == 'past-month':
+            debug_log(f"   - {item['description']}", "URL_GEN")
+    
+    return search_urls
 
 def main():
-    """Main execution function with backend fallback support."""
+    """Main execution function - backend only."""
     debug_log("="*50, "START")
     debug_log(f"Starting LinkedIn commenter at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "START")
     debug_log("Running in headed mode for real-time debugging", "START")
     debug_log("="*50, "START")
     
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='LinkedIn Commenter')
+    parser = argparse.ArgumentParser(description='LinkedIn Commenter - Backend Only')
     parser.add_argument('--config', type=str, help='Configuration file path')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
-    parser.add_argument('--offline', action='store_true', help='Run without backend (offline mode)')
     args = parser.parse_args()
     
-    # Initialize variables
+    # Initialize backend client
     backend_client = None
-    backend_available = False
-    config = FALLBACK_CONFIG.copy()
+    config = {}
     
     # Try to load local config file first
     if args.config and os.path.exists(args.config):
         try:
             with open(args.config, 'r') as f:
-                local_config = json.load(f)
-                config.update(local_config)
+                config = json.load(f)
             debug_log(f"Local configuration loaded from: {args.config}", "CONFIG")
         except Exception as e:
-            debug_log(f"Error reading config file: {e}", "WARNING")
+            debug_log(f"Error reading config file: {e}", "ERROR")
+            sys.exit(1)
     
-    # Try backend integration unless explicitly offline
-    if not args.offline:
-        try:
-            # Set global configuration for backend
-            global API_BASE_URL, API_KEY
-            API_BASE_URL = config.get('backend_url', 'http://localhost:8000')
-            API_KEY = config.get('api_key')
+    # Backend connection is required
+    try:
+        # Set global configuration for backend
+        global API_BASE_URL
+        API_BASE_URL = config.get('backend_url')
+        username = config.get('username')
+        password = config.get('password')
+        access_token = config.get('access_token')  # Optional: can provide pre-generated token
+        
+        if not API_BASE_URL:
+            debug_log("❌ Missing backend_url in configuration", "ERROR")
+            debug_log("This script requires backend connection. Please provide valid backend configuration.", "ERROR")
+            sys.exit(1)
+        
+        if not access_token and (not username or not password):
+            debug_log("❌ Missing username/password or access_token in configuration", "ERROR")
+            debug_log("This script requires either username/password or access_token for authentication.", "ERROR")
+            sys.exit(1)
+        
+        debug_log("Attempting backend connection...", "BACKEND")
+        backend_client = BackendClient(API_BASE_URL, username, password, access_token)
+        
+        # Try to authenticate
+        if not backend_client.authenticate():
+            debug_log("❌ Backend authentication failed", "ERROR")
+            sys.exit(1)
+        
+        debug_log("✅ Backend connected successfully!", "BACKEND")
+        
+        # Start analytics session
+        if backend_client.start_session():
+            debug_log("✅ Analytics session started", "BACKEND")
+        
+        # Get backend configuration
+        backend_config = backend_client.get_config()
+        if backend_config:
+            config.update(backend_config)
+            debug_log("✅ Backend configuration loaded", "BACKEND")
             
-            if API_BASE_URL and API_KEY:
-                debug_log("Attempting backend connection...", "BACKEND")
-                backend_client = BackendClient(API_BASE_URL, API_KEY)
-                
-                # Try to authenticate
-                if backend_client.authenticate():
-                    debug_log("✅ Backend connected successfully!", "BACKEND")
-                    backend_available = True
-                    
-                    # Start analytics session
-                    if backend_client.start_session():
-                        debug_log("✅ Analytics session started", "BACKEND")
-                    
-                    # Get backend configuration
-                    backend_config = backend_client.get_config()
-                    if backend_config:
-                        config.update(backend_config)
-                        debug_log("✅ Backend configuration loaded", "BACKEND")
-                else:
-                    debug_log("⚠️ Backend authentication failed, using offline mode", "BACKEND")
-            else:
-                debug_log("⚠️ No backend credentials found, using offline mode", "BACKEND")
-        except Exception as e:
-            debug_log(f"⚠️ Backend connection failed: {e}, using offline mode", "BACKEND")
-    else:
-        debug_log("🔄 Running in explicit offline mode", "BACKEND")
+    except Exception as e:
+        debug_log(f"❌ Backend connection failed: {e}", "ERROR")
+        debug_log("This script requires backend connection. Please check your configuration.", "ERROR")
+        sys.exit(1)
     
     # Display current configuration
-    if backend_available:
-        debug_log("🌐 Mode: ONLINE (Backend Connected)", "CONFIG")
-    else:
-        debug_log("📱 Mode: OFFLINE (Fallback Configuration)", "CONFIG")
-    
-    debug_log(f"Daily limit: {config.get('daily_limit', 20)}", "CONFIG")
-    debug_log(f"Session limit: {config.get('session_limit', 10)}", "CONFIG")
+    debug_log("🌐 Mode: BACKEND ONLY", "CONFIG")
     debug_log(f"Comment delay: {config.get('comment_delay_seconds', 30)}s", "CONFIG")
     
     # Initialize browser
     debug_log("Initializing browser...", "INIT")
     driver = initialize_driver()
-    
-    # Local tracking for offline mode
-    comments_made = 0
-    session_limit = config.get('session_limit', 10)
     
     try:
         # Verify login
@@ -1372,46 +1425,42 @@ def main():
             sys.exit(1)
         
         # Process search URLs
-        search_urls = config.get('search_urls', ["https://www.linkedin.com/feed/"])
-        for url in search_urls:
+        search_urls = generate_search_urls(config)
+        for url_data in search_urls:
             try:
-                debug_log(f"Processing URL: {url}", "URL")
+                # Extract URL and metadata from the dictionary
+                url = url_data['url'] if isinstance(url_data, dict) else url_data
+                keyword = url_data.get('keyword', '') if isinstance(url_data, dict) else ''
+                description = url_data.get('description', url) if isinstance(url_data, dict) else url
+                
+                debug_log(f"Processing URL: {description}", "URL")
                 driver.get(url)
                 time.sleep(random.uniform(3, 5))
                 
-                # Process posts with appropriate client
-                if backend_available:
-                    processed_count = process_posts(driver, backend_client)
-                else:
-                    processed_count = process_posts_offline(driver, config, comments_made, session_limit)
-                    comments_made += processed_count
+                # Process posts with backend client
+                processed_count = process_posts(driver, backend_client)
                 
                 if processed_count > 0:
-                    debug_log(f"Successfully processed {processed_count} posts", "SUCCESS")
+                    debug_log(f"Successfully processed {processed_count} posts from {description}", "SUCCESS")
                     time.sleep(random.uniform(15, 30))
                 
-                # Record metrics if backend available
-                if backend_available and backend_client:
-                    try:
-                        backend_client.add_search_metrics(
-                            url=url,
-                            keyword="",
-                            total_posts=len(find_posts(driver)),
-                            hiring_posts=0,
-                            searches=1,
-                            efficiency=processed_count / max(len(find_posts(driver)), 1)
-                        )
-                    except Exception as e:
-                        debug_log(f"Error recording metrics: {e}", "WARNING")
-                
-                # Check session limit for offline mode
-                if not backend_available and comments_made >= session_limit:
-                    debug_log(f"Reached session limit ({session_limit}) in offline mode", "INFO")
-                    break
+                # Record metrics with keyword information
+                try:
+                    backend_client.add_search_metrics(
+                        url=url,
+                        keyword=keyword,
+                        total_posts=len(find_posts(driver)),
+                        hiring_posts=0,
+                        searches=1,
+                        efficiency=processed_count / max(len(find_posts(driver)), 1)
+                    )
+                except Exception as e:
+                    debug_log(f"Error recording metrics: {e}", "WARNING")
                     
             except Exception as e:
-                debug_log(f"Error processing URL {url}: {e}", "ERROR")
+                debug_log(f"Error processing URL {description if 'description' in locals() else url}: {e}", "ERROR")
                 continue
+                
     except Exception as e:
         debug_log(f"Fatal error: {e}", "ERROR")
         debug_log(traceback.format_exc(), "ERROR")
@@ -1420,110 +1469,6 @@ def main():
         driver.quit()
     
     debug_log("Script execution completed", "END")
-
-def process_posts_offline(driver, config, comments_made, session_limit):
-    """Process posts in offline mode with local configuration."""
-    debug_log("Processing posts in OFFLINE mode", "PROCESS")
-    posts_processed = 0
-    posts_commented = 0
-    min_score = 40
-    
-    # Check session limit
-    remaining_comments = session_limit - comments_made
-    if remaining_comments <= 0:
-        debug_log(f"Session limit of {session_limit} comments reached in offline mode", "WARNING")
-        return 0
-    
-    debug_log(f"Session limit: {session_limit}, Already made: {comments_made}, Remaining: {remaining_comments}", "INFO")
-    
-    try:
-        posts = find_posts(driver)
-        if not posts:
-            debug_log("No posts found on current page", "WARNING")
-            return 0
-        
-        debug_log(f"Found {len(posts)} posts, sorting by priority", "SEARCH")
-        
-        # Sort posts by priority
-        sorted_posts = sort_posts_by_priority(driver, posts)
-        
-        # Filter to only high-scoring posts
-        high_score_posts = [p for p in sorted_posts if p['score'] >= min_score]
-        debug_log(f"Found {len(high_score_posts)} posts with score >= {min_score}", "FILTER")
-        
-        if not high_score_posts:
-            debug_log("No posts meet minimum score threshold", "WARNING")
-            return 0
-        
-        for post_data in high_score_posts:
-            if posts_commented >= remaining_comments:
-                debug_log(f"Reached remaining comment limit ({remaining_comments}). Stopping.", "WARNING")
-                break
-            
-            post = post_data['element']
-            hours_ago = post_data['hours_ago']
-            score = post_data['score']
-            author_name = post_data['author']
-            
-            try:
-                debug_log(f"Processing post (score: {score}, {hours_ago:.1f}h ago, author: {author_name})", "PROCESS")
-                posts_processed += 1
-                
-                debug_log("Scrolling post into view", "ACTION")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post)
-                time.sleep(1)
-                
-                debug_log("Attempting to expand post content", "ACTION")
-                expand_post(driver, post)
-                
-                debug_log("Extracting full post text", "DATA")
-                post_text = get_post_text(driver, post)
-                
-                if not post_text or len(post_text) < 10:
-                    debug_log(f"Post text too short or empty (length: {len(post_text)}), skipping", "SKIP")
-                    continue
-                
-                # Re-score with full text
-                should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score)
-                if not should_comment:
-                    debug_log(f"Post score too low after full text analysis ({final_score} < {min_score}), skipping", "SKIP")
-                    continue
-                
-                debug_log("Checking for existing comments", "CHECK")
-                if has_already_commented(driver, post):
-                    debug_log("Already commented on this post, skipping", "SKIP")
-                    continue
-                
-                debug_log("Generating comment (offline mode)", "GENERATE")
-                custom_message = generate_fallback_comment(post_text, author_name)
-                debug_log(f"Generated comment: {custom_message}", "DATA")
-                
-                if len(custom_message.split()) > len(post_text.split()):
-                    debug_log("Comment longer than post, skipping", "SKIP")
-                    continue
-                
-                debug_log("Attempting to post comment", "ACTION")
-                comment_success = post_comment(driver, post, custom_message)
-                if comment_success:
-                    debug_log("Successfully posted comment", "SUCCESS")
-                    posts_commented += 1
-                    
-                    # Apply comment delay
-                    delay_seconds = config.get("comment_delay_seconds", 30)
-                    debug_log(f"Sleeping {delay_seconds} seconds between comments", "WAIT")
-                    time.sleep(delay_seconds)
-                else:
-                    debug_log("Failed to post comment", "ERROR")
-                    
-            except Exception as e:
-                debug_log(f"Error processing post: {str(e)}", "ERROR")
-                continue
-        
-        debug_log(f"Processed {posts_processed} posts, commented on {posts_commented} (offline mode)", "SUMMARY")
-        return posts_commented
-    except Exception as e:
-        debug_log(f"Error in process_posts_offline: {str(e)}", "ERROR")
-        return 0
 
 if __name__ == "__main__":
     main() 

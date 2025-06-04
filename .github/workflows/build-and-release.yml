@@ -1,124 +1,259 @@
-name: Build and Release Application
+name: Build and Release Junior Desktop (Direct)
 
 on:
   push:
-    branches: [main, develop]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            platform: win32
-            arch: x64
-          - os: macos-13
-            platform: darwin
-            arch: x64
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-    runs-on: ${{ matrix.os }}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Junior Desktop ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Junior Desktop Release ${{ steps.get_version.outputs.version }}
 
+            ### What's New
+            - Desktop application for LinkedIn automation
+            - Cross-platform support (Windows, macOS Intel, macOS ARM)
+            - Backend API integration with Cloud Run
+            - API key authentication
+            - Tier-based limits with warmup period
+
+            ### Installation
+            1. Download the appropriate file for your platform.
+            2. Install the application.
+            3. Get your API key from the purchase email.
+            4. Launch Junior and enter your API key.
+            5. Configure your LinkedIn credentials and bio.
+
+            ### Downloads
+            - **Windows**: Junior-Setup-${{ steps.get_version.outputs.version }}.exe
+            - **macOS Intel**: Junior-${{ steps.get_version.outputs.version }}.dmg
+            - **macOS ARM (M1/M2)**: Junior-${{ steps.get_version.outputs.version }}-arm64.dmg
+          draft: false
+          prerelease: false
+
+  build-and-upload-windows:
+    needs: create-release
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash # Explicitly use bash for consistency where possible
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
-      - name: Install Node.js dependencies
-        run: npm ci
-
-      - name: Install Python dependencies and PyInstaller
+      - name: Install dependencies
+        # working-directory: junior-desktop # Removed, commands run from repo root
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
+          npm ci
           pip install -r src/resources/scripts/requirements.txt
-
-      - name: Build Python executable (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Build Windows executable
+        # working-directory: junior-desktop # Removed
         run: |
-          chmod +x scripts/setup-python-bundling.sh
-          ./scripts/setup-python-bundling.sh
-
-      - name: Debug build environment (macOS)
-        if: matrix.platform == 'darwin'
+          export NODE_OPTIONS='--max-old-space-size=4096'
+          npm run build:win
+      - name: List contents of dist directory (Windows)
         run: |
-          echo "Platform: ${{ matrix.platform }}"
-          echo "Architecture: ${{ matrix.arch }}"
-          echo "Working directory: $(pwd)"
-          echo "Icon file exists: $(ls -la assets/icons/icon.icns)"
-          echo "Python executable exists: $(ls -la resources/python-executables/*/linkedin_commenter || echo 'Not found')"
-          echo "Code signing environment:"
-          echo "CSC_IDENTITY_AUTO_DISCOVERY: $CSC_IDENTITY_AUTO_DISCOVERY"
-          echo "CSC_LINK: $CSC_LINK"
-          echo "CSC_KEY_PASSWORD: [hidden]"
-
-      - name: Build Python executable (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          # Create platform directory
-          $platformDir = if ([System.Environment]::Is64BitOperatingSystem) { "win-x64" } else { "win-ia32" }
-          New-Item -ItemType Directory -Force -Path "resources/python-executables/$platformDir"
-
-          # Build using PyInstaller
-          python -m PyInstaller --distpath "resources/python-executables/$platformDir" --workpath "build/pyinstaller" linkedin_commenter.spec
-
-          # Verify executable was created
-          if (Test-Path "resources/python-executables/$platformDir/linkedin_commenter.exe") {
-            Write-Host "✅ Executable created successfully"
-          } else {
-            Write-Error "❌ Executable not found after build"
-            exit 1
-          }
-        shell: powershell
-
-      - name: Build Electron app (Windows)
-        if: matrix.platform == 'win32'
-        run: |
-          npm run build:python
-          $env:NODE_OPTIONS = '--max-old-space-size=4096'
-          npx electron-builder --win --publish=never
-        shell: powershell
+          echo "Listing contents of dist/ (Windows):"
+          ls -lR dist/
+          echo "Listing contents of current directory (Windows):"
+          ls -lR .
+      - name: Upload Windows Release Asset
+        uses: actions/upload-release-asset@v1
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          API_URL: ${{ secrets.API_URL }}
-
-      - name: Build Electron app (macOS)
-        if: matrix.platform == 'darwin'
-        run: npm run build:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          API_URL: ${{ env.API_URL }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_LINK: ''
-          CSC_KEY_PASSWORD: ''
-          CSC_NAME: ''
-          CSC_FOR_PULL_REQUEST: true
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: junior-desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            dist/*.dmg
-            dist/*.pkg
-            dist/*.exe
-            dist/*.msi
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-          retention-days: 30
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: dist/Junior Setup 1.0.0.exe # Changed to match actual build output
+          asset_name: Junior-Setup-${{ needs.create-release.outputs.release_version }}.exe
+          asset_content_type: application/octet-stream
+
+  build-and-upload-macos-intel:
+    needs: create-release
+    runs-on: macos-13
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        # working-directory: junior-desktop # Removed
+        run: |
+          npm ci
+          pip install -r src/resources/scripts/requirements.txt
+      - name: Modify package.json for x64 (Intel) DMG build
+        # working-directory: junior-desktop # Removed
+        run: |
+          node -e "
+          const fs = require('fs');
+          const pkgPath = 'package.json'; // Assuming package.json is in the root
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+          // Ensure the build and mac sections exist
+          pkg.build = pkg.build || {};
+          pkg.build.mac = pkg.build.mac || {};
+
+          // Explicitly set the mac.target to build only x64 dmg
+          // This overrides any existing target configurations for mac
+          pkg.build.mac.target = [{ target: 'dmg', arch: ['x64'] }];
+
+          // Explicitly set the top-level mac arch to x64
+          // pkg.build.mac.arch = ['x64']; // This line is invalid and causes the error
+
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+          console.log('package.json explicitly configured for x64 (Intel) DMG build.');
+          "
+      - name: Build macOS app (Intel)
+        # working-directory: junior-desktop # Removed
+        run: npm run build:mac -- --x64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: List contents of dist directory (Intel Mac)
+        run: |
+          echo "Listing contents of dist/ (Intel Mac):"
+          ls -lR dist/
+          echo "Listing contents of current directory:"
+          ls -lR .
+      - name: Upload macOS Intel Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: dist/Junior-1.0.0.dmg # Changed to match actual build output
+          asset_name: Junior-${{ needs.create-release.outputs.release_version }}.dmg
+          asset_content_type: application/octet-stream
+
+  build-and-upload-macos-arm:
+    needs: create-release
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        # working-directory: junior-desktop # Removed
+        run: |
+          npm ci
+          pip install -r src/resources/scripts/requirements.txt
+      - name: Modify package.json for ARM64 build
+        # working-directory: junior-desktop # Removed
+        run: |
+          node -e "
+          const fs = require('fs');
+          const pkgPath = 'package.json'; 
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          if (pkg.build && pkg.build.mac && pkg.build.mac.target && Array.isArray(pkg.build.mac.target)) {
+            if (typeof pkg.build.mac.target[0] === 'string') {
+                 pkg.build.mac.target = [{ target: pkg.build.mac.target[0], arch: ['arm64'] }];
+            } else if (typeof pkg.build.mac.target[0] === 'object' && !pkg.build.mac.target[0].arch) {
+                 pkg.build.mac.target[0].arch = ['arm64'];
+            } else if (Array.isArray(pkg.build.mac.target[0].arch)){
+                 pkg.build.mac.target[0].arch = ['arm64']; 
+            } else { 
+                 pkg.build.mac.target[0].arch = ['arm64'];
+            }
+          } else {
+            pkg.build = pkg.build || {};
+            pkg.build.mac = pkg.build.mac || {};
+            pkg.build.mac.target = [{ target: 'dmg', arch: ['arm64'] }];
+          }
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+          console.log('package.json updated for ARM64 build');
+          "
+      - name: Build macOS app (ARM64)
+        # working-directory: junior-desktop # Removed
+        run: npm run build:mac -- --arm64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Rename ARM64 build
+        working-directory: dist # Operate within dist where DMGs are
+        run: |
+          VERSION_FROM_TAG="${{ needs.create-release.outputs.release_version }}"
+          EXPECTED_DMG_NAME="Junior-${VERSION_FROM_TAG}-arm64.dmg"
+          # Find the generated DMG, electron-builder might add arch in the name if not explicitly handled by build config
+          ACTUAL_DMG=$(ls Junior*.dmg | grep -E "arm64|aarch64" | head -n 1 || true) # Allow to proceed if no specific arch-named file initially
+          if [ -z "$ACTUAL_DMG" ]; then # If no arch-specific name, try the generic name from the Intel build (if ARM build failed to produce specific name)
+            ACTUAL_DMG=$(ls Junior-*.dmg | grep -v "arm64\|aarch64" | head -n 1 || true)
+          fi
+
+          if [ -z "$ACTUAL_DMG" ]; then
+            echo "ARM64 DMG not found after checking specific and generic names!"
+            ls -R . # List files for debugging
+            exit 1
+          fi
+
+          # If actual name is already the expected one, no rename needed
+          if [ "$ACTUAL_DMG" == "$EXPECTED_DMG_NAME" ]; then
+            echo "DMG name $EXPECTED_DMG_NAME is already correct."
+          elif [ -f "$ACTUAL_DMG" ]; then # Ensure actual_dmg is a file before trying to move
+            echo "Renaming $ACTUAL_DMG to $EXPECTED_DMG_NAME"
+            mv "$ACTUAL_DMG" "$EXPECTED_DMG_NAME"
+          else 
+            echo "Could not find a DMG to rename. Expected $ACTUAL_DMG to be a file or $EXPECTED_DMG_NAME."
+            ls -R . # List files for debugging
+            exit 1
+          fi
+      - name: Upload macOS ARM64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: dist/Junior-${{ needs.create-release.outputs.release_version }}-arm64.dmg # Path relative to repo root
+          asset_name: Junior-${{ needs.create-release.outputs.release_version }}-arm64.dmg
+          asset_content_type: application/octet-stream
+
+  # Optional: Placeholder for any post-release actions if needed in the future
+  # post-release-steps:
+  #   needs: [build-and-upload-windows, build-and-upload-macos-intel, build-and-upload-macos-arm]
+  #   runs-on: ubuntu-latest
+  #   if: startsWith(github.ref, 'refs/tags/')
+  #   steps:
+  #     - name: Post-release notification or update
+  #       run: echo "Release ${{ needs.create-release.outputs.release_version }} successfully built and all assets uploaded."

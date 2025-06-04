@@ -13,7 +13,7 @@
     "build:dmg": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
     "build:python": "node scripts/build-python-cross-platform.js",
     "build:python:force": "rm -rf resources/python-executables && npm run build:python",
-    "build:win": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --win --publish=never",
+    "build:win": "npm run build:python && electron-builder --win --publish=never",
     "build:mac": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
     "build:linux": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --linux --publish=never",
     "release": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=always",

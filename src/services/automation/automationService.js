@@ -4,7 +4,8 @@ const fs = require('fs');
 const { app, BrowserWindow } = require('electron');
 const pythonDependencyService = require('./pythonDependencyService');
 const pythonBundleService = require('./pythonBundleService');
-
+const errorCodes = require('./errorCodes');
+const tokenManager = require('../auth/tokenManager');
 // Track the running process
 let pythonProcess = null;
 let isRunning = false;
@@ -48,6 +49,8 @@ const automationService = {
    * @returns {Promise<Object>} Result of the automation
    */
   async runLinkedInAutomation(config) {
+    await this._cleanupStaleProcess();
+
     if (isRunning) {
       throw new Error('Automation is already running');
     }
@@ -67,6 +70,7 @@ const automationService = {
           const chromeAvailable = await this.checkChromeAvailability();
           if (!chromeAvailable) {
             isRunning = false;
+            console.error('[runLinkedInAutomation] Chrome not found');
             reject({
               message:
                 'Google Chrome is not installed or not accessible. Please install Chrome to use the LinkedIn automation feature.',
@@ -77,7 +81,7 @@ const automationService = {
           }
 
           // Create a temporary config file to pass to the Python script
-          configPath = this.createConfigFile(config);
+          configPath = await this.createConfigFile(config);
 
           // Send log messages to renderer
           const sendLogMessage = message => {
@@ -125,7 +129,10 @@ const automationService = {
           if (configPath) {
             this.cleanupConfigFile(configPath);
           }
-
+          console.error(
+            '[runLinkedInAutomation] Error during automation run:',
+            error
+          );
           reject({
             message: error.message || 'Automation failed',
             status: error.status || 500,
@@ -135,6 +142,44 @@ const automationService = {
 
       runAsync();
     });
+  },
+
+  /**
+   * Clean up stale processes before starting new automation
+   * @private
+   */
+  async _cleanupStaleProcess() {
+    try {
+      // If we think something is running but the process is dead, clean it up
+      if (isRunning && global.pythonProcess) {
+        // Check if process is actually still running
+        try {
+          process.kill(global.pythonProcess.pid, 0); // Signal 0 just checks if process exists
+        } catch (error) {
+          // Process doesn't exist, clean up the state
+          console.log('[_cleanupStaleProcess] Cleaning up stale process state');
+          isRunning = false;
+          global.pythonProcess = null;
+          return;
+        }
+      }
+
+      // If we have a running process, try to stop it gracefully
+      if (isRunning) {
+        console.log(
+          '[_cleanupStaleProcess] Stopping existing automation before starting new one'
+        );
+        await this.stopAutomation();
+      }
+    } catch (error) {
+      // If cleanup fails, force reset the state
+      console.warn(
+        '[_cleanupStaleProcess] Error during cleanup, forcing reset:',
+        error.message
+      );
+      isRunning = false;
+      global.pythonProcess = null;
+    }
   },
 
   /**
@@ -149,8 +194,6 @@ const automationService = {
     reject
   ) {
     try {
-      sendLogMessage('Production mode: Using bundled Python executable...');
-
       // In production, bundled Python MUST be available
       if (!pythonBundleService.isBundledPythonAvailable()) {
         throw new Error(
@@ -158,16 +201,9 @@ const automationService = {
         );
       }
 
-      // Find bundled script (MUST exist in production)
-      const scriptPath = this._findProductionScript();
-      sendLogMessage(`Using bundled script: ${path.basename(scriptPath)}`);
-
       // Get writable paths for logs and Chrome profile
       const logFilePath = this.getLogFilePath();
       const chromeProfilePath = this.getChromeProfilePath();
-
-      sendLogMessage(`Log file: ${logFilePath}`);
-      sendLogMessage(`Chrome profile: ${chromeProfilePath}`);
 
       // Create environment with writable paths
       const env = {
@@ -176,17 +212,20 @@ const automationService = {
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
       };
 
-      // Run bundled Python executable
+      // Run bundled executable directly (no script path needed - it's compiled in)
       const pythonProcess = pythonBundleService.runBundledPython(
-        [scriptPath, '--config', configPath],
+        ['--config', configPath], // Only pass the config, not the script path
         { env }
       );
+
+      // For the handlers, we'll use the executable path as the "script path"
+      const executablePath = pythonBundleService.getBundledPythonPath();
 
       this._setupProcessHandlers(
         pythonProcess,
         configPath,
         true,
-        scriptPath,
+        executablePath, // Use executable path instead of script path
         sendLogMessage,
         resolve,
         reject
@@ -194,6 +233,7 @@ const automationService = {
     } catch (error) {
       isRunning = false;
       this.cleanupConfigFile(configPath);
+      console.error('[_runProductionMode] Error:', error);
       reject({
         message: `Production mode failed: ${error.message}`,
         status: 500,
@@ -213,8 +253,6 @@ const automationService = {
     reject
   ) {
     try {
-      sendLogMessage('Development mode: Using system Python...');
-
       // Check system Python availability
       const systemPythonAvailable =
         await pythonBundleService.isSystemPythonAvailable();
@@ -244,9 +282,6 @@ const automationService = {
       const logFilePath = this.getLogFilePath();
       const chromeProfilePath = this.getChromeProfilePath();
 
-      sendLogMessage(`Log file: ${logFilePath}`);
-      sendLogMessage(`Chrome profile: ${chromeProfilePath}`);
-
       // Create environment with writable paths
       const env = {
         ...process.env,
@@ -274,6 +309,7 @@ const automationService = {
     } catch (error) {
       isRunning = false;
       this.cleanupConfigFile(configPath);
+      console.error('[_runDevelopmentMode] Error:', error);
       reject({
         message: `Development mode failed: ${error.message}`,
         status: 500,
@@ -296,8 +332,6 @@ const automationService = {
   ) {
     let stdoutData = '';
     let stderrData = '';
-    let hasStarted = false;
-    let hasErrors = false;
 
     // Store the process reference globally
     global.pythonProcess = pythonProcess;
@@ -305,40 +339,20 @@ const automationService = {
     pythonProcess.stdout.on('data', data => {
       const output = data.toString();
       stdoutData += output;
-      console.log('Python stdout:', output);
-
-      // Check if automation has actually started
-      if (
-        !hasStarted &&
-        (output.includes('Starting LinkedIn Commenter') ||
-          output.includes('[START]'))
-      ) {
-        hasStarted = true;
-        sendLogMessage('Python script started successfully');
-      }
-
-      this.parseStatusUpdates(output);
-
-      if (global.mainWindow) {
-        global.mainWindow.webContents.send('automation-log', {
-          type: 'stdout',
-          message: output,
-        });
+      console.log('[Python] stdout:', output);
+      const trimmedOutput = data.toString().trim();
+      if (trimmedOutput.startsWith('[APP_OUT]')) {
+        const appMessage = trimmedOutput.substring('[APP_OUT]'.length).trim();
+        if (appMessage) {
+          sendLogMessage(appMessage);
+        }
       }
     });
 
     pythonProcess.stderr.on('data', data => {
       const output = data.toString();
       stderrData += output;
-      console.error('Python stderr:', output);
-
-      // Check for error indicators in stderr
-      if (this._containsErrorIndicators(output)) {
-        hasErrors = true;
-        sendLogMessage(
-          `Error detected in Python script: ${output.slice(0, 200)}...`
-        );
-      }
+      console.error('[Python] stderr:', output);
 
       if (global.mainWindow) {
         global.mainWindow.webContents.send('automation-log', {
@@ -352,39 +366,27 @@ const automationService = {
       isRunning = false;
       global.pythonProcess = null;
       this.cleanupConfigFile(configPath);
-
       // Check for errors even if exit code is 0
-      if (code === 0 && !hasErrors && hasStarted) {
+      if (code === 0) {
         resolve({
           success: true,
-          message: 'LinkedIn automation completed successfully',
+          message: errorCodes[code],
           output: stdoutData,
         });
       } else {
-        // Determine appropriate error message
-        let errorMessage;
-        if (!hasStarted) {
-          errorMessage = 'Python script failed to start properly';
-        } else if (hasErrors) {
-          errorMessage = 'Python script encountered errors during execution';
-        } else {
-          errorMessage = `LinkedIn automation failed with exit code ${code}`;
-        }
-
         const errorDetails = {
-          message: errorMessage,
+          message: errorCodes[code] || 'Unknown error occurred',
           exitCode: code,
           stdout: stdoutData,
           stderr: stderrData,
           usedBundled: useBundled,
           scriptPath,
-          hasStarted,
-          hasErrors,
-          status: 500,
         };
 
-        console.error('Python process exit error:', errorDetails);
-        sendLogMessage(`${errorMessage}. Check logs for details.`);
+        console.error(
+          '[_setupProcessHandlers] Python process exit error:',
+          errorDetails
+        );
         reject(errorDetails);
       }
     });
@@ -395,9 +397,10 @@ const automationService = {
       this.cleanupConfigFile(configPath);
 
       const errorDetails = {
-        message: 'Failed to start LinkedIn automation process',
+        message: 'Faile to start LinkedIn automation process',
         originalError: error.message,
-        errorType: error.code || error.name || 'Unknown',
+        exitCode: error.code,
+        errorType: error.name,
         usedBundled: useBundled,
         scriptPath,
         platform: process.platform,
@@ -405,7 +408,10 @@ const automationService = {
         status: 500,
       };
 
-      console.error('Python process error:', errorDetails);
+      console.error(
+        '[_setupProcessHandlers] Python process error:',
+        errorDetails
+      );
       sendLogMessage(`Process error: ${error.message}`);
       reject(errorDetails);
     });
@@ -538,12 +544,10 @@ const automationService = {
           message: 'Automation stopped successfully',
         });
       } catch (error) {
-        console.error('Error stopping automation:', error);
-
         // Reset state even if there was an error
         pythonProcess = null;
         isRunning = false;
-
+        console.error('[stopAutomation] Error stopping automation:', error);
         reject({
           message: error.message || 'Failed to stop automation',
           status: error.status || 500,
@@ -555,10 +559,24 @@ const automationService = {
   /**
    * Create a temporary configuration file for the Python script
    * @param {Object} config - Configuration options
-   * @returns {string} Path to the created config file
+   * @returns {Promise<string>} Path to the created config file
    */
-  createConfigFile(config) {
+  async createConfigFile(config) {
     try {
+      let accessToken = '';
+      try {
+        accessToken = await tokenManager.getAccessToken();
+        console.log(
+          'Retrieved access token for config:',
+          accessToken ? 'Token found' : 'No token'
+        );
+      } catch (error) {
+        console.warn(
+          'Could not retrieve access token for config:',
+          error.message
+        );
+      }
+
       // Create JuniorAI directory in platform-appropriate user data location
       const juniorDir = path.join(app.getPath('userData'), 'JuniorAI');
 
@@ -588,6 +606,7 @@ const automationService = {
           chrome_profile_path: chromeProfilePath,
           headless: false,
         },
+        access_token: accessToken,
         chrome_profile_path: chromeProfilePath, // Additional field for the Python script
         debug_mode: config.debugMode !== undefined ? config.debugMode : true,
         max_daily_comments: config.limits?.dailyComments || 50,
@@ -599,14 +618,6 @@ const automationService = {
         short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
         max_comments: config.limits?.commentsPerCycle || 3,
       };
-      console.log(
-        'Creating config file:',
-        configPath,
-        'with contents',
-        pythonConfig,
-        'from env',
-        process.env
-      );
       fs.writeFileSync(configPath, JSON.stringify(pythonConfig, null, 2));
       return configPath;
     } catch (error) {
@@ -626,47 +637,6 @@ const automationService = {
       }
     } catch (error) {
       console.error('Error cleaning up config file:', error);
-    }
-  },
-
-  /**
-   * Parse status updates from the Python script output
-   * @param {string} output - Output from the Python script
-   */
-  parseStatusUpdates(output) {
-    try {
-      // Look for JSON formatted status updates
-      const lines = output.split('\n');
-
-      for (const line of lines) {
-        if (line.trim().startsWith('[') && line.includes(']')) {
-          // This looks like a log line from the Python script
-          // Format: [timestamp] [LEVEL] message
-
-          // Extract timestamp and message
-          const match = line.match(/\[(.*?)\]\s+\[(.*?)\]\s+(.*)/);
-          if (match) {
-            const timestamp = match[1];
-            const level = match[2];
-            const message = match[3];
-
-            // Emit an event with the status update
-            const event = {
-              type: 'log',
-              timestamp,
-              level,
-              message,
-            };
-
-            // Use Electron's IPC to send the event to the renderer process
-            if (global.mainWindow) {
-              global.mainWindow.webContents.send('automation:status', event);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error parsing status updates:', error);
     }
   },
 
@@ -826,32 +796,6 @@ const automationService = {
       console.log('Chrome not found in any expected locations');
       resolve(false);
     });
-  },
-
-  /**
-   * Check if stderr output contains error indicators
-   * @private
-   * @param {string} output - stderr output to check
-   * @returns {boolean} True if error indicators are found
-   */
-  _containsErrorIndicators(output) {
-    const errorPatterns = [
-      /Traceback \(most recent call last\):/i,
-      /Error:/i,
-      /Exception:/i,
-      /Failed to/i,
-      /Cannot create/i,
-      /Permission denied/i,
-      /No such file or directory/i,
-      /PermissionError:/i,
-      /FileNotFoundError:/i,
-      /ChromeDriverException:/i,
-      /selenium\.common\.exceptions/i,
-      /TimeoutException:/i,
-      /WebDriverException:/i,
-    ];
-
-    return errorPatterns.some(pattern => pattern.test(output));
   },
 };
 

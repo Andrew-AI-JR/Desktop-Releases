@@ -4,20 +4,20 @@ export class AutomationController {
     this.modalManager = modalManager;
 
     // Element references
-    this.startButton = document.getElementById("start-automation");
-    this.stopButton = document.getElementById("stop-automation");
-    this.statusText = document.getElementById("automation-status-text");
-    this.logContainer = document.getElementById("log-container");
+    this.startButton = document.getElementById('start-automation');
+    this.stopButton = document.getElementById('stop-automation');
+    this.statusText = document.getElementById('automation-status-text');
+    this.logContainer = document.getElementById('log-container');
 
     // Form inputs
-    this.linkedinEmailInput = document.getElementById("linkedin-email");
-    this.linkedinPasswordInput = document.getElementById("linkedin-password");
+    this.linkedinEmailInput = document.getElementById('linkedin-email');
+    this.linkedinPasswordInput = document.getElementById('linkedin-password');
     this.rememberCredentialsInput = document.getElementById(
-      "remember-credentials"
+      'remember-credentials'
     );
-    this.calendlyUrlInput = document.getElementById("calendly-url");
-    this.userBioInput = document.getElementById("user-bio");
-    this.keywordsInput = document.getElementById("keywords");
+    this.calendlyUrlInput = document.getElementById('calendly-url');
+    this.userBioInput = document.getElementById('user-bio');
+    this.keywordsInput = document.getElementById('keywords');
 
     // State
     this.isRunning = false;
@@ -40,8 +40,8 @@ export class AutomationController {
    * Set up event listeners for automation-related elements
    */
   setupEventListeners() {
-    this.startButton.addEventListener("click", this.startAutomation.bind(this));
-    this.stopButton.addEventListener("click", this.stopAutomation.bind(this));
+    this.startButton.addEventListener('click', this.startAutomation.bind(this));
+    this.stopButton.addEventListener('click', this.stopAutomation.bind(this));
   }
 
   /**
@@ -55,8 +55,8 @@ export class AutomationController {
 
       if (!email || !password) {
         this.modalManager.alert(
-          "Please enter your LinkedIn email and password.",
-          "Validation Error"
+          'Please enter your LinkedIn email and password.',
+          'Validation Error'
         );
         return;
       }
@@ -69,7 +69,7 @@ export class AutomationController {
 
       // Update UI state
       this.setRunningState(true);
-      this.log("Starting LinkedIn automation...");
+      this.log('Starting LinkedIn automation...');
 
       // Create configuration object
       const config = {
@@ -99,32 +99,49 @@ export class AutomationController {
       // Start automation through the API
       const result = await window.api.automation.runLinkedInAutomation(config);
 
-      // Handle result
-      if (result && result.success) {
-        this.log("LinkedIn automation process completed successfully!");
+      // Check for error property first (returned errors, not thrown)
+      if (result && result.error) {
+        this.log('Automation failed!');
+        console.error('[startAutomation] Error result:', result);
 
+        const errorMessage = result.message || 'Unknown error';
+        this.log(`Error: ${errorMessage}`);
+        this.statusText.textContent = 'Automation failed';
+        this.modalManager.alert(errorMessage, 'Automation Error');
+        this.setRunningState(false);
+        return; // Exit early, don't throw
+      }
+
+      // Handle success
+      if (result && result.success) {
+        this.log('LinkedIn automation process completed successfully!');
         // Note: We've moved credential saving to the main process
         // using the persistent configuration file
       } else {
-        throw new Error(result.message || "Unknown error");
+        // This handles cases where result exists but success is false and no error flag
+        this.log('Automation failed!');
+        console.error('[startAutomation] Unexpected result:', result);
+        const errorMessage =
+          result.message || 'Unknown error - unexpected result format';
+        this.log(`Error: ${errorMessage}`);
+        this.statusText.textContent = 'Automation failed';
+        this.modalManager.alert(errorMessage, 'Automation Error');
+        this.setRunningState(false);
+        return;
       }
     } catch (error) {
-      console.error("Automation error:", error);
+      // This catch block now only handles actual exceptions (network errors, etc.)
+      console.error('[startAutomation x1] Automation exception:', error);
 
-      // Better error message extraction
-      let errorMessage = this.extractErrorMessage(error);
+      const errorMessage = error?.message || 'Unexpected error occurred';
+      this.log(`Exception: ${errorMessage}`);
 
-      // Log detailed error information
-      this.log(`Error: ${errorMessage}`);
       if (error.stack) {
-        console.error("Error stack:", error.stack);
-        this.log(`Stack trace: ${error.stack}`);
+        console.error('Error stack:', error.stack);
       }
 
-      this.statusText.textContent = "Automation failed";
-      this.modalManager.alert(errorMessage, "Automation Error");
-
-      // Reset UI state
+      this.statusText.textContent = 'Automation failed';
+      this.modalManager.alert(errorMessage, 'Automation Error');
       this.setRunningState(false);
     }
   }
@@ -134,23 +151,31 @@ export class AutomationController {
    */
   async stopAutomation() {
     try {
-      this.log("Stopping automation...");
+      this.log('Stopping automation...');
 
       // Call API to stop automation
       const result = await window.api.automation.stopAutomation();
 
+      // Check for error property first
+      if (result && result.error) {
+        const errorMessage = result.message || 'Failed to stop automation';
+        this.log(`Error stopping automation: ${errorMessage}`);
+        this.setRunningState(false);
+        return;
+      }
+
       if (result && result.success) {
-        this.log("Automation stopped successfully.");
+        this.log('Automation stopped successfully.');
       } else {
-        throw new Error(result.message || "Failed to stop automation");
+        const errorMessage = result.message || 'Failed to stop automation';
+        this.log(`Error stopping automation: ${errorMessage}`);
       }
     } catch (error) {
-      console.error("Stop automation error:", error);
-
-      // Use helper function for better error message extraction
-      const errorMessage = this.extractErrorMessage(error);
-
-      this.log(`Error stopping automation: ${errorMessage}`);
+      // Only handles actual exceptions now
+      console.error('[stopAutomation] Exception stopping automation:', error);
+      const errorMessage =
+        error?.message || 'Unexpected error stopping automation';
+      this.log(`Exception stopping automation: ${errorMessage}`);
     } finally {
       // Reset UI state
       this.setRunningState(false);
@@ -177,7 +202,7 @@ export class AutomationController {
     this.rememberCredentialsInput.disabled = isRunning;
 
     // Update status
-    this.statusText.textContent = isRunning ? "Running..." : "Ready to start";
+    this.statusText.textContent = isRunning ? 'Running...' : 'Ready to start';
   }
 
   /**
@@ -186,8 +211,8 @@ export class AutomationController {
    */
   log(message) {
     const timestamp = new Date().toLocaleTimeString();
-    const logEntry = document.createElement("div");
-    logEntry.className = "log-entry";
+    const logEntry = document.createElement('div');
+    logEntry.className = 'log-entry';
     logEntry.textContent = `[${timestamp}] ${message}`;
 
     // Add to log container
@@ -205,7 +230,7 @@ export class AutomationController {
   isValidLinkedInUrl(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.includes("linkedin.com");
+      return urlObj.hostname.includes('linkedin.com');
     } catch (error) {
       return false;
     }
@@ -220,14 +245,14 @@ export class AutomationController {
       // In a real app, these should be stored securely
       // For now, just using localStorage for demo purposes
       if (window.localStorage) {
-        const storedCredentials = localStorage.getItem("linkedinCredentials");
+        const storedCredentials = localStorage.getItem('linkedinCredentials');
         if (storedCredentials) {
           return JSON.parse(storedCredentials);
         }
       }
       return null;
     } catch (error) {
-      console.error("Error getting LinkedIn credentials:", error);
+      console.error('Error getting LinkedIn credentials:', error);
       return null;
     }
   }
@@ -242,7 +267,7 @@ export class AutomationController {
       // For now, just using localStorage for demo purposes
       if (window.localStorage) {
         localStorage.setItem(
-          "linkedinCredentials",
+          'linkedinCredentials',
           JSON.stringify({
             email: credentials.email,
             password: credentials.password,
@@ -252,20 +277,20 @@ export class AutomationController {
 
       // Also save other configuration
       if (this.calendlyUrlInput.value) {
-        localStorage.setItem("calendlyUrl", this.calendlyUrlInput.value);
+        localStorage.setItem('calendlyUrl', this.calendlyUrlInput.value);
       }
 
       if (this.userBioInput.value) {
-        localStorage.setItem("userBio", this.userBioInput.value);
+        localStorage.setItem('userBio', this.userBioInput.value);
       }
 
       if (this.keywordsInput.value) {
-        localStorage.setItem("jobKeywords", this.keywordsInput.value);
+        localStorage.setItem('jobKeywords', this.keywordsInput.value);
       }
 
-      this.log("Configuration saved for future use");
+      this.log('Configuration saved for future use');
     } catch (error) {
-      console.error("Error saving credentials:", error);
+      console.error('Error saving credentials:', error);
     }
   }
 
@@ -276,95 +301,64 @@ export class AutomationController {
     try {
       // First try to load from the persistent storage via the main process
       const result = await window.api.automation.loadPersistentConfig();
-      console.log("Loaded persistent config:", result);
-      if (result && result.success && result.config) {
+      console.log('Loaded persistent config:', result);
+
+      // Check for error property first
+      if (result && result.error) {
+        console.warn('[loadSavedConfig] Error loading config:', result.message);
+        // Fall through to localStorage fallback
+      } else if (result && result.success && result.config) {
         const config = result.config;
 
         // Set credentials if available
         if (config.credentials) {
-          this.linkedinEmailInput.value = config.credentials.email || "";
-          this.linkedinPasswordInput.value = config.credentials.password || "";
+          this.linkedinEmailInput.value = config.credentials.email || '';
+          this.linkedinPasswordInput.value = config.credentials.password || '';
           this.rememberCredentialsInput.checked = !!config.rememberCredentials;
         }
 
         // Set user info if available
         if (config.userInfo) {
-          this.calendlyUrlInput.value = config.userInfo.calendlyLink || "";
-          this.userBioInput.value = config.userInfo.bio || "";
-          this.keywordsInput.value = config.userInfo.jobKeywords || "";
+          this.calendlyUrlInput.value = config.userInfo.calendlyLink || '';
+          this.userBioInput.value = config.userInfo.bio || '';
+          this.keywordsInput.value = config.userInfo.jobKeywords || '';
         }
 
-        return;
+        return; // Successfully loaded, exit early
       }
 
-      // Fallback to old localStorage method if persistent config not found
+      // Fallback to old localStorage method if persistent config not found or failed
       const credentials = await this.getLinkedInCredentials();
 
       if (credentials) {
-        this.linkedinEmailInput.value = credentials.email || "";
-        this.linkedinPasswordInput.value = credentials.password || "";
+        this.linkedinEmailInput.value = credentials.email || '';
+        this.linkedinPasswordInput.value = credentials.password || '';
         this.rememberCredentialsInput.checked = true;
       }
 
       // Load other saved configurations from localStorage
       if (window.localStorage) {
-        const calendlyUrl = localStorage.getItem("calendlyUrl");
+        const calendlyUrl = localStorage.getItem('calendlyUrl');
         if (calendlyUrl) {
           this.calendlyUrlInput.value = calendlyUrl;
         }
 
-        const userBio = localStorage.getItem("userBio");
+        const userBio = localStorage.getItem('userBio');
         if (userBio) {
           this.userBioInput.value = userBio;
         }
 
-        const keywords = localStorage.getItem("jobKeywords");
+        const keywords = localStorage.getItem('jobKeywords');
         if (keywords) {
           this.keywordsInput.value = keywords;
         }
       }
     } catch (error) {
-      console.error("Error loading saved config:", error);
-
-      // Use helper function for better error message extraction
-      const errorMessage = this.extractErrorMessage(error);
-
+      // Only handles actual exceptions now
+      console.error('[loadSavedConfig] Exception loading saved config:', error);
+      const errorMessage =
+        error?.message || 'Unexpected error loading configuration';
       this.log(`Warning: Could not load saved configuration: ${errorMessage}`);
     }
-  }
-
-  /**
-   * Extract a meaningful error message from various error types
-   * @param {*} error - Error object, string, or other type
-   * @returns {string} Human-readable error message
-   */
-  extractErrorMessage(error) {
-    if (typeof error === "string") {
-      return error;
-    }
-
-    if (error && error.message) {
-      return error.message;
-    }
-
-    if (error && typeof error === "object") {
-      // Try to get useful information from error object
-      if (error.code || error.status) {
-        const parts = [];
-        if (error.code) parts.push(`Code: ${error.code}`);
-        if (error.status) parts.push(`Status: ${error.status}`);
-        if (error.type) parts.push(`Type: ${error.type}`);
-        return parts.join(", ");
-      }
-
-      // Last resort: stringify the object
-      try {
-        return JSON.stringify(error);
-      } catch {
-        return String(error);
-      }
-    }
-
-    return "Unknown error occurred";
   }
 }

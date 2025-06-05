@@ -1,7 +1,7 @@
-const { spawn } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const { app } = require("electron");
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const { app } = require('electron');
 
 /**
  * Service to manage bundled Python executable
@@ -18,23 +18,23 @@ const pythonBundleService = {
     // Get the resources directory (different in development vs production)
     const resourcesPath = app.isPackaged
       ? process.resourcesPath // In production, extraResources go directly to resourcesPath
-      : path.join(app.getAppPath(), "resources");
+      : path.join(app.getAppPath(), 'resources');
 
     let executableName;
     let platformDir;
 
     switch (platform) {
-      case "win32":
-        platformDir = arch === "x64" ? "win-x64" : "win-ia32";
-        executableName = "linkedin_commenter.exe";
+      case 'win32':
+        platformDir = arch === 'x64' ? 'win-x64' : 'win-ia32';
+        executableName = 'linkedin_commenter.exe';
         break;
-      case "darwin":
-        platformDir = arch === "arm64" ? "mac-arm64" : "mac-x64";
-        executableName = "linkedin_commenter";
+      case 'darwin':
+        platformDir = arch === 'arm64' ? 'mac-arm64' : 'mac-x64';
+        executableName = 'linkedin_commenter';
         break;
-      case "linux":
-        platformDir = arch === "x64" ? "linux-x64" : "linux-ia32";
-        executableName = "linkedin_commenter";
+      case 'linux':
+        platformDir = arch === 'x64' ? 'linux-x64' : 'linux-ia32';
+        executableName = 'linkedin_commenter';
         break;
       default:
         throw new Error(`Unsupported platform: ${platform}`);
@@ -42,7 +42,7 @@ const pythonBundleService = {
 
     const executablePath = path.join(
       resourcesPath,
-      "python-executables",
+      'python-executables',
       platformDir,
       executableName
     );
@@ -65,7 +65,7 @@ const pythonBundleService = {
       // Clear separation: Development vs Production
       if (!app.isPackaged) {
         console.log(
-          "[Python Bundle] Development mode - bundled Python disabled"
+          '[Python Bundle] Development mode - bundled Python disabled'
         );
         return false;
       }
@@ -74,7 +74,7 @@ const pythonBundleService = {
       const executablePath = this.getBundledPythonPath();
       const exists = fs.existsSync(executablePath);
 
-      console.log("[Python Bundle] Production mode - checking bundled Python:");
+      console.log('[Python Bundle] Production mode - checking bundled Python:');
       console.log(
         `[Python Bundle] - Platform: ${process.platform}-${process.arch}`
       );
@@ -84,7 +84,7 @@ const pythonBundleService = {
       if (!exists) {
         // Debug missing bundled Python in production
         console.error(
-          "[Python Bundle] CRITICAL: Bundled Python missing in production!"
+          '[Python Bundle] CRITICAL: Bundled Python missing in production!'
         );
         this._debugMissingBundledPython();
         throw new Error(`Bundled Python executable missing: ${executablePath}`);
@@ -93,7 +93,7 @@ const pythonBundleService = {
       return true;
     } catch (error) {
       console.error(
-        "[Python Bundle] Bundled Python check failed:",
+        '[Python Bundle] Bundled Python check failed:',
         error.message
       );
       if (app.isPackaged) {
@@ -115,25 +115,25 @@ const pythonBundleService = {
 
       if (fs.existsSync(resourcesPath)) {
         const contents = fs.readdirSync(resourcesPath);
-        console.log("[Python Bundle Debug] Resources contents:", contents);
+        console.log('[Python Bundle Debug] Resources contents:', contents);
 
-        const pythonDir = path.join(resourcesPath, "python-executables");
+        const pythonDir = path.join(resourcesPath, 'python-executables');
         if (fs.existsSync(pythonDir)) {
           const pythonContents = fs.readdirSync(pythonDir);
           console.log(
-            "[Python Bundle Debug] Python dir contents:",
+            '[Python Bundle Debug] Python dir contents:',
             pythonContents
           );
         } else {
           console.log(
-            "[Python Bundle Debug] Python executables directory missing"
+            '[Python Bundle Debug] Python executables directory missing'
           );
         }
       } else {
-        console.log("[Python Bundle Debug] Resources path does not exist");
+        console.log('[Python Bundle Debug] Resources path does not exist');
       }
     } catch (error) {
-      console.error("[Python Bundle Debug] Error during debug:", error.message);
+      console.error('[Python Bundle Debug] Error during debug:', error.message);
     }
   },
 
@@ -147,21 +147,21 @@ const pythonBundleService = {
     const executablePath = this.getBundledPythonPath();
 
     // Make sure the executable has the right permissions on Unix systems
-    if (process.platform !== "win32") {
+    if (process.platform !== 'win32') {
       try {
-        fs.chmodSync(executablePath, "755");
+        fs.chmodSync(executablePath, '755');
       } catch (error) {
-        console.warn("Could not set executable permissions:", error.message);
+        console.warn('Could not set executable permissions:', error.message);
       }
     }
 
     console.log(
-      `Running bundled Python executable: ${executablePath} ${args.join(" ")}`
+      `Running bundled Python executable: ${executablePath} ${args.join(' ')}`
     );
 
     return spawn(executablePath, args, {
       ...options,
-      stdio: options.stdio || ["pipe", "pipe", "pipe"],
+      stdio: options.stdio || ['pipe', 'pipe', 'pipe'],
     });
   },
 
@@ -170,7 +170,7 @@ const pythonBundleService = {
    * @returns {string} Python executable name
    */
   getFallbackPython() {
-    return process.platform === "win32" ? "python" : "python3";
+    return process.platform === 'win32' ? 'python' : 'python3';
   },
 
   /**
@@ -178,15 +178,15 @@ const pythonBundleService = {
    * @returns {Promise<boolean>} True if system Python is available
    */
   async isSystemPythonAvailable() {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const pythonExecutable = this.getFallbackPython();
-      const checkProcess = spawn(pythonExecutable, ["--version"]);
+      const checkProcess = spawn(pythonExecutable, ['--version']);
 
-      checkProcess.on("close", (code) => {
+      checkProcess.on('close', code => {
         resolve(code === 0);
       });
 
-      checkProcess.on("error", () => {
+      checkProcess.on('error', () => {
         resolve(false);
       });
 

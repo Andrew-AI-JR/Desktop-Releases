@@ -1,3 +1,15 @@
+# === EXIT CODES ===
+# 0  - Success
+# 1  - General error (default)
+# 2  - Configuration file error
+# 3  - Backend authentication failed
+# 4  - LinkedIn login failed
+# 5  - Browser initialization failed
+# 6  - No posts found to process
+# 7  - Comment generation failed
+# 8  - Comment posting failed
+# 9  - Missing required configuration
+
 import sys
 import time
 import random
@@ -544,14 +556,16 @@ def initialize_driver():
             except Exception as e2:
                 print(f"\nSecond error initializing Chrome: {e2}")
                 print("\nERROR: Failed to open Chrome browser. Do you have Chrome installed?\n")
-                raise Exception("Could not initialize Chrome. Please ensure Chrome is installed.")
+                debug_log("Browser initialization failed", "ERROR")
+                sys.exit(5)  # Browser initialization failed
                 
     except Exception as e:
         print(f"Error in initialize_driver: {e}")
-        raise
+        debug_log("Browser initialization failed", "ERROR")
+        sys.exit(5)  # Browser initialization failed
 
-def verify_active_login(driver):
-    """Robustly verify that we're logged in to LinkedIn, with auto/manual login and debug logging."""
+def verify_active_login(driver, config=None):
+    """Robustly verify that we're logged in to LinkedIn, with automatic/manual login and debug logging."""
     debug_log("Verifying LinkedIn login status...", "LOGIN")
     try:
         # Go to LinkedIn homepage
@@ -593,7 +607,20 @@ def verify_active_login(driver):
                 except Exception:
                     pass
 
-        # If login form is detected, prompt for manual login
+        # If not logged in, attempt automatic login if credentials are provided
+        linkedin_credentials = config.get('linkedin_credentials', {}) if config else {}
+        linkedin_email = linkedin_credentials.get('email')
+        linkedin_password = linkedin_credentials.get('password')
+        
+        if linkedin_email and linkedin_password:
+            debug_log("Attempting automatic LinkedIn login...", "LOGIN")
+            if attempt_automatic_login(driver, linkedin_email, linkedin_password):
+                debug_log("Automatic login successful!", "LOGIN")
+                return True
+            else:
+                debug_log("Automatic login failed, falling back to manual login", "LOGIN")
+
+        # If automatic login failed or no credentials provided, prompt for manual login
         debug_log("Prompting user for manual login", "LOGIN")
         print("\n===========================================================\n||                                                       ||\n||       PLEASE LOGIN TO LINKEDIN IN THE BROWSER         ||\n||                                                       ||\n||  1. Enter your email/phone and password               ||\n||  2. Click 'Sign in'                                   ||\n||  3. Complete any security verification if needed       ||\n||  4. Press ENTER in this console when you've logged in ||\n||                                                       ||\n===========================================================")
         input("\nPress ENTER after you've completed login: ")
@@ -611,11 +638,182 @@ def verify_active_login(driver):
             except Exception:
                 continue
         
-        debug_log("Manual login not detected after prompt", "LOGIN")
+        debug_log("Login verification failed after manual attempt", "LOGIN")
         return False
 
     except Exception as e:
         debug_log(f"Error verifying login: {e}", "LOGIN")
+        return False
+
+def attempt_automatic_login(driver, email, password):
+    """
+    Attempt to automatically log in to LinkedIn using provided credentials.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        email: LinkedIn email/username
+        password: LinkedIn password
+        
+    Returns:
+        bool: True if login successful, False otherwise
+    """
+    try:
+        debug_log("Navigating to LinkedIn login page...", "AUTO_LOGIN")
+        driver.get("https://www.linkedin.com/login")
+        time.sleep(3)
+        
+        # Find and fill email field
+        email_selectors = [
+            (By.ID, "username"),
+            (By.NAME, "session_key"),
+            (By.CSS_SELECTOR, "input[type='email']"),
+            (By.CSS_SELECTOR, "input[name='username']"),
+            (By.CSS_SELECTOR, "input[autocomplete='username']")
+        ]
+        
+        email_field = None
+        for by, selector in email_selectors:
+            try:
+                email_field = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((by, selector))
+                )
+                break
+            except:
+                continue
+                
+        if not email_field:
+            debug_log("Could not find email input field", "AUTO_LOGIN")
+            return False
+            
+        debug_log("Found email field, entering credentials...", "AUTO_LOGIN")
+        email_field.clear()
+        email_field.send_keys(email)
+        time.sleep(1)
+        
+        # Find and fill password field
+        password_selectors = [
+            (By.ID, "password"),
+            (By.NAME, "session_password"),
+            (By.CSS_SELECTOR, "input[type='password']"),
+            (By.CSS_SELECTOR, "input[name='password']"),
+            (By.CSS_SELECTOR, "input[autocomplete='current-password']")
+        ]
+        
+        password_field = None
+        for by, selector in password_selectors:
+            try:
+                password_field = driver.find_element(by, selector)
+                break
+            except:
+                continue
+                
+        if not password_field:
+            debug_log("Could not find password input field", "AUTO_LOGIN")
+            return False
+            
+        password_field.clear()
+        password_field.send_keys(password)
+        time.sleep(1)
+        
+        # Find and click sign in button
+        signin_selectors = [
+            (By.CSS_SELECTOR, "button[type='submit']"),
+            (By.CSS_SELECTOR, "button[data-litms-control-urn='login-submit']"),
+            (By.CSS_SELECTOR, "input[type='submit']"),
+            (By.XPATH, "//button[contains(text(), 'Sign in')]"),
+            (By.XPATH, "//button[contains(text(), 'Log in')]"),
+            (By.CLASS_NAME, "btn__primary--large")
+        ]
+        
+        signin_button = None
+        for by, selector in signin_selectors:
+            try:
+                signin_button = driver.find_element(by, selector)
+                if signin_button.is_enabled() and signin_button.is_displayed():
+                    break
+            except:
+                continue
+                
+        if not signin_button:
+            debug_log("Could not find sign in button", "AUTO_LOGIN")
+            return False
+            
+        debug_log("Clicking sign in button...", "AUTO_LOGIN")
+        signin_button.click()
+        time.sleep(5)
+        
+        # Check for successful login
+        current_url = driver.current_url.lower()
+        debug_log(f"Post-login URL: {current_url}", "AUTO_LOGIN")
+        
+        # Check if we're redirected to feed or other authenticated pages
+        if any(indicator in current_url for indicator in ['feed', 'mynetwork', 'messaging', 'notifications']):
+            debug_log("Login appears successful based on URL", "AUTO_LOGIN")
+            time.sleep(3)  # Allow page to load
+            
+            # Double-check with login indicators
+            logged_in_indicators = {
+                "profile photo": (By.CLASS_NAME, "global-nav__me-photo"),
+                "feed module": (By.CLASS_NAME, "feed-identity-module"),
+                "navigation bar": (By.CLASS_NAME, "global-nav__content")
+            }
+            
+            for name, (by, value) in logged_in_indicators.items():
+                try:
+                    element = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((by, value))
+                    )
+                    if element.is_displayed():
+                        debug_log(f"Login confirmed - found {name}", "AUTO_LOGIN")
+                        return True
+                except:
+                    continue
+        
+        # Check for 2FA or additional verification
+        if "challenge" in current_url or "verification" in current_url:
+            debug_log("2FA/verification required - switching to manual mode", "AUTO_LOGIN")
+            print("\n" + "="*60)
+            print("|| TWO-FACTOR AUTHENTICATION OR VERIFICATION REQUIRED  ||")
+            print("||                                                      ||")
+            print("|| Please complete the verification in the browser      ||")
+            print("|| and press ENTER when done.                          ||")
+            print("="*60)
+            input("\nPress ENTER after completing verification: ")
+            time.sleep(3)
+            
+            # Check again for successful login after 2FA
+            for name, (by, value) in logged_in_indicators.items():
+                try:
+                    element = driver.find_element(by, value)
+                    if element.is_displayed():
+                        debug_log(f"Login successful after 2FA - found {name}", "AUTO_LOGIN")
+                        return True
+                except:
+                    continue
+        
+        # Check for login errors
+        error_selectors = [
+            (By.CLASS_NAME, "form__label--error"),
+            (By.CLASS_NAME, "alert"),
+            (By.CSS_SELECTOR, ".alert--error"),
+            (By.CSS_SELECTOR, ".form-error")
+        ]
+        
+        for by, selector in error_selectors:
+            try:
+                error_element = driver.find_element(by, selector)
+                if error_element.is_displayed():
+                    error_text = error_element.text
+                    debug_log(f"Login error detected: {error_text}", "AUTO_LOGIN")
+                    return False
+            except:
+                continue
+        
+        debug_log("Automatic login did not complete successfully", "AUTO_LOGIN")
+        return False
+        
+    except Exception as e:
+        debug_log(f"Error during automatic login: {e}", "AUTO_LOGIN")
         return False
 
 def process_posts(driver, backend_client):
@@ -1363,7 +1561,7 @@ def main():
             debug_log(f"Local configuration loaded from: {args.config}", "CONFIG")
         except Exception as e:
             debug_log(f"Error reading config file: {e}", "ERROR")
-            sys.exit(1)
+            sys.exit(2)  # Configuration file error
     
     # Backend connection is required
     try:
@@ -1377,12 +1575,12 @@ def main():
         if not API_BASE_URL:
             debug_log("❌ Missing backend_url in configuration", "ERROR")
             debug_log("This script requires backend connection. Please provide valid backend configuration.", "ERROR")
-            sys.exit(1)
+            sys.exit(9)  # Missing required configuration
         
         if not access_token and (not username or not password):
             debug_log("❌ Missing username/password or access_token in configuration", "ERROR")
             debug_log("This script requires either username/password or access_token for authentication.", "ERROR")
-            sys.exit(1)
+            sys.exit(9)  # Missing required configuration
         
         debug_log("Attempting backend connection...", "BACKEND")
         backend_client = BackendClient(API_BASE_URL, username, password, access_token)
@@ -1390,7 +1588,7 @@ def main():
         # Try to authenticate
         if not backend_client.authenticate():
             debug_log("❌ Backend authentication failed", "ERROR")
-            sys.exit(1)
+            sys.exit(3)
         
         debug_log("✅ Backend connected successfully!", "BACKEND")
         
@@ -1407,7 +1605,7 @@ def main():
     except Exception as e:
         debug_log(f"❌ Backend connection failed: {e}", "ERROR")
         debug_log("This script requires backend connection. Please check your configuration.", "ERROR")
-        sys.exit(1)
+        sys.exit(3)  # Backend authentication failed
     
     # Display current configuration
     debug_log("🌐 Mode: BACKEND ONLY", "CONFIG")
@@ -1415,17 +1613,27 @@ def main():
     
     # Initialize browser
     debug_log("Initializing browser...", "INIT")
-    driver = initialize_driver()
+    try:
+        driver = initialize_driver()
+    except SystemExit:
+        # Re-raise SystemExit to preserve exit codes from initialize_driver
+        raise
+    except Exception as e:
+        debug_log(f"Failed to initialize browser: {e}", "ERROR")
+        sys.exit(5)  # Browser initialization failed
     
     try:
         # Verify login
         debug_log("Verifying LinkedIn login...", "LOGIN")
-        if not verify_active_login(driver):
+        if not verify_active_login(driver, config):
             debug_log("Failed to verify LinkedIn login", "ERROR")
-            sys.exit(1)
+            sys.exit(4)
         
         # Process search URLs
         search_urls = generate_search_urls(config)
+        total_processed = 0
+        total_commented = 0
+        
         for url_data in search_urls:
             try:
                 # Extract URL and metadata from the dictionary
@@ -1439,9 +1647,11 @@ def main():
                 
                 # Process posts with backend client
                 processed_count = process_posts(driver, backend_client)
+                total_processed += processed_count
                 
                 if processed_count > 0:
                     debug_log(f"Successfully processed {processed_count} posts from {description}", "SUCCESS")
+                    total_commented += processed_count
                     time.sleep(random.uniform(15, 30))
                 
                 # Record metrics with keyword information
@@ -1460,15 +1670,29 @@ def main():
             except Exception as e:
                 debug_log(f"Error processing URL {description if 'description' in locals() else url}: {e}", "ERROR")
                 continue
+        
+        # Check if we successfully processed any posts
+        if total_commented == 0:
+            debug_log("No posts were successfully commented on in this session", "WARNING")
+            if total_processed == 0:
+                debug_log("No posts found to process across all URLs", "ERROR")
+                sys.exit(6)  # No posts found to process
+            else:
+                debug_log("Posts were found but no comments were successfully generated/posted", "ERROR")
+                sys.exit(7)  # Comment generation/posting failed
+        
+        debug_log(f"Session completed successfully! Commented on {total_commented} posts total.", "SUCCESS")
                 
     except Exception as e:
         debug_log(f"Fatal error: {e}", "ERROR")
         debug_log(traceback.format_exc(), "ERROR")
+        sys.exit(1)  # General error
     finally:
         debug_log("Cleaning up...", "CLEANUP")
         driver.quit()
     
-    debug_log("Script execution completed", "END")
+    debug_log("Script execution completed successfully", "END")
+    sys.exit(0)  # Success
 
 if __name__ == "__main__":
     main() 

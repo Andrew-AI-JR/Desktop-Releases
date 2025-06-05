@@ -1,7 +1,11 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { setupIpcHandlers } = require('./ipc/ipcHandlers');
-require('dotenv').config();
+require('dotenv').config({
+  path: app.isPackaged
+    ? path.join(process.resourcesPath, '.env')
+    : path.resolve(process.cwd(), '.env'),
+});
 
 // Hot reload setup in development mode
 try {

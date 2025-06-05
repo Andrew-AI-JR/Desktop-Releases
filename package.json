@@ -10,7 +10,6 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=never",
-    "build:dmg": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
     "build:python": "node scripts/build-python-cross-platform.js",
     "build:python:force": "rm -rf resources/python-executables && npm run build:python",
     "build:win": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --win --publish=never",
@@ -32,7 +31,10 @@
     "electron": "^36.2.1",
     "electron-builder": "^24.9.1",
     "electron-reloader": "^1.2.3",
-    "eslint": "^8.56.0"
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.1",
+    "prettier": "^3.5.3"
   },
   "build": {
     "appId": "com.junior.desktop",
@@ -51,6 +53,7 @@
       "package.json"
     ],
     "extraResources": [
+      ".env",
       {
         "from": "resources/python-executables",
         "to": "python-executables",

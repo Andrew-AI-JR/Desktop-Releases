@@ -1,6 +1,12 @@
+const { app } = require('electron');
+const path = require('path');
 const axios = require('axios');
 const tokenManager = require('../auth/tokenManager');
-require('dotenv').config();
+require('dotenv').config({
+  path: app.isPackaged
+    ? path.join(process.resourcesPath, '.env')
+    : path.resolve(process.cwd(), '.env'),
+});
 
 // Create base axios instance
 const apiClient = axios.create({
@@ -13,7 +19,7 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(
-  async (config) => {
+  async config => {
     // Check if we need to refresh the token
     if (await tokenManager.isTokenExpired()) {
       try {
@@ -56,7 +62,7 @@ apiClient.interceptors.request.use(
 
     return config;
   },
-  (error) => {
+  error => {
     return Promise.reject(error);
   }
 );

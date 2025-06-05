@@ -21,14 +21,14 @@ export class ModalManager {
     });
 
     // Close modal when clicking outside the modal
-    this.modalOverlay.addEventListener('click', (event) => {
+    this.modalOverlay.addEventListener('click', event => {
       if (event.target === this.modalOverlay) {
         this.closeModal();
       }
     });
 
     // Close modal when pressing ESC key
-    document.addEventListener('keydown', (event) => {
+    document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && this.isModalOpen()) {
         this.closeModal();
       }
@@ -62,7 +62,7 @@ export class ModalManager {
     this.modalOverlay.classList.remove('hidden');
 
     // Return a promise that resolves when the modal is closed
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this._modalResolve = resolve;
     });
   }
@@ -139,6 +139,7 @@ export class ModalManager {
    * @returns {Promise<void>} Promise resolving when the dialog is closed
    */
   async alert(message, title = 'Alert') {
+    console.log('Showing alert dialog:', { title, message });
     const content = document.createElement('div');
     content.classList.add('alert-dialog');
 

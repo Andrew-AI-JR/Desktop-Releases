@@ -135,6 +135,28 @@ export class AuthController {
     try {
       const response = await window.api.auth.login({ email, password });
 
+      if (!response.success) {
+        console.error('Login failed:', response.error);
+        let userMessage = 'Login failed. Please try again.';
+
+        if (response.error.status === 401) {
+          userMessage = 'Invalid email or password.';
+        } else if (response.error.status === 429) {
+          userMessage = 'Too many login attempts. Please try again later.';
+        } else if (response.error.status >= 500) {
+          userMessage = 'Server error. Please try again later.';
+        } else if (
+          response.error.message &&
+          response.error.message.includes('network')
+        ) {
+          userMessage =
+            'Unable to connect to server. Please check your internet connection.';
+        }
+
+        this.showError('login-error', userMessage, response.error);
+        return;
+      }
+
       // Load user data and show main app
       await this.loadUserData();
       this.showMainApp();
@@ -143,20 +165,12 @@ export class AuthController {
       // Trigger loading of initial data
       this.loadInitialData();
     } catch (error) {
-      let userMessage = 'Login failed. Please try again.';
-
-      if (error.status === 401) {
-        userMessage = 'Invalid email or password.';
-      } else if (error.status === 429) {
-        userMessage = 'Too many login attempts. Please try again later.';
-      } else if (error.status >= 500) {
-        userMessage = 'Server error. Please try again later.';
-      } else if (error.message && error.message.includes('network')) {
-        userMessage =
-          'Unable to connect to server. Please check your internet connection.';
-      }
-
-      this.showError('login-error', userMessage, error);
+      console.error('Login error:', error);
+      this.showError(
+        'login-error',
+        'An unexpected error occurred. Please try again.',
+        error
+      );
     } finally {
       this.setFormLoading(this.loginForm, false);
     }
@@ -187,7 +201,32 @@ export class AuthController {
     this.setFormLoading(this.registerForm, true);
 
     try {
-      await window.api.auth.register({ email, password });
+      const response = await window.api.auth.register({ email, password });
+
+      if (!response.success) {
+        let userMessage = 'Registration failed. Please try again.';
+
+        if (response.error.status === 409) {
+          userMessage =
+            'This email is already registered. Please use a different email or try logging in.';
+        } else if (response.error.status === 422) {
+          userMessage = 'Invalid email or password format.';
+        } else if (response.error.status === 429) {
+          userMessage =
+            'Too many registration attempts. Please try again later.';
+        } else if (response.error.status >= 500) {
+          userMessage = 'Server error. Please try again later.';
+        } else if (
+          response.error.message &&
+          response.error.message.includes('network')
+        ) {
+          userMessage =
+            'Unable to connect to server. Please check your internet connection.';
+        }
+
+        this.showError('register-error', userMessage, response.error);
+        return;
+      }
 
       // Clear form and show success
       this.registerForm.reset();
@@ -206,23 +245,12 @@ export class AuthController {
         }
       }, 100);
     } catch (error) {
-      let userMessage = 'Registration failed. Please try again.';
-
-      if (error.status === 409) {
-        userMessage =
-          'This email is already registered. Please use a different email or try logging in.';
-      } else if (error.status === 422) {
-        userMessage = 'Invalid email or password format.';
-      } else if (error.status === 429) {
-        userMessage = 'Too many registration attempts. Please try again later.';
-      } else if (error.status >= 500) {
-        userMessage = 'Server error. Please try again later.';
-      } else if (error.message && error.message.includes('network')) {
-        userMessage =
-          'Unable to connect to server. Please check your internet connection.';
-      }
-
-      this.showError('register-error', userMessage, error);
+      console.error('Registration error:', error);
+      this.showError(
+        'register-error',
+        'An unexpected error occurred. Please try again.',
+        error
+      );
     } finally {
       this.setFormLoading(this.registerForm, false);
     }
@@ -232,44 +260,42 @@ export class AuthController {
    * Load user data from API and update UI
    */
   async loadUserData() {
-    try {
-      const userData = await window.api.auth.getUser();
-      this.updateUserInfo(userData);
-      return userData;
-    } catch (error) {
-      console.error('Load user data error:', error);
-      throw error;
+    const response = await window.api.auth.getUser();
+    if (!response.success) {
+      console.error('Load user data error:', response.error);
+      throw response.error;
     }
+    this.updateUserInfo(response.data);
+    return response.data;
   }
 
   /**
    * Handle logout button click
    */
   async handleLogout() {
-    try {
-      // Clear tokens from storage
-      await window.api.auth.clearTokens();
-
-      // Reset UI to login overlay
-      this.showLoginOverlay();
-
-      // Clear user info
-      const userNameElement = document.querySelector('.user-name');
-      if (userNameElement) {
-        userNameElement.textContent = 'Guest';
-      }
-
-      // Clear any form data
-      this.loginForm.reset();
-      this.registerForm.reset();
-      this.clearErrors();
-    } catch (error) {
-      console.error('Logout error:', error);
+    const response = await window.api.auth.clearTokens();
+    if (!response.success) {
+      console.error('Logout error:', response.error);
       this.showError(
         'login-error',
         'An error occurred during logout. Please try again.'
       );
+      return;
     }
+
+    // Reset UI to login overlay
+    this.showLoginOverlay();
+
+    // Clear user info
+    const userNameElement = document.querySelector('.user-name');
+    if (userNameElement) {
+      userNameElement.textContent = 'Guest';
+    }
+
+    // Clear any form data
+    this.loginForm.reset();
+    this.registerForm.reset();
+    this.clearErrors();
   }
 
   /**
@@ -277,12 +303,12 @@ export class AuthController {
    * @returns {Promise<Object>} User data
    */
   async getCurrentUser() {
-    try {
-      return await window.api.auth.getUser();
-    } catch (error) {
-      console.error('Get user error:', error);
-      throw error;
+    const response = await window.api.auth.getUser();
+    if (!response.success) {
+      console.error('Get user error:', response.error);
+      throw response.error;
     }
+    return response.data;
   }
 
   /**
@@ -291,8 +317,8 @@ export class AuthController {
    */
   async isLoggedIn() {
     try {
-      const accessToken = await window.api.auth.getAccessToken();
-      if (!accessToken) return false;
+      const tokenResponse = await window.api.auth.getAccessToken();
+      if (!tokenResponse.success || !tokenResponse.data) return false;
 
       const user = await this.getCurrentUser();
       return !!(user && user.id);

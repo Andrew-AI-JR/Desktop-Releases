@@ -5,7 +5,11 @@ module.exports = {
     es2021: true,
     node: true,
   },
-  extends: ['eslint:recommended'],
+  extends: [
+    'eslint:recommended',
+    'plugin:prettier/recommended', // This must be last
+  ],
+  plugins: ['prettier'],
   parserOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',
@@ -27,8 +31,7 @@ module.exports = {
   rules: {
     'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     'no-console': 'off',
-    semi: ['error', 'always'],
-    quotes: ['error', 'single'],
+    'prettier/prettier': 'error',
   },
   ignorePatterns: [
     'dist/',

@@ -1,4 +1,4 @@
-const automationService = require("../../services/automation/automationService");
+const automationService = require('../../services/automation/automationService');
 
 /**
  * Handlers for automation-related IPC calls
@@ -12,39 +12,21 @@ module.exports = {
    */
   runLinkedIn: async (event, config) => {
     try {
-      return await automationService.runLinkedInAutomation(config);
+      const result = await automationService.runLinkedInAutomation(config);
+      return result;
     } catch (error) {
-      console.error("Run LinkedIn automation error:", error);
+      console.error(
+        '[runLinkedIn] Run LinkedIn automation error:',
+        error?.message
+      );
 
-      // Robust error message extraction
-      let errorMessage = "Failed to run automation";
-
-      if (typeof error === "string") {
-        errorMessage = error;
-      } else if (error && typeof error.message === "string") {
-        errorMessage = error.message;
-      } else if (error && typeof error === "object") {
-        // Try to extract meaningful information from the error object
-        const parts = [];
-        if (error.message) parts.push(error.message);
-        if (error.code) parts.push(`(${error.code})`);
-        if (error.errno) parts.push(`errno: ${error.errno}`);
-        if (error.syscall) parts.push(`syscall: ${error.syscall}`);
-        if (error.path) parts.push(`path: ${error.path}`);
-
-        errorMessage =
-          parts.length > 0
-            ? parts.join(" ")
-            : error.toString !== Object.prototype.toString
-            ? error.toString()
-            : "Unknown error occurred";
-      }
-
-      // Only throw simple serializable objects
-      const serializedError = new Error(errorMessage);
-      serializedError.status = (error && error.status) || 500;
-
-      throw serializedError;
+      // Return error instead of throwing to avoid Electron IPC wrapper
+      return {
+        success: false,
+        error: true,
+        message: error?.message || 'Unknown error',
+        originalError: error,
+      };
     }
   },
 
@@ -53,7 +35,7 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Loaded configuration
    */
-  loadConfig: async (_event) => {
+  loadConfig: async _event => {
     try {
       const config = automationService.loadPersistentConfig();
       return {
@@ -61,33 +43,15 @@ module.exports = {
         config,
       };
     } catch (error) {
-      console.error("Load automation config error:", error);
+      console.error('[loadConfig] Load automation config error:', error);
 
-      // Robust error message extraction
-      let errorMessage = "Failed to load automation configuration";
-
-      if (typeof error === "string") {
-        errorMessage = error;
-      } else if (error && typeof error.message === "string") {
-        errorMessage = error.message;
-      } else if (error && typeof error === "object") {
-        const parts = [];
-        if (error.message) parts.push(error.message);
-        if (error.code) parts.push(`(${error.code})`);
-
-        errorMessage =
-          parts.length > 0
-            ? parts.join(" ")
-            : error.toString !== Object.prototype.toString
-            ? error.toString()
-            : "Failed to load automation configuration";
-      }
-
-      // Only throw simple serializable objects
-      const serializedError = new Error(errorMessage);
-      serializedError.status = (error && error.status) || 500;
-
-      throw serializedError;
+      // Return error instead of throwing
+      return {
+        success: false,
+        error: true,
+        message: error?.message || 'Unknown error',
+        originalError: error,
+      };
     }
   },
 
@@ -96,37 +60,19 @@ module.exports = {
    * @param {Electron.IpcMainInvokeEvent} event
    * @returns {Promise<Object>} Stop status
    */
-  stop: async (_event) => {
+  stop: async _event => {
     try {
       return await automationService.stopAutomation();
     } catch (error) {
-      console.error("Stop automation error:", error);
+      console.error('[stopAutomation] Error:', error);
 
-      // Robust error message extraction
-      let errorMessage = "Failed to stop automation";
-
-      if (typeof error === "string") {
-        errorMessage = error;
-      } else if (error && typeof error.message === "string") {
-        errorMessage = error.message;
-      } else if (error && typeof error === "object") {
-        const parts = [];
-        if (error.message) parts.push(error.message);
-        if (error.code) parts.push(`(${error.code})`);
-
-        errorMessage =
-          parts.length > 0
-            ? parts.join(" ")
-            : error.toString !== Object.prototype.toString
-            ? error.toString()
-            : "Failed to stop automation";
-      }
-
-      // Only throw simple serializable objects
-      const serializedError = new Error(errorMessage);
-      serializedError.status = (error && error.status) || 500;
-
-      throw serializedError;
+      // Return error instead of throwing
+      return {
+        success: false,
+        error: true,
+        message: error?.message || 'Unknown error',
+        originalError: error,
+      };
     }
   },
 };

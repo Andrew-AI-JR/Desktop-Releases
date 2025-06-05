@@ -583,7 +583,7 @@ const automationService = {
           email: config.credentials?.email || '',
           password: config.credentials?.password || '',
         },
-        backend_url: process.env.BACKEND_URL || '',
+        backend_url: process.env.API_URL || '',
         browser_config: {
           chrome_profile_path: chromeProfilePath,
           headless: false,

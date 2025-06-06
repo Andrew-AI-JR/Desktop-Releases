@@ -6,10 +6,15 @@ contextBridge.exposeInMainWorld('api', {
   // Authentication
   auth: {
     login: credentials => ipcRenderer.invoke('auth:login', credentials),
-    register: userData => ipcRenderer.invoke('auth:register', userData),
+    register: credentials => ipcRenderer.invoke('auth:register', credentials),
+    forgotPassword: data => ipcRenderer.invoke('auth:forgot-password', data),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
     refreshToken: refreshToken =>
       ipcRenderer.invoke('auth:refreshToken', refreshToken),
     getUser: () => ipcRenderer.invoke('auth:getUser'),
+    getSubscriptionStats: () =>
+      ipcRenderer.invoke('auth:getSubscriptionStats'),
     updateBio: bio => ipcRenderer.invoke('auth:updateBio', bio),
     getBio: () => ipcRenderer.invoke('auth:getBio'),
     setTokens: (accessToken, refreshToken) =>

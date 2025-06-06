@@ -9,8 +9,10 @@ function setupIpcHandlers(ipcMain) {
   // Auth handlers
   ipcMain.handle('auth:login', authHandlers.login);
   ipcMain.handle('auth:register', authHandlers.register);
+  ipcMain.handle('auth:forgot-password', authHandlers.forgotPassword);
   ipcMain.handle('auth:refreshToken', authHandlers.refreshToken);
   ipcMain.handle('auth:getUser', authHandlers.getUser);
+  ipcMain.handle('auth:getSubscriptionStats', authHandlers.getSubscriptionStats);
   ipcMain.handle('auth:updateBio', authHandlers.updateBio);
   ipcMain.handle('auth:getBio', authHandlers.getBio);
   ipcMain.handle('auth:setTokens', authHandlers.setTokens);

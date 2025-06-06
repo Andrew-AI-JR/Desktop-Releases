@@ -57,6 +57,16 @@ const pythonBundleService = {
   },
 
   /**
+   * Get the path to the LinkedIn commenter script (not needed for standalone executable)
+   * @returns {string} Path to the LinkedIn commenter script
+   */
+  getScriptPath() {
+    // For standalone executable, script is embedded, so we return null
+    // But keep this method for compatibility
+    return null;
+  },
+
+  /**
    * Check if bundled Python executable exists and should be used
    * @returns {boolean} True if bundled executable exists and should be used
    */
@@ -78,13 +88,13 @@ const pythonBundleService = {
       console.log(
         `[Python Bundle] - Platform: ${process.platform}-${process.arch}`
       );
-      console.log(`[Python Bundle] - Expected path: ${executablePath}`);
+      console.log(`[Python Bundle] - Expected executable: ${executablePath}`);
       console.log(`[Python Bundle] - File exists: ${exists}`);
 
       if (!exists) {
         // Debug missing bundled Python in production
         console.error(
-          '[Python Bundle] CRITICAL: Bundled Python missing in production!'
+          '[Python Bundle] CRITICAL: Bundled Python executable missing in production!'
         );
         this._debugMissingBundledPython();
         throw new Error(`Bundled Python executable missing: ${executablePath}`);
@@ -138,7 +148,7 @@ const pythonBundleService = {
   },
 
   /**
-   * Run the bundled Python executable
+   * Run the bundled Python executable (standalone executable)
    * @param {Array<string>} args - Arguments to pass to the executable
    * @param {Object} options - Spawn options
    * @returns {ChildProcess} The spawned process
@@ -156,9 +166,10 @@ const pythonBundleService = {
     }
 
     console.log(
-      `Running bundled Python executable: ${executablePath} ${args.join(' ')}`
+      `Running bundled standalone executable: ${executablePath} ${args.join(' ')}`
     );
 
+    // For standalone executable, we run it directly with arguments
     return spawn(executablePath, args, {
       ...options,
       stdio: options.stdio || ['pipe', 'pipe', 'pipe'],

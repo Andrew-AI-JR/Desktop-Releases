@@ -34,12 +34,15 @@
               <input type="email" id="email" name="email" required />
             </div>
             <div class="form-group">
-              <label for="password">Password</label>
-              <input type="password" id="password" name="password" required />
+              <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+              <input type="password" id="password" name="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <div class="text-right mt-2">
+                <a href="#" id="forgot-password-link" class="text-sm text-indigo-600 hover:text-indigo-500">Forgot Password?</a>
+              </div>
             </div>
             <div class="form-actions">
               <button type="submit" class="btn btn-primary">Login</button>
-              <a href="#" id="show-register">Need an account? Register</a>
+              <a href="#" id="show-register">First time user? Create your password</a>
             </div>
           </form>
         </div>
@@ -80,7 +83,7 @@
               />
             </div>
             <div class="form-actions">
-              <button type="submit" class="btn btn-primary">Register</button>
+              <button type="submit" class="btn btn-primary">Create Password</button>
               <a href="#" id="show-login">Already have an account? Login</a>
             </div>
           </form>
@@ -170,13 +173,14 @@
                         placeholder="Your LinkedIn password"
                       />
                     </div>
-                    <div class="form-group">
-                      <label for="remember-credentials">
-                        <input
-                          type="checkbox"
-                          id="remember-credentials"
-                          name="remember-credentials"
-                        />
+                    <div class="form-group flex items-center">
+                      <input
+                        type="checkbox"
+                        id="remember-credentials"
+                        name="remember-credentials"
+                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label for="remember-credentials" class="ml-2 block text-sm text-gray-900">
                         Remember credentials (stored securely)
                       </label>
                     </div>

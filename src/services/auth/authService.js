@@ -11,26 +11,19 @@ const authService = {
    * @returns {Promise<Object>} Token data or error object
    */
   async login(credentials) {
-    console.log('Attempting to login with credentials:', credentials);
     try {
       const response = await apiClient.post('/api/users/token', credentials);
-
-      // Store tokens for future use
       if (response.data && response.data.access_token) {
         await tokenManager.storeTokens(response.data);
       }
-
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
-      return {
-        success: false,
-        error: {
-          message: error.response?.data?.detail || 'Login failed',
-          status: error.response?.status || 500,
-          data: error,
-        },
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Login failed. Please check your credentials.',
+        status: error.response?.status || 500,
       };
+      console.error('Login error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 
@@ -41,59 +34,34 @@ const authService = {
    */
   async register(userData) {
     try {
-      console.log(
-        'Attempting to register at ',
-        apiClient.defaults.baseURL,
-        'path',
-        '/api/users/register'
-      );
-      console.log('User data:', userData);
       const response = await apiClient.post('/api/users/register', userData);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error(
-        'Registration error:',
-        error.response?.data || error.message
-      );
-      return {
-        success: false,
-        error: {
-          message: error.response?.data?.detail || 'Registration failed',
-          status: error.response?.status || 500,
-        },
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Registration failed. Please try again.',
+        status: error.response?.status || 500,
       };
+      console.error('Registration error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 
   /**
-   * Refresh the authentication token
-   * @param {string} refreshToken - Refresh token
-   * @returns {Promise<Object>} New token data or error object
+   * Request a password reset email.
+   * @param {Object} data - Contains user's email { email }
+   * @returns {Promise<Object>} Success or error object
    */
-  async refreshToken(refreshToken) {
+  async forgotPassword(data) {
     try {
-      const response = await apiClient.post('/api/users/token/refresh', {
-        refresh_token: refreshToken,
-      });
-
-      // Store new tokens
-      if (response.data && response.data.access_token) {
-        await tokenManager.storeTokens(response.data);
-      }
-
+      const response = await apiClient.post('/api/users/forgot-password', data);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error(
-        'Token refresh error:',
-        error.response?.data || error.message
-      );
-      return {
-        success: false,
-        error: {
-          message: error.response?.data?.detail || 'Token refresh failed',
-          status: error.response?.status || 500,
-        },
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Failed to send password reset email.',
+        status: error.response?.status || 500,
       };
+      console.error('Forgot password error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 
@@ -103,17 +71,92 @@ const authService = {
    */
   async getCurrentUser() {
     try {
+      // Check if we have a valid token first
+      const accessToken = await tokenManager.getAccessToken();
+      if (!accessToken) {
+        return {
+          success: false,
+          error: {
+            message: 'Not authenticated',
+            status: 401,
+          },
+        };
+      }
+
+      // Check if token is expired
+      if (await tokenManager.isTokenExpired()) {
+        // Try to refresh the token
+        const refreshToken = await tokenManager.getRefreshToken();
+        if (!refreshToken) {
+          await tokenManager.clearTokens();
+          return {
+            success: false,
+            error: {
+              message: 'Session expired. Please log in again.',
+              status: 401,
+            },
+          };
+        }
+
+        try {
+          const response = await apiClient.post('/api/users/token/refresh', {
+            refresh_token: refreshToken,
+          });
+
+          if (response.data && response.data.access_token) {
+            await tokenManager.storeTokens(response.data);
+          }
+        } catch (error) {
+          await tokenManager.clearTokens();
+          return {
+            success: false,
+            error: {
+              message: 'Session expired. Please log in again.',
+              status: 401,
+            },
+          };
+        }
+      }
+
       const response = await apiClient.get('/api/users/me');
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Get user error:', error.response?.data || error.message);
-      return {
-        success: false,
-        error: {
-          message: error.response?.data?.detail || 'Failed to get user data',
-          status: error.response?.status || 500,
-        },
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        await tokenManager.clearTokens();
+        return {
+          success: false,
+          error: {
+            message: 'Session expired. Please log in again.',
+            status: 401,
+          },
+        };
+      }
+
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Failed to get user data.',
+        status: error.response?.status || 500,
       };
+      console.error('Get user error:', errorInfo);
+      return { success: false, error: errorInfo };
+    }
+  },
+
+  /**
+   * Get subscription statistics for the current user
+   * @returns {Promise<Object>} Subscription stats or error object
+   */
+  async getSubscriptionStats() {
+    try {
+      const response = await apiClient.get('/api/subscription/stats');
+      return { success: true, data: response.data };
+    } catch (error) {
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Failed to get subscription stats.',
+        status: error.response?.status || 500,
+      };
+      console.error('Get subscription stats error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 
@@ -127,14 +170,12 @@ const authService = {
       const response = await apiClient.put('/api/users/bio', bioData);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Update bio error:', error.response?.data || error.message);
-      return {
-        success: false,
-        error: {
-          message: error.response?.data?.detail || 'Failed to update bio',
-          status: error.response?.status || 500,
-        },
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Failed to update bio.',
+        status: error.response?.status || 500,
       };
+      console.error('Update bio error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 
@@ -147,14 +188,12 @@ const authService = {
       const response = await apiClient.get('/api/users/bio');
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Get bio error:', error.response?.data || error.message);
-      return {
-        success: false,
-        error: {
-          message: error.response?.data?.detail || 'Failed to get bio',
-          status: error.response?.status || 500,
-        },
+      const errorInfo = {
+        message: error.response?.data?.detail || 'Failed to get bio.',
+        status: error.response?.status || 500,
       };
+      console.error('Get bio error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 
@@ -167,14 +206,12 @@ const authService = {
       await tokenManager.clearTokens();
       return { success: true };
     } catch (error) {
-      console.error('Logout error:', error.message);
-      return {
-        success: false,
-        error: {
-          message: 'Logout failed',
-          status: 500,
-        },
+      const errorInfo = {
+        message: 'Logout failed',
+        status: 500,
       };
+      console.error('Logout error:', errorInfo);
+      return { success: false, error: errorInfo };
     }
   },
 };

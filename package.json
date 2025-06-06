@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "The desktop app for Junior",
   "license": "ISC",
-  "author": "Robert Hall",
+  "author": "Hey-Junior",
   "type": "commonjs",
   "main": "./src/main/main.js",
   "scripts": {
@@ -114,18 +114,12 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "msi",
-          "arch": [
-            "x64"
-          ]
         }
       ]
     },
     "linux": {
       "icon": "assets/icons/icon.png",
-      "category": "Office",
+      "category": "Utility",
       "target": [
         {
           "target": "AppImage",
@@ -143,7 +137,17 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "shortcutName": "Junior AI",
+      "installerIcon": "assets/icons/icon.ico",
+      "uninstallerIcon": "assets/icons/icon.ico",
+      "installerHeaderIcon": "assets/icons/icon.ico",
+      "createStartMenuShortcut": true,
+      "menuCategory": "Junior AI",
+      "perMachine": false,
+      "runAfterFinish": true,
+      "artifactName": "${productName} Setup ${version}.${ext}"
     }
   }
 }

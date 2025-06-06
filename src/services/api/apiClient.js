@@ -2,16 +2,16 @@ const { app } = require('electron');
 const path = require('path');
 const axios = require('axios');
 const tokenManager = require('../auth/tokenManager');
+
 require('dotenv').config({
   path: app.isPackaged
     ? path.join(process.resourcesPath, '.env')
     : path.resolve(process.cwd(), '.env'),
 });
 
-// Create base axios instance
 const apiClient = axios.create({
-  baseURL: process.env.API_URL, // TODO: Is there a default we need?
-  timeout: 10000,
+  baseURL: process.env.API_URL || 'https://junior-api-915940312680.us-west1.run.app',
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -36,12 +36,9 @@ apiClient.interceptors.request.use(
           });
 
           // Attempt to refresh token
-          const response = await refreshClient.post(
-            '/api/users/token/refresh',
-            {
-              refresh_token: refreshToken,
-            }
-          );
+          const response = await refreshClient.post('/api/users/token/refresh', {
+            refresh_token: refreshToken,
+          });
 
           if (response.data && response.data.access_token) {
             await tokenManager.storeTokens(response.data);
@@ -62,9 +59,7 @@ apiClient.interceptors.request.use(
 
     return config;
   },
-  error => {
-    return Promise.reject(error);
-  }
+  error => Promise.reject(error)
 );
 
 module.exports = apiClient;

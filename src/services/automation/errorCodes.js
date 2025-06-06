@@ -9,4 +9,6 @@ module.exports = {
   7: 'Comment generation failed',
   8: 'Comment posting failed',
   9: 'Missing required configuration',
+  UNAUTHORIZED: 401,
+  NO_SUBSCRIPTION: 402,
 };

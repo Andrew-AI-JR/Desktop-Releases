@@ -29,59 +29,9 @@ from selenium.common.exceptions import (
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-# Import license validator
-try:
-    from src.license_validator import LicenseValidator
-except ImportError:
-    try:
-        from license_validator import LicenseValidator
-    except ImportError:
-        print("Warning: License validator not found. License features will be disabled.")
-        LicenseValidator = None
-
 # Set default encoding to UTF-8
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
-
-# === LICENSE VALIDATION ===
-def validate_license():
-    """Validate license before starting automation."""
-    if not LicenseValidator:
-        print("❌ License validation system not available")
-        return False
-    
-    try:
-        license_validator = LicenseValidator()
-        
-        # Try to validate existing license
-        validation_result = license_validator.validate_license()
-        
-        if validation_result["valid"]:
-            license_status = license_validator.get_license_status()
-            
-            if license_status["status"] == "active":
-                features = license_status.get("features", [])
-                print(f"✅ License validated successfully")
-                print(f"📧 Features: {', '.join(features)}")
-                print(f"📅 Expires: {license_status.get('expiry_date', 'Unknown')}")
-                return True
-            elif license_status["status"] == "expired":
-                print(f"❌ License has expired: {license_status.get('expiry_date', 'Unknown')}")
-                print("Please renew your license at https://heyjunior.ai/purchase.html")
-                return False
-            else:
-                print(f"❌ License status: {license_status['message']}")
-                return False
-        else:
-            error_msg = validation_result.get("error", "Unknown error")
-            print(f"❌ License validation failed: {error_msg}")
-            print("Please ensure you have a valid license key.")
-            print("You can purchase a license at https://heyjunior.ai/purchase.html")
-            return False
-            
-    except Exception as e:
-        print(f"❌ License validation error: {str(e)}")
-        return False
 
 # === CONFIGURATION ===
 # Load configuration from config.json
@@ -147,16 +97,6 @@ def main():
     global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
     
     debug_log("Starting LinkedIn Commenter", "START")
-    
-    # Validate license before starting
-    print("🔑 Validating license...")
-    if not validate_license():
-        print("\n❌ License validation failed. Automation cannot start.")
-        print("Please ensure you have a valid license to use this tool.")
-        print("Visit https://heyjunior.ai/purchase.html to get a license.")
-        sys.exit(1)
-    
-    print("✅ License validation successful. Starting automation...\n")
     
     # Initialize variables
     daily_comments = 0
@@ -1360,16 +1300,21 @@ def initialize_driver():
         
         # Load config to check headless setting
         config = load_config()
-        headless_mode = config.get('headless', True) if config else True
+        # Check both old format (headless) and new format (browser_config.headless)
+        if config:
+            browser_config = config.get('browser_config', {})
+            headless_mode = browser_config.get('headless', config.get('headless', True))
+        else:
+            headless_mode = True
         
         if headless_mode:
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
-            debug_log("Running in headless mode", "INIT")
+            debug_log("🔧 Running in headless mode (production)", "INIT")
         else:
-            debug_log("Running in headed mode (visible browser)", "INIT")
+            debug_log("🔧 Running in headed mode (visible browser)", "INIT")
         
         # Add persistent user data directory for Chrome profile
         chrome_profile_path = os.path.join(os.getcwd(), "chrome_profile")
@@ -1426,17 +1371,32 @@ def initialize_driver():
 
 def debug_log(message, level="INFO"):
     """Enhanced debug logging with timestamps and levels."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_line = f"[{timestamp}] [{level}] {message}"
-    print(log_line)
+    # Define log level hierarchy
+    log_levels = {"DEBUG": 0, "INFO": 1, "COMMENT": 1, "SEARCH": 1, "INIT": 1, "WARNING": 2, "ERROR": 3, "START": 1, "DATA": 0, "CHECK": 0}
     
-    # Also write to a log file
-    log_file = "linkedin_commenter.log"
-    try:
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(log_line + "\n")
-    except Exception as e:
-        print(f"Error writing to log file: {e}")
+    # Get current log level from config
+    config = load_config()
+    current_log_level = "info"  # default
+    if config:
+        current_log_level = config.get('log_level', 'info').lower()
+    
+    # Convert to uppercase for comparison
+    current_level_num = log_levels.get(current_log_level.upper(), 1)
+    message_level_num = log_levels.get(level.upper(), 1)
+    
+    # Only log if message level is equal or higher than current log level
+    if message_level_num >= current_level_num:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_line = f"[{timestamp}] [{level}] {message}"
+        print(log_line)
+        
+        # Also write to a log file
+        log_file = "linkedin_commenter.log"
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(log_line + "\n")
+        except Exception as e:
+            print(f"Error writing to log file: {e}")
 
 def load_log():
     """Load processed post IDs from disk, excluding posts from the last hour."""
@@ -2554,9 +2514,12 @@ def post_comment(driver, post, message):
         # Final check - search for our comment in the post
         time.sleep(2)
         if has_already_commented(driver, post):
-            debug_log("[post_comment] Verified our comment is now in the post!", "COMMENT")
+            # SUCCESS! Log this prominently for the desktop app
+            debug_log("✅ COMMENT POSTED SUCCESSFULLY! Comment has been verified in the post.", "COMMENT")
+            debug_log(f"📝 Comment content (first 100 chars): {message[:100]}{'...' if len(message) > 100 else ''}", "COMMENT")
             return True
-        debug_log("[post_comment] Could not verify if comment was posted, assuming success", "COMMENT")
+        debug_log("✅ COMMENT POSTED! Could not verify but submission appears successful.", "COMMENT")
+        debug_log(f"📝 Comment content (first 100 chars): {message[:100]}{'...' if len(message) > 100 else ''}", "COMMENT")
         return True
     except Exception as e:
         debug_log(f"[post_comment] Error posting comment: {e}", "COMMENT")

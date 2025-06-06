@@ -5,8 +5,8 @@ const { app, BrowserWindow } = require('electron');
 const pythonDependencyService = require('./pythonDependencyService');
 const pythonBundleService = require('./pythonBundleService');
 const errorCodes = require('./errorCodes');
-const tokenManager = require('../auth/tokenManager');
 const apiClient = require('../api/apiClient');
+const tokenManager = require('../auth/tokenManager');
 // Track the running process
 let pythonProcess = null;
 let isRunning = false;
@@ -50,6 +50,15 @@ const automationService = {
    */
   async _checkSubscriptionLimits() {
     try {
+      // First check if we have a valid token
+      const accessToken = await tokenManager.getAccessToken();
+      if (!accessToken) {
+        throw {
+          message: 'Please log in to use the automation feature',
+          status: errorCodes.UNAUTHORIZED,
+        };
+      }
+
       const response = await apiClient.get('/api/users/me');
       const userData = response.data;
 
@@ -63,7 +72,15 @@ const automationService = {
 
       return true; // All checks passed.
     } catch (error) {
-      // If the error already has a message, re-throw it.
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        throw {
+          message: 'Please log in to use the automation feature',
+          status: errorCodes.UNAUTHORIZED,
+        };
+      }
+
+      // If the error already has a message, re-throw it
       if (error.message) {
         throw error;
       }
@@ -262,20 +279,20 @@ const automationService = {
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
       };
 
-      // Run bundled executable directly (no script path needed - it's compiled in)
+      // Run bundled Python with config
       const pythonProcess = pythonBundleService.runBundledPython(
-        ['--config', configPath], // Only pass the config, not the script path
+        ['--config', configPath],
         { env }
       );
 
-      // For the handlers, we'll use the executable path as the "script path"
-      const executablePath = pythonBundleService.getBundledPythonPath();
+      // Get script path for handlers
+      const scriptPath = pythonBundleService.getScriptPath();
 
       this._setupProcessHandlers(
         pythonProcess,
         configPath,
         true,
-        executablePath, // Use executable path instead of script path
+        scriptPath,
         sendLogMessage,
         resolve,
         reject

@@ -4,18 +4,13 @@ const path = require('path');
 const os = require('os');
 
 /**
- * Cross-platform Python executable builder
- * This script builds Python executables for the current platform
- * Usage:
- *   npm run build:python       - Build for current platform only
- *   npm run build:python:local - Use local shell script (Unix only)
+ * PyInstaller-based Python executable builder
+ * Creates a standalone executable that includes Python and all dependencies
  */
 
 const PYTHON_EXECUTABLES_DIR = 'resources/python-executables';
 const BUILD_DIR = 'build/pyinstaller';
-
-// Check if we're in development mode (only build for current platform)
-const isDevelopment = process.env.NODE_ENV !== 'production' && !process.env.CI;
+const SCRIPT_SOURCE = 'src/resources/scripts/linkedin_commenter.py';
 
 function getPlatformInfo() {
   const platform = os.platform();
@@ -26,15 +21,15 @@ function getPlatformInfo() {
   let executableName;
 
   switch (platform) {
-    case 'darwin':
-      platformDir = arch === 'arm64' ? 'mac-arm64' : 'mac-x64';
-      pythonCmd = 'python3';
-      executableName = 'linkedin_commenter';
-      break;
     case 'win32':
       platformDir = arch === 'x64' ? 'win-x64' : 'win-ia32';
       pythonCmd = 'python';
       executableName = 'linkedin_commenter.exe';
+      break;
+    case 'darwin':
+      platformDir = arch === 'arm64' ? 'mac-arm64' : 'mac-x64';
+      pythonCmd = 'python3';
+      executableName = 'linkedin_commenter';
       break;
     case 'linux':
       platformDir = arch === 'x64' ? 'linux-x64' : 'linux-ia32';
@@ -57,6 +52,7 @@ function createDirectories() {
   fs.mkdirSync(BUILD_DIR, { recursive: true });
 
   console.log(`Created directories: ${outputDir}, ${BUILD_DIR}`);
+  return outputDir;
 }
 
 function checkPython() {
@@ -137,22 +133,26 @@ function installDependencies() {
 }
 
 function buildExecutable() {
-  const { pythonCmd, platformDir } = getPlatformInfo();
-  const specFile = 'linkedin_commenter.spec';
+  const { pythonCmd, platformDir, executableName } = getPlatformInfo();
   const outputDir = path.join(PYTHON_EXECUTABLES_DIR, platformDir);
 
   return new Promise((resolve, reject) => {
-    console.log(`Building Python executable for ${platformDir}...`);
+    console.log(`Building standalone executable for ${platformDir}...`);
 
+    // PyInstaller arguments for creating a standalone executable
     const args = [
       '-m',
       'PyInstaller',
-      '--distpath',
-      outputDir,
-      '--workpath',
-      BUILD_DIR,
-      specFile,
+      '--onefile',              // Create a single executable file
+      '--noconsole',            // Don't show console window (Windows)
+      '--clean',                // Clean PyInstaller cache
+      '--distpath', outputDir,  // Output directory
+      '--workpath', BUILD_DIR,  // Work directory
+      '--name', executableName.replace('.exe', ''), // Executable name
+      SCRIPT_SOURCE             // Script to build
     ];
+
+    console.log(`Running: ${pythonCmd} ${args.join(' ')}`);
 
     const process = spawn(pythonCmd, args, {
       stdio: 'inherit',
@@ -161,8 +161,15 @@ function buildExecutable() {
     process.on('close', code => {
       if (code === 0) {
         console.log(`Build completed successfully for ${platformDir}`);
-        console.log(`Executable location: ${outputDir}/linkedin_commenter`);
-        resolve();
+        
+        // Check if the executable was created
+        const expectedPath = path.join(outputDir, executableName);
+        if (fs.existsSync(expectedPath)) {
+          console.log(`✅ Executable created: ${expectedPath}`);
+          resolve();
+        } else {
+          reject(new Error(`Executable not found at expected path: ${expectedPath}`));
+        }
       } else {
         reject(new Error(`Build failed (exit code: ${code})`));
       }
@@ -176,15 +183,10 @@ function buildExecutable() {
 
 async function main() {
   try {
-    console.log('Starting Python executable build process...');
-
-    // Check if spec file exists
-    if (!fs.existsSync('linkedin_commenter.spec')) {
-      throw new Error('linkedin_commenter.spec file not found');
-    }
+    console.log('Starting PyInstaller build process...');
 
     // Check if Python script exists
-    if (!fs.existsSync('src/resources/scripts/linkedin_commenter.py')) {
+    if (!fs.existsSync(SCRIPT_SOURCE)) {
       throw new Error('linkedin_commenter.py script not found');
     }
 
@@ -192,20 +194,22 @@ async function main() {
     console.log(`Building for platform: ${platformDir}`);
 
     // In development, check if executable already exists and skip if it does
-    // if (isDevelopment) {
-    //   const executablePath = path.join(
-    //     PYTHON_EXECUTABLES_DIR,
-    //     platformDir,
-    //     executableName
-    //   );
-    //   if (fs.existsSync(executablePath)) {
-    //     console.log(`✅ Python executable already exists: ${executablePath}`);
-    //     console.log(
-    //       'Skipping build in development mode. Delete the file to force rebuild.'
-    //     );
-    //     return;
-    //   }
-    // }
+    const executablePath = path.join(
+      PYTHON_EXECUTABLES_DIR,
+      platformDir,
+      executableName
+    );
+    if (fs.existsSync(executablePath)) {
+      const stats = fs.statSync(executablePath);
+      const scriptStats = fs.statSync(SCRIPT_SOURCE);
+      
+      // Only skip if executable is newer than the script
+      if (stats.mtime > scriptStats.mtime) {
+        console.log(`✅ Executable already exists and is up to date: ${executablePath}`);
+        console.log('Skipping build. Delete the file to force rebuild.');
+        return;
+      }
+    }
 
     // Create necessary directories
     createDirectories();
@@ -219,12 +223,12 @@ async function main() {
     // Install Python dependencies
     await installDependencies();
 
-    // Build the executable
+    // Build the standalone executable
     await buildExecutable();
 
-    console.log('Python executable build completed successfully!');
+    console.log('✅ PyInstaller build completed successfully!');
   } catch (error) {
-    console.error('Build failed:', error.message);
+    console.error('❌ Build failed:', error.message);
     process.exit(1);
   }
 }

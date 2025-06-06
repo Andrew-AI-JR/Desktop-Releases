@@ -73,27 +73,12 @@ export class AutomationController {
 
       // Create configuration object
       const config = {
-        credentials: {
-          email,
-          password,
-        },
-        rememberCredentials: rememberCredentials,
-        userInfo: {
-          calendlyLink,
-          bio: userBio,
-          jobKeywords,
-        },
-        limits: {
-          dailyComments: 50, // Using hardcoded values as requested
-          sessionComments: 10,
-          commentsPerCycle: 3,
-        },
-        timing: {
-          scrollPauseTime: 5,
-          shortSleepSeconds: 180,
-        },
-        debugMode: true,
-        searchUrls: [], // The Python script will generate these based on keywords
+        linkedin_email: email,
+        linkedin_password: password,
+        remember_credentials: rememberCredentials,
+        calendly_link: calendlyLink,
+        user_bio: userBio,
+        job_keywords: jobKeywords,
       };
 
       // Start automation through the API

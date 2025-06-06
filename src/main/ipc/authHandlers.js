@@ -34,6 +34,21 @@ module.exports = {
   },
 
   /**
+   * Handle forgot password request
+   * @param {Electron.IpcMainInvokeEvent} event
+   * @param {Object} data - Contains user's email { email }
+   * @returns {Promise<Object>} Success response or error object
+   */
+  forgotPassword: async (event, data) => {
+    // This calls a function on authService that needs to be created.
+    const result = await authService.forgotPassword(data);
+    if (!result.success) {
+      console.error('[authHandler] Forgot password error:', result.error);
+    }
+    return result;
+  },
+
+  /**
    * Refresh the authentication token
    * @param {Electron.IpcMainInvokeEvent} event
    * @param {string} refreshToken - Refresh token
@@ -56,6 +71,17 @@ module.exports = {
     const result = await authService.getCurrentUser();
     if (!result.success) {
       console.error('[authHandler] Get user error:', result.error);
+    }
+    return result;
+  },
+
+  getSubscriptionStats: async _event => {
+    const result = await authService.getSubscriptionStats();
+    if (!result.success) {
+      console.error(
+        '[authHandler] Get subscription stats error:',
+        result.error
+      );
     }
     return result;
   },

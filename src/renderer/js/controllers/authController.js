@@ -8,6 +8,7 @@ export class AuthController {
     this.registerForm = document.getElementById('register-form');
     this.showRegisterLink = document.getElementById('show-register');
     this.showLoginLink = document.getElementById('show-login');
+    this.forgotPasswordLink = document.getElementById('forgot-password-link');
     this.loginOverlay = document.getElementById('login-overlay');
     this.registerOverlay = document.getElementById('register-overlay');
     this.mainApp = document.getElementById('main-app');
@@ -30,6 +31,11 @@ export class AuthController {
     this.showLoginLink.addEventListener('click', e => {
       e.preventDefault();
       this.showLoginOverlay();
+    });
+
+    this.forgotPasswordLink.addEventListener('click', e => {
+      e.preventDefault();
+      this.handleForgotPassword();
     });
 
     // Handle form submissions
@@ -204,12 +210,27 @@ export class AuthController {
       const response = await window.api.auth.register({ email, password });
 
       if (!response.success) {
-        let userMessage = 'Registration failed. Please try again.';
+        // Check for 'email already registered' error first
+        const isEmailRegisteredError =
+          (response.error.status === 400 || response.error.status === 409) &&
+          response.error.message &&
+          response.error.message
+            .toLowerCase()
+            .includes('email already registered');
 
-        if (response.error.status === 409) {
-          userMessage =
-            'This email is already registered. Please use a different email or try logging in.';
-        } else if (response.error.status === 422) {
+        if (isEmailRegisteredError) {
+          this.showLoginOverlay();
+          this.showError(
+            'login-error',
+            'This email is already registered. Please log in.',
+            response.error
+          );
+          return;
+        }
+
+        // Handle other registration errors
+        let userMessage = 'Registration failed. Please try again.';
+        if (response.error.status === 422) {
           userMessage = 'Invalid email or password format.';
         } else if (response.error.status === 429) {
           userMessage =
@@ -260,13 +281,21 @@ export class AuthController {
    * Load user data from API and update UI
    */
   async loadUserData() {
-    const response = await window.api.auth.getUser();
-    if (!response.success) {
-      console.error('Load user data error:', response.error);
-      throw response.error;
+    // First, get the basic user data
+    const userResponse = await window.api.auth.getUser();
+    if (!userResponse.success) {
+      console.error('Load user data error:', userResponse.error);
+      throw userResponse.error;
     }
-    this.updateUserInfo(response.data);
-    return response.data;
+    const user = userResponse.data;
+
+    // The is_active field comes directly from the user data
+    user.is_active = user.is_active || false;
+    console.log('User data:', user); // For debugging
+
+    // Update the UI with the user data
+    this.updateUserInfo(user);
+    return user;
   }
 
   /**
@@ -335,16 +364,15 @@ export class AuthController {
     // Update user name in header
     const userNameElement = document.querySelector('.user-name');
     if (userNameElement && user.email) {
-      userNameElement.textContent = user.email.split('@')[0]; // Display username part of email
+      userNameElement.textContent = user.email.split('@')[0];
     }
 
     // Update subscription status if element exists
-    const subscriptionElement = document.querySelector('.subscription-status');
+    const subscriptionElement = document.getElementById('subscription-status');
     if (subscriptionElement && user.is_active !== undefined) {
       subscriptionElement.textContent = user.is_active ? 'Active' : 'Inactive';
-      subscriptionElement.className = `subscription-status ${
-        user.is_active ? 'active' : 'inactive'
-      }`;
+      subscriptionElement.classList.remove('active', 'inactive');
+      subscriptionElement.classList.add(user.is_active ? 'active' : 'inactive');
     }
 
     // Update full email if element exists
@@ -379,5 +407,33 @@ export class AuthController {
     // Dispatch custom event for other controllers to listen to
     const event = new CustomEvent('user:loggedin');
     document.dispatchEvent(event);
+  }
+
+  async handleForgotPassword() {
+    const { value: email } = await this.modalManager.showPrompt({
+      title: 'Forgot Password',
+      text: "Enter your email address and we'll send you a link to reset your password.",
+      input: 'email',
+      inputPlaceholder: 'Enter your email address',
+      confirmButtonText: 'Send Reset Link',
+    });
+
+    if (email) {
+      this.modalManager.showLoading('Sending reset link...');
+      try {
+        // This will be a new API endpoint that needs to be created on the backend
+        const response = await window.api.auth.forgotPassword({ email });
+
+        if (response.success) {
+          this.modalManager.close();
+          this.showError('login-error', 'If a matching account was found, a password reset link has been sent to your email.', null);
+        } else {
+          this.modalManager.showError(response.error.message || 'Failed to send reset link.');
+        }
+      } catch (error) {
+        console.error('Forgot password error:', error);
+        this.modalManager.showError('An unexpected error occurred.');
+      }
+    }
   }
 }

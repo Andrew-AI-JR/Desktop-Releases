@@ -6,6 +6,7 @@ const pythonDependencyService = require('./pythonDependencyService');
 const pythonBundleService = require('./pythonBundleService');
 const errorCodes = require('./errorCodes');
 const tokenManager = require('../auth/tokenManager');
+const apiClient = require('../api/apiClient');
 // Track the running process
 let pythonProcess = null;
 let isRunning = false;
@@ -44,6 +45,41 @@ const automationService = {
   },
 
   /**
+   * Check subscription status and limits before running automation.
+   * @private
+   */
+  async _checkSubscriptionLimits() {
+    try {
+      const response = await apiClient.get('/api/users/me');
+      const userData = response.data;
+
+      // Check for an active subscription using is_active field
+      if (!userData || !userData.is_active) {
+        throw {
+          message: 'No active subscription found',
+          status: errorCodes.NO_SUBSCRIPTION,
+        };
+      }
+
+      return true; // All checks passed.
+    } catch (error) {
+      // If the error already has a message, re-throw it.
+      if (error.message) {
+        throw error;
+      }
+
+      console.error(
+        '[_checkSubscriptionLimits] Error checking subscription status:',
+        error
+      );
+      throw {
+        message: 'Could not verify subscription status. Please try again later.',
+        status: 500,
+      };
+    }
+  },
+
+  /**
    * Run LinkedIn automation to post comments
    * @param {Object} config - Automation configuration
    * @returns {Promise<Object>} Result of the automation
@@ -53,6 +89,20 @@ const automationService = {
 
     if (isRunning) {
       throw new Error('Automation is already running');
+    }
+
+    // First, verify subscription and limits.
+    try {
+      await this._checkSubscriptionLimits();
+    } catch (error) {
+      console.error('[runLinkedInAutomation] Subscription check failed:', error);
+      // Reject the promise to send the error back to the controller.
+      return Promise.reject({
+        message:
+          error.message ||
+          'An error occurred while verifying your subscription.',
+        status: error.status || 500,
+      });
     }
 
     // Save configuration for future use if remember credentials is checked
@@ -558,71 +608,24 @@ const automationService = {
 
   /**
    * Create a temporary configuration file for the Python script
-   * @param {Object} config - Configuration options
+   * @param {Object} config - Automation configuration
    * @returns {Promise<string>} Path to the created config file
    */
   async createConfigFile(config) {
+    // Add paths that the Python script will need
+    config.log_file_path = this.getLogFilePath();
+    config.chrome_profile_path = this.getChromeProfilePath();
+
+    const tempDir = path.join(app.getPath('userData'), 'temp');
+    fs.mkdirSync(tempDir, { recursive: true });
+    const configPath = path.join(tempDir, `config-${Date.now()}.json`);
+
     try {
-      let accessToken = '';
-      try {
-        accessToken = await tokenManager.getAccessToken();
-        console.log(
-          'Retrieved access token for config:',
-          accessToken ? 'Token found' : 'No token'
-        );
-      } catch (error) {
-        console.warn(
-          'Could not retrieve access token for config:',
-          error.message
-        );
-      }
-
-      // Create JuniorAI directory in platform-appropriate user data location
-      const juniorDir = path.join(app.getPath('userData'), 'JuniorAI');
-
-      // Create configs subdirectory
-      const configDir = path.join(juniorDir, 'configs');
-      fs.mkdirSync(configDir, { recursive: true });
-
-      const configPath = path.join(
-        configDir,
-        `linkedin_config_${Date.now()}.json`
-      );
-
-      // Transform the config object to match the Python script's expectations
-      // Process keywords from string to the format the Python script expects
-      const keywords = config.userInfo?.jobKeywords || '';
-
-      // Get a platform-appropriate Chrome profile path
-      const chromeProfilePath = this.getChromeProfilePath();
-
-      const pythonConfig = {
-        linkedin_credentials: {
-          email: config.credentials?.email || '',
-          password: config.credentials?.password || '',
-        },
-        backend_url: process.env.API_URL || '',
-        browser_config: {
-          chrome_profile_path: chromeProfilePath,
-          headless: false,
-        },
-        access_token: accessToken,
-        chrome_profile_path: chromeProfilePath, // Additional field for the Python script
-        debug_mode: config.debugMode !== undefined ? config.debugMode : true,
-        max_daily_comments: config.limits?.dailyComments || 50,
-        max_session_comments: config.limits?.sessionComments || 10,
-        calendly_url: config.userInfo?.calendlyLink || '',
-        keywords: keywords, // Pass keywords as a string - the script will split it
-        user_bio: config.userInfo?.bio || '',
-        scroll_pause_time: config.timing?.scrollPauseTime || 5,
-        short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
-        max_comments: config.limits?.commentsPerCycle || 3,
-      };
-      fs.writeFileSync(configPath, JSON.stringify(pythonConfig, null, 2));
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
       return configPath;
     } catch (error) {
-      console.error('Error creating config file:', error);
-      throw new Error('Failed to create configuration file');
+      console.error('[createConfigFile] Error creating temp config file:', error);
+      throw new Error('Failed to create automation configuration.');
     }
   },
 
@@ -646,45 +649,28 @@ const automationService = {
    * @returns {boolean} Success status
    */
   savePersistentConfig(config) {
+    const configPath = getPersistentConfigPath();
     try {
-      const configPath = getPersistentConfigPath();
-
-      // Prepare configuration for persistent storage
-      const persistentConfig = {
-        credentials: config.rememberCredentials
-          ? {
-              email: config.credentials?.email || '',
-              password: config.credentials?.password || '',
-            }
-          : {
-              email: config.credentials?.email || '',
-              password: '', // Don't save password if not requested
-            },
-        rememberCredentials: !!config.rememberCredentials,
-        userInfo: {
-          calendlyLink: config.userInfo?.calendlyLink || '',
-          bio: config.userInfo?.bio || '',
-          jobKeywords: config.userInfo?.jobKeywords || '',
-        },
-        limits: {
-          dailyComments: config.limits?.dailyComments || 50,
-          sessionComments: config.limits?.sessionComments || 10,
-          commentsPerCycle: config.limits?.commentsPerCycle || 3,
-        },
-        timing: {
-          scrollPauseTime: config.timing?.scrollPauseTime || 5,
-          shortSleepSeconds: config.timing?.shortSleepSeconds || 180,
-        },
-        debugMode: config.debugMode !== undefined ? config.debugMode : true,
-        lastUpdated: new Date().toISOString(),
+      // Only store credentials and user info, not the whole config
+      const persistentData = {
+        linkedin_email: config.linkedin_email,
+        linkedin_password: config.linkedin_password,
+        calendly_link: config.calendly_link,
+        user_bio: config.user_bio,
+        job_keywords: config.job_keywords,
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(persistentConfig, null, 2));
-      console.log(`Configuration saved to ${configPath}`);
-      return true;
+      // Only save if remember credentials is true
+      if (config.remember_credentials) {
+        fs.writeFileSync(configPath, JSON.stringify(persistentData, null, 2));
+      } else {
+        // If not checked, remove any existing saved config
+        if (fs.existsSync(configPath)) {
+          fs.unlinkSync(configPath);
+        }
+      }
     } catch (error) {
-      console.error('Error saving persistent configuration:', error);
-      return false;
+      console.error('[savePersistentConfig] Error saving config:', error);
     }
   },
 

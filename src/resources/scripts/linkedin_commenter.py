@@ -28,6 +28,7 @@ from selenium.common.exceptions import (
 )
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+import shutil
 
 # Set default encoding to UTF-8
 if sys.stdout.encoding != 'utf-8':
@@ -45,14 +46,14 @@ def load_config_from_file(config_path):
         print(f"Error loading config: {e}")
         return None
 
-def load_config():
-    """Load configuration from config.json."""
-    try:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.json')
-        return load_config_from_file(config_path)
-    except Exception as e:
-        print(f"Error loading config: {e}")
-        return None
+# Global config variable
+CONFIG = None
+
+def get_config():
+    global CONFIG
+    if CONFIG is None:
+        CONFIG = load_config_from_args()
+    return CONFIG
 
 def load_config_from_args():
     """Load configuration from command line arguments."""
@@ -62,18 +63,24 @@ def load_config_from_args():
     parser.add_argument('--password', type=str, help='LinkedIn account password')
     parser.add_argument('--log_level', type=str, choices=['debug', 'info', 'warning', 'error'], help='Override log level')
     parser.add_argument('--debug', action='store_true', help='Enable full debug mode (alias for --log_level debug)')
+    parser.add_argument('--chrome-path', type=str, help='Path to custom Chrome/Chromium binary (overrides system Chrome)')
     args = parser.parse_args()
-    
-    # Load config from command line or default path
+
+    # Debug: print the config path being loaded
     if args.config:
+        print(f"[DEBUG] Attempting to load config from: {args.config}")
+        if not os.path.exists(args.config):
+            print(f"[ERROR] Config file does not exist at: {args.config}")
+            sys.exit(1)
         config = load_config_from_file(args.config)
     else:
-        config = load_config()
-        
-    if not config:
-        print("Failed to load configuration. Please ensure config file exists and is valid.")
+        print("Error: --config argument is required.")
         sys.exit(1)
-    
+
+    if not config:
+        print(f"[ERROR] Failed to load configuration from {args.config}. Please ensure config file exists and is valid.")
+        sys.exit(1)
+
     # Ensure nested structure exists
     if 'linkedin_credentials' not in config:
         config['linkedin_credentials'] = {}
@@ -83,7 +90,9 @@ def load_config_from_args():
         config['linkedin_credentials']['email'] = args.email
     if args.password:
         config['linkedin_credentials']['password'] = args.password
-
+    if args.chrome_path:
+        config['chrome_path'] = args.chrome_path
+    
     # Log level / debug overrides
     global LOG_LEVEL_OVERRIDE
     if args.log_level:
@@ -124,34 +133,31 @@ LINKEDIN_EMAIL = ''
 LINKEDIN_PASSWORD = ''
 USER_BIO = ''
 SEARCH_URLS = []
-# <-- ADD
 # Stores CLI/env override for logging; used inside debug_log
 LOG_LEVEL_OVERRIDE = None
-# --> END ADD
 
 def main():
     """Main execution function that continuously cycles through URLs while respecting limits."""
-    # Declare globals at the start
     global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
     global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
     global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
-    
+
     debug_log("Starting LinkedIn Commenter", "START")
     print("[APP_OUT]LinkedIn automation started and running continuously. Do not close this window.")
-    
+
     # Initialize variables
     daily_comments = 0
     session_comments = 0
     login_attempts = 0
     cycle_break = 5  # Base time between URL cycles
-    
+
     # Initialize the search performance tracker
     search_tracker = SearchPerformanceTracker()
     debug_log("Initialized search performance tracker", "INIT")
-    
-    # Load configuration from args
-    config = load_config_from_args()
-    
+
+    # Load configuration globally (always from --config)
+    config = get_config()
+
     # Update values from config
     DEBUG_MODE = config.get('debug_mode', DEBUG_MODE)
     MAX_DAILY_COMMENTS = config.get('max_daily_comments', MAX_DAILY_COMMENTS)
@@ -164,36 +170,36 @@ def main():
     CALENDLY_LINK = config.get('calendly_url', CALENDLY_LINK)
     keywords = config.get('keywords', '')
     USER_BIO = config.get('user_bio', USER_BIO)
-    
+
     # Split comma-separated keywords and generate search URLs
     if isinstance(keywords, str) and keywords:
         keywords_list = [k.strip() for k in keywords.split(',')]
         JOB_SEARCH_KEYWORDS = keywords_list
         debug_log(f"Found {len(keywords_list)} keywords to search for", "INFO")
         SEARCH_URLS = get_search_urls_for_keywords(keywords_list)
-        
         # Count 24h vs monthly URLs for prioritization info
         urls_24h = [url for url in SEARCH_URLS if 'past-24h' in url]
         urls_monthly = [url for url in SEARCH_URLS if 'past-month' in url]
         debug_log(f"Generated {len(urls_24h)} high-priority 24h URLs and {len(urls_monthly)} monthly URLs", "INFO")
-    
+        debug_log(f"Full list of search URLs (priority order):\n" + '\n'.join([f"[24h] {url}" if 'past-24h' in url else f"[month] {url}" for url in SEARCH_URLS]), "URL")
+
     # Add feed and network URLs
     SEARCH_URLS.extend([
         "https://www.linkedin.com/feed/",
         "https://www.linkedin.com/mynetwork/"
     ])
-    
+
     # Get LinkedIn credentials
     if 'linkedin_credentials' in config:
         LINKEDIN_EMAIL = config['linkedin_credentials'].get('email', LINKEDIN_EMAIL)
         LINKEDIN_PASSWORD = config['linkedin_credentials'].get('password', LINKEDIN_PASSWORD)
-    
+
     # Initialize the comment generator
     comment_generator = CommentGenerator(debug_mode=DEBUG_MODE)
-    
+
     # Initialize the browser
     driver = initialize_driver()
-    
+
     # Main automation loop
     try:
         while True:
@@ -224,7 +230,9 @@ def main():
                 # Process each search URL
                 for url_index, search_url in enumerate(optimized_urls, 1):
                     try:
-                        debug_log(f"Processing URL {url_index}/{len(optimized_urls)}: {search_url}", "URL")
+                        # Log the URL and its priority before processing
+                        url_priority = '[24h]' if 'past-24h' in search_url else '[month]' if 'past-month' in search_url else '[other]'
+                        debug_log(f"About to process URL {url_index}/{len(optimized_urls)} {url_priority}: {search_url}", "URL")
                         
                         # Check limits
                         if daily_comments >= MAX_DAILY_COMMENTS:
@@ -1037,104 +1045,47 @@ class CommentGenerator:
 
     def calculate_post_score(self, post_text, author_name=None):
         """
-        Calculate a score for a post based on various factors to prioritize posts from hiring managers.
-        
-        Args:
-            post_text (str): The text content of the post
-            author_name (str, optional): The name of the post author
-            
-        Returns:
-            float: A score between 0 and 100, with higher scores indicating higher priority
+        Calculate a score for a LinkedIn post using a fixed-weight, non-normalized system.
+        Each category contributes up to a capped maximum, and bonuses are applied directly.
+        The final score is capped at 100.
         """
         if not post_text:
             return 0
-        
-        # Get the global config
-        config = load_config()
-        
-        # Build scoring configuration with dynamic tech relevance
+        config = get_config()
         scoring_config = self.build_scoring_config(config)
-        
-        total_score = 0
-        max_score = 0
         post_text_lower = post_text.lower()
-        
-        # Log scoring details for debugging
-        score_breakdown = {
-            'metadata': {
-                'text_length': len(post_text),
-                'word_count': len(post_text.split()),
-                'has_author': bool(author_name)
-            }
-        }
-        
-        # Calculate scores for each category
-        for category, config in scoring_config.items():
-            weight = config['weight']
-            keywords = config['keywords']
-            
-            # Skip author check if no author name provided
-            if 'author' in category and not author_name:
-                continue
-                
-            # Determine text to search in based on category
-            search_text = author_name.lower() if 'author' in category else post_text_lower
-            
-            # Count keyword matches
-            matches = sum(1 for kw in keywords if kw.lower() in search_text)
-            
-            # Calculate weighted score for this category
-            category_score = min(matches * weight, weight * 5)  # Cap at 5 matches per category
-            total_score += category_score
-            max_score += weight * 5  # Maximum possible score per category
-            
-            # Store breakdown for logging
+        total_score = 0
+        score_breakdown = {}
+        # Category scoring (fixed weights, capped matches)
+        for category, cat_conf in scoring_config.items():
+            weight = cat_conf['weight']
+            keywords = cat_conf['keywords']
+            matches = sum(1 for kw in keywords if kw.lower() in post_text_lower)
+            capped_matches = min(matches, 5)  # Cap matches per category
+            category_score = capped_matches * weight
             score_breakdown[category] = {
                 'matches': matches,
+                'capped_matches': capped_matches,
+                'weight': weight,
                 'score': category_score,
-                'weight': weight
+                'keywords': [kw for kw in keywords if kw.lower() in post_text_lower]
             }
-        
-        # Add length score
-        words = len(post_text.split())
-        length_score = 0
-        if 50 <= words <= 300:
-            length_score = 10  # Ideal length
-        elif words > 300:
-            length_score = 5   # Long but acceptable
-        elif words >= 30:
-            length_score = 3   # Minimum acceptable
-        
-        total_score += length_score
-        max_score += 10
-        
-        score_breakdown['length'] = {
-            'words': words,
-            'score': length_score
-        }
-        
-        # Normalize to 0-100 scale
-        final_score = (total_score / max_score) * 100 if max_score > 0 else 0
-        
-        # Log scoring breakdown with analysis
-        score_analysis = {
-            'breakdown': score_breakdown,
-            'final_score': final_score,
-            'max_possible': max_score,
-            'categories_hit': sum(1 for cat in score_breakdown.values() if isinstance(cat, dict) and cat.get('matches', 0) > 0),
-            'total_matches': sum(cat.get('matches', 0) for cat in score_breakdown.values() if isinstance(cat, dict)),
-            'highest_category': max(
-                ((cat, data['score']) for cat, data in score_breakdown.items() 
-                 if isinstance(data, dict) and 'score' in data),
-                key=lambda x: x[1],
-                default=('none', 0)
-            )[0]
-        }
-        
+            total_score += category_score
+        # Length bonus (up to 10 points)
+        length_bonus = 0
+        if len(post_text) > 400:
+            length_bonus = 10
+        elif len(post_text) > 200:
+            length_bonus = 5
+        score_breakdown['length_bonus'] = length_bonus
+        total_score += length_bonus
+        # Cap at 100
+        final_score = min(100, total_score)
+        score_breakdown['final_score'] = final_score
         if self.debug_mode:
-            self.debug_log(f"Post scoring analysis: {json.dumps(score_analysis, indent=2)}", "SCORE")
-        
-        return min(100, final_score)
+            self.debug_log(f"Post scoring breakdown: {json.dumps(score_breakdown, indent=2)}", "SCORE")
+        return final_score
+
 
     def verify_comment(self, comment):
         """
@@ -1345,98 +1296,76 @@ class SearchPerformanceTracker:
 
 def initialize_driver():
     """Initialize and return a configured Chrome WebDriver instance."""
+    chrome_options = Options()
+    config = get_config()
+    chrome_path = config.get('chrome_path')
+    # Default to bundled Chromium if not provided
+    if not chrome_path:
+        bundled_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-win64', 'chrome-win', 'chrome.exe'))
+        if os.path.exists(bundled_path):
+            chrome_path = bundled_path
+            debug_log(f"Using bundled standard Chromium at {bundled_path}", "INFO")
+        else:
+            debug_log("Bundled standard Chromium not found, will search for system Chrome.", "WARNING")
+    else:
+        debug_log(f"Using Chromium/Chrome from CLI/config: {chrome_path}", "INFO")
+    possible_paths = [
+        chrome_path,
+        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+        r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+        os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
+        os.path.expandvars(r'%PROGRAMFILES%\Google\Chrome\Application\chrome.exe'),
+        os.path.expandvars(r'%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe'),
+    ]
+    # If chrome_path is provided and valid, use it directly
+    if chrome_path and os.path.exists(chrome_path):
+        chrome_options.binary_location = chrome_path
+    else:
+        for path in possible_paths[1:]:
+            if path and os.path.exists(path):
+                chrome_options.binary_location = path
+                debug_log(f"Using system Chrome at {path}", "INFO")
+                break
+
+    # TEMPORARY: Disable headless mode for debugging ungoogled Chromium
+    debug_log("[TEST MODE] Headless mode disabled for Selenium/Chromium launch.", "WARNING")
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--remote-debugging-port=9222')
     try:
-        chrome_options = Options()
-        
-        # Load config to check headless setting
-        config = load_config()
-        # Check both old format (headless) and new format (browser_config.headless)
-        if config:
-            browser_config = config.get('browser_config', {})
-            headless_mode = browser_config.get('headless', config.get('headless', True))
-        else:
-            headless_mode = True
-        
-        if headless_mode:
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            debug_log("🔧 Running in headless mode (production)", "INIT")
-        else:
-            debug_log("🔧 Running in headed mode (visible browser)", "INIT")
-        
-        # Add persistent user data directory for Chrome profile
-        chrome_profile_path = os.path.join(os.getcwd(), "chrome_profile")
-        chrome_options.add_argument(f"--user-data-dir={chrome_profile_path}")
-        
-        # Add common user agent
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        
-        # Disable notifications and other unnecessary features
-        chrome_options.add_argument("--disable-notifications")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # Set window size (important even for headless)
-        chrome_options.add_argument("--window-size=1920,1080")
-        
-        # Initialize driver
-        try:
-            if headless_mode:
-                debug_log("Initializing headless Chrome browser...", "INIT")
-            else:
-                debug_log("Opening Chrome browser window for LinkedIn login...", "INIT")
-                
-            driver = webdriver.Chrome(options=chrome_options)
-            
-            # Execute script to remove webdriver property
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            if not headless_mode:
-                # Maximize window for better visibility in headed mode
-                driver.maximize_window()
-                debug_log("Browser window maximized for better visibility", "INIT")
-            
-            debug_log("Chrome driver initialized successfully", "INIT")
-            return driver
-            
-        except Exception as e:
-            debug_log(f"Error initializing Chrome driver: {e}", "ERROR")
-            debug_log("Trying alternative Chrome driver initialization method...", "INIT")
-            try:
-                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-                if not headless_mode:
-                    driver.maximize_window()
-                return driver
-            except Exception as e2:
-                debug_log(f"Second error initializing Chrome: {e2}", "ERROR")
-                debug_log("ERROR: Failed to open Chrome browser. Do you have Chrome installed?", "ERROR")
-                raise Exception("Could not initialize Chrome. Please ensure Chrome is installed.")
-                
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        debug_log(f"Successfully initialized Chrome driver in non-headless mode", "INFO")
+        return driver
     except Exception as e:
-        debug_log(f"Error in initialize_driver: {e}", "ERROR")
-        raise
+        user_message = (
+            f"Could not initialize Chrome in non-headless mode: {e}\n"
+            "If the problem persists, please contact support and provide this log file."
+        )
+        debug_log(user_message, "ERROR")
+        print(f"[APP_OUT]{user_message}")
+        raise Exception(user_message)
+
 
 def debug_log(message, level="INFO"):
     """Enhanced debug logging with timestamps and levels."""
     # Define log level hierarchy
     log_levels = {"DEBUG": 0, "INFO": 1, "COMMENT": 1, "SEARCH": 1, "INIT": 1, "WARNING": 2, "ERROR": 3, "START": 1, "DATA": 0, "CHECK": 0}
-    
+
     # <-- CHANGE: honour override first
     global LOG_LEVEL_OVERRIDE
     if LOG_LEVEL_OVERRIDE:
         current_level = LOG_LEVEL_OVERRIDE
     else:
         # Get current log level from config file (may be stale if CLI override)
-        config = load_config()
+        config = get_config()
         current_level = (config.get('log_level', 'info') if config else 'info').upper()
     # --> END CHANGE
-    
+
     current_level_num = log_levels.get(current_level, 1)
     message_level_num = log_levels.get(level.upper(), 1)
-    
+
     # Only log if message level is equal or higher than current log level
     if message_level_num >= current_level_num:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1444,17 +1373,30 @@ def debug_log(message, level="INFO"):
         print(log_line)
         
         # Add APP_OUT prefix for important logs to display in UI
-        important_levels = ["INFO", "WARNING", "ERROR", "START", "SUCCESS", "COMMENT", "PROCESS", "URL", "LIMIT", "NAV", "POSTS", "ACTION"]
-        if level.upper() in important_levels:
-            print(f"[APP_OUT]{log_line}")
+        # Send ALL log levels to the GUI activity log
+        print(f"[APP_OUT]{log_line}")
         
+
         # Also write to a log file
-        log_file = "linkedin_commenter.log"
+        raw_log_file_path = os.getenv('LINKEDIN_LOG_FILE', 'linkedin_commenter.log')
+        # Normalize the path to handle potential OS-specific issues (e.g., mixed slashes, redundant separators)
+        log_file = os.path.normpath(raw_log_file_path)
+
         try:
+            # Ensure the directory for the log file exists
+            log_dir = os.path.dirname(log_file)
+            # Create directory if it's specified (not an empty string) and doesn't exist
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(log_line + "\n")
         except Exception as e:
-            print(f"Error writing to log file: {e}")
+            # Provide more context in case of error
+            print(f"Error writing to log file '{log_file}' (raw path: '{raw_log_file_path}'): {e}")
+            # If it's an OSError with errno 22 (Invalid argument), print more details
+            if isinstance(e, OSError) and e.errno == 22:
+                 print(f"Detailed path info for OSError 22: normalized_path='{log_file}', directory_part='{os.path.dirname(log_file)}'")
 
 def load_log():
     """Load processed post IDs from disk, excluding posts from the last hour."""
@@ -1858,7 +1800,7 @@ DEFAULT_USER_CONFIG = {
 
 def get_user_config():
     """Get user configuration from loaded config or defaults."""
-    config = load_config()
+    config = get_config()
     return config.get('user_config', DEFAULT_USER_CONFIG) if config else DEFAULT_USER_CONFIG
 
 def is_active_hours():

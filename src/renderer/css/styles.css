@@ -299,6 +299,26 @@ button:disabled {
   gap: var(--spacing-xs);
 }
 
+/* Checkbox styling */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.checkbox-input {
+  width: auto;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.checkbox-label {
+  font-size: 0.875rem;
+  color: var(--text-color);
+  user-select: none;
+}
+
 .form-group label {
   font-weight: 500;
 }

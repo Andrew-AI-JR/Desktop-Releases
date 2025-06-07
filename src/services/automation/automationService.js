@@ -2,14 +2,24 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow } = require('electron');
+
+// Persistent file logger for debugging Python process events
+const logToFile = (msg) => {
+  try {
+    const logPath = path.join(app.getPath('userData'), 'main.log');
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch (e) {
+    // Ignore logging errors
+  }
+};
 const pythonDependencyService = require('./pythonDependencyService');
 const pythonBundleService = require('./pythonBundleService');
 const errorCodes = require('./errorCodes');
 const apiClient = require('../api/apiClient');
 const tokenManager = require('../auth/tokenManager');
-// Track the running process
-let pythonProcess = null;
-let isRunning = false;
+// Track the running process - use global variables to ensure consistency across app lifecycle
+global.pythonProcess = global.pythonProcess || null;
+global.isAutomationRunning = global.isAutomationRunning || false;
 
 // Persistent configuration path
 const getPersistentConfigPath = () => {
@@ -27,9 +37,19 @@ const automationService = {
    * @returns {string} Path to writable log file
    */
   getLogFilePath() {
-    const juniorDir = path.join(app.getPath('userData'), 'JuniorAI');
-    fs.mkdirSync(juniorDir, { recursive: true });
-    return path.join(juniorDir, 'linkedin_commenter.log');
+    // User requested log path for easier access during debugging
+    const desiredLogPath = 'C:\\Users\\asust\\OneDrive\\Documentos\\GitHub\\junior\\junior-desktop\\linkedin_commenter.log';
+    const logDir = path.dirname(desiredLogPath);
+    try {
+      fs.mkdirSync(logDir, { recursive: true });
+    } catch (e) {
+      console.error(`[getLogFilePath] Error creating directory ${logDir}:`, e);
+      // Fallback to userData if creating desired path fails
+      const fallbackDir = path.join(app.getPath('userData'), 'JuniorAI');
+      fs.mkdirSync(fallbackDir, { recursive: true });
+      return path.join(fallbackDir, 'linkedin_commenter.log');
+    }
+    return desiredLogPath;
   },
 
   /**
@@ -102,9 +122,10 @@ const automationService = {
    * @returns {Promise<Object>} Result of the automation
    */
   async runLinkedInAutomation(config) {
+  logToFile(`[AutomationService] runLinkedInAutomation called with config: ${JSON.stringify(config)}`);
     await this._cleanupStaleProcess();
 
-    if (isRunning) {
+    if (global.isAutomationRunning) {
       throw new Error('Automation is already running');
     }
 
@@ -131,7 +152,7 @@ const automationService = {
       const runAsync = async () => {
         let configPath;
         try {
-          isRunning = true;
+          global.isAutomationRunning = true;
 
           // Check if Chrome is available before starting
           const chromeAvailable = await this.checkChromeAvailability();
@@ -232,7 +253,7 @@ const automationService = {
       }
 
       // If we have a running process, try to stop it gracefully
-      if (isRunning) {
+      if (global.isAutomationRunning) {
         console.log(
           '[_cleanupStaleProcess] Stopping existing automation before starting new one'
         );
@@ -407,6 +428,7 @@ const automationService = {
       const output = data.toString();
       stdoutData += output;
       console.log('[Python] stdout:', output);
+      logToFile('[Python] stdout: ' + output);
       const trimmedOutput = data.toString().trim();
       if (trimmedOutput.startsWith('[APP_OUT]')) {
         const appMessage = trimmedOutput.substring('[APP_OUT]'.length).trim();
@@ -420,6 +442,7 @@ const automationService = {
       const output = data.toString();
       stderrData += output;
       console.error('[Python] stderr:', output);
+      logToFile('[Python] stderr: ' + output);
 
       if (global.mainWindow) {
         global.mainWindow.webContents.send('automation-log', {
@@ -434,6 +457,7 @@ const automationService = {
       global.pythonProcess = null;
       this.cleanupConfigFile(configPath);
       // Check for errors even if exit code is 0
+      logToFile(`[Python] process exited with code: ${code}`);
       if (code === 0) {
         resolve({
           success: true,
@@ -454,6 +478,8 @@ const automationService = {
           '[_setupProcessHandlers] Python process exit error:',
           errorDetails
         );
+        logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails));
+        logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails), 'main.log');
         reject(errorDetails);
       }
     });
@@ -479,6 +505,7 @@ const automationService = {
         '[_setupProcessHandlers] Python process error:',
         errorDetails
       );
+      logToFile('[Python] process error: ' + JSON.stringify(errorDetails));
       sendLogMessage(`Process error: ${error.message}`);
       reject(errorDetails);
     });
@@ -585,7 +612,7 @@ const automationService = {
    * @returns {Promise<Object>} Result of the stop operation
    */
   async stopAutomation() {
-    if (!isRunning || !pythonProcess) {
+    if (!global.isAutomationRunning || !global.pythonProcess) {
       return {
         success: true,
         message: 'No automation running',
@@ -612,8 +639,8 @@ const automationService = {
         });
       } catch (error) {
         // Reset state even if there was an error
-        pythonProcess = null;
-        isRunning = false;
+        global.pythonProcess = null;
+        global.isAutomationRunning = false;
         console.error('[stopAutomation] Error stopping automation:', error);
         reject({
           message: error.message || 'Failed to stop automation',
@@ -629,9 +656,39 @@ const automationService = {
    * @returns {Promise<string>} Path to the created config file
    */
   async createConfigFile(config) {
+  logToFile(`[AutomationService] createConfigFile received config: ${JSON.stringify(config)}`);
+
+  // --- PATCH: Ensure config is in correct format for Python script ---
+  // Set backend_url
+  config.backend_url = 'https://junior-api-915940312680.us-west1.run.app';
+
+  // Move credentials under linkedin_credentials
+  if (config.linkedin_email || config.linkedin_password) {
+    config.linkedin_credentials = config.linkedin_credentials || {};
+    // Force log level to debug for GUI rendering
+    config.log_level = 'debug';
+
+    // Set chrome_path to bundled Chromium for Python automation
+    try {
+      const chromium = require('chromium');
+      config.chrome_path = chromium.path;
+    } catch (err) {
+      console.warn('Chromium package not found or failed to load. Chrome path will not be set in config.');
+    }
+    if (config.linkedin_email) {
+      config.linkedin_credentials.email = config.linkedin_email;
+      delete config.linkedin_email;
+    }
+    if (config.linkedin_password) {
+      config.linkedin_credentials.password = config.linkedin_password;
+      delete config.linkedin_password;
+    }
+  }
+  // --- END PATCH ---
     // Add paths that the Python script will need
     config.log_file_path = this.getLogFilePath();
-    config.chrome_profile_path = this.getChromeProfilePath();
+  config.chrome_profile_path = this.getChromeProfilePath();
+  logToFile(`[AutomationService] Config before writing to file: ${JSON.stringify(config, null, 2)}`);
 
     const tempDir = path.join(app.getPath('userData'), 'temp');
     fs.mkdirSync(tempDir, { recursive: true });
@@ -800,6 +857,42 @@ const automationService = {
       resolve(false);
     });
   },
+};
+
+/**
+ * Force reset the automation state - use this to clear stuck states
+ * @returns {Object} Result of the reset operation
+ */
+automationService.forceResetState = function() {
+  const wasRunning = global.isAutomationRunning;
+  
+  // Force kill any process if it exists
+  if (global.pythonProcess) {
+    try {
+      if (process.platform === 'win32') {
+        // On Windows
+        spawn('taskkill', ['/pid', global.pythonProcess.pid, '/f', '/t']);
+      } else {
+        // On macOS/Linux
+        process.kill(global.pythonProcess.pid);
+      }
+    } catch (e) {
+      // Ignore errors during forced kill
+      console.log('[forceResetState] Error killing process:', e.message);
+    }
+  }
+  
+  // Reset state variables
+  global.pythonProcess = null;
+  global.isAutomationRunning = false;
+  
+  logToFile(`Forced reset of automation state. Was running: ${wasRunning}`);
+  
+  return {
+    success: true,
+    wasRunning,
+    message: 'Automation state has been forcibly reset'
+  };
 };
 
 module.exports = automationService;

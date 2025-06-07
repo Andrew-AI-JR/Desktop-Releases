@@ -34,6 +34,7 @@ const pythonDependencyService = {
    * @returns {string|null} Path to requirements.txt or null if not found
    */
   getRequirementsPath() {
+    console.log('[Debug] app.getAppPath() returns:', app.getAppPath());
     const possiblePaths = [
       // Production build locations
       path.join(process.resourcesPath, 'requirements.txt'),
@@ -41,6 +42,14 @@ const pythonDependencyService = {
       // Development locations
       path.join(
         app.getAppPath(),
+        'junior-desktop',
+        'src',
+        'resources',
+        'scripts',
+        'requirements.txt'
+      ),
+      path.join(
+        app.getAppPath(), // Fallback for cases where junior-desktop might be the root
         'src',
         'resources',
         'scripts',
@@ -49,7 +58,10 @@ const pythonDependencyService = {
     ];
 
     for (const reqPath of possiblePaths) {
-      if (fs.existsSync(reqPath)) {
+      console.log('[Debug] Checking path:', reqPath);
+      const exists = fs.existsSync(reqPath);
+      console.log('[Debug] Path exists:', exists);
+      if (exists) {
         console.log(`Found requirements.txt at: ${reqPath}`);
         return reqPath;
       }

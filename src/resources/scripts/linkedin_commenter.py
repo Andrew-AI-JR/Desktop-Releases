@@ -58,6 +58,10 @@ def load_config_from_args():
     """Load configuration from command line arguments."""
     parser = argparse.ArgumentParser(description='LinkedIn Commenter')
     parser.add_argument('--config', type=str, help='Path to configuration file')
+    parser.add_argument('--email', type=str, help='LinkedIn account email')
+    parser.add_argument('--password', type=str, help='LinkedIn account password')
+    parser.add_argument('--log_level', type=str, choices=['debug', 'info', 'warning', 'error'], help='Override log level')
+    parser.add_argument('--debug', action='store_true', help='Enable full debug mode (alias for --log_level debug)')
     args = parser.parse_args()
     
     # Load config from command line or default path
@@ -69,6 +73,38 @@ def load_config_from_args():
     if not config:
         print("Failed to load configuration. Please ensure config file exists and is valid.")
         sys.exit(1)
+    
+    # Ensure nested structure exists
+    if 'linkedin_credentials' not in config:
+        config['linkedin_credentials'] = {}
+
+    # CLI overrides highest priority
+    if args.email:
+        config['linkedin_credentials']['email'] = args.email
+    if args.password:
+        config['linkedin_credentials']['password'] = args.password
+
+    # Log level / debug overrides
+    global LOG_LEVEL_OVERRIDE
+    if args.log_level:
+        config['log_level'] = args.log_level
+        LOG_LEVEL_OVERRIDE = args.log_level.upper()
+    if args.debug:
+        config['log_level'] = 'debug'
+        config['debug_mode'] = True
+        LOG_LEVEL_OVERRIDE = 'DEBUG'
+
+    # Environment variable fallback if still missing
+    env_email = os.getenv('LINKEDIN_EMAIL')
+    env_pass = os.getenv('LINKEDIN_PASSWORD')
+    env_log  = os.getenv('LOG_LEVEL')
+    if env_email and not config['linkedin_credentials'].get('email'):
+        config['linkedin_credentials']['email'] = env_email
+    if env_pass and not config['linkedin_credentials'].get('password'):
+        config['linkedin_credentials']['password'] = env_pass
+    if env_log and 'log_level' not in config:
+        config['log_level'] = env_log
+        LOG_LEVEL_OVERRIDE = env_log.upper()
     
     return config
 
@@ -88,6 +124,10 @@ LINKEDIN_EMAIL = ''
 LINKEDIN_PASSWORD = ''
 USER_BIO = ''
 SEARCH_URLS = []
+# <-- ADD
+# Stores CLI/env override for logging; used inside debug_log
+LOG_LEVEL_OVERRIDE = None
+# --> END ADD
 
 def main():
     """Main execution function that continuously cycles through URLs while respecting limits."""
@@ -97,6 +137,7 @@ def main():
     global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
     
     debug_log("Starting LinkedIn Commenter", "START")
+    print("[APP_OUT]LinkedIn automation started and running continuously. Do not close this window.")
     
     # Initialize variables
     daily_comments = 0
@@ -281,7 +322,16 @@ def main():
         debug_log("Cleaning up and closing browser", "CLEANUP")
         if 'driver' in locals():
             driver.quit()
-        debug_log("Script execution completed", "END")
+        debug_log("Script execution completed - will restart automatically", "END")
+        print("[APP_OUT]LinkedIn automation completed a cycle. Restarting automatically...")
+        
+        # Instead of exiting, restart the main function after a short delay
+        time.sleep(10)
+        try:
+            main()  # Restart the main function
+        except Exception as e:
+            debug_log(f"Failed to restart automation: {str(e)}", "FATAL")
+            print(f"[APP_OUT]Failed to restart automation: {str(e)}")
 
 def construct_linkedin_search_url(keywords, time_filter="past_month"):
     """
@@ -1374,14 +1424,17 @@ def debug_log(message, level="INFO"):
     # Define log level hierarchy
     log_levels = {"DEBUG": 0, "INFO": 1, "COMMENT": 1, "SEARCH": 1, "INIT": 1, "WARNING": 2, "ERROR": 3, "START": 1, "DATA": 0, "CHECK": 0}
     
-    # Get current log level from config
-    config = load_config()
-    current_log_level = "info"  # default
-    if config:
-        current_log_level = config.get('log_level', 'info').lower()
+    # <-- CHANGE: honour override first
+    global LOG_LEVEL_OVERRIDE
+    if LOG_LEVEL_OVERRIDE:
+        current_level = LOG_LEVEL_OVERRIDE
+    else:
+        # Get current log level from config file (may be stale if CLI override)
+        config = load_config()
+        current_level = (config.get('log_level', 'info') if config else 'info').upper()
+    # --> END CHANGE
     
-    # Convert to uppercase for comparison
-    current_level_num = log_levels.get(current_log_level.upper(), 1)
+    current_level_num = log_levels.get(current_level, 1)
     message_level_num = log_levels.get(level.upper(), 1)
     
     # Only log if message level is equal or higher than current log level
@@ -1389,6 +1442,11 @@ def debug_log(message, level="INFO"):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_line = f"[{timestamp}] [{level}] {message}"
         print(log_line)
+        
+        # Add APP_OUT prefix for important logs to display in UI
+        important_levels = ["INFO", "WARNING", "ERROR", "START", "SUCCESS", "COMMENT", "PROCESS", "URL", "LIMIT", "NAV", "POSTS", "ACTION"]
+        if level.upper() in important_levels:
+            print(f"[APP_OUT]{log_line}")
         
         # Also write to a log file
         log_file = "linkedin_commenter.log"
@@ -1882,6 +1940,7 @@ def rephrase_comment_shorter(comment, post_text):
 def process_posts(driver):
     """Process visible posts on the current page."""
     debug_log("Starting post processing", "PROCESS")
+    print("[APP_OUT]Processing LinkedIn posts...")
     posts_processed = 0
     hiring_posts_found = 0
     posts_commented = 0
@@ -1985,6 +2044,7 @@ def process_posts(driver):
                 comment_success = post_comment(driver, post, custom_message)
                 if comment_success:
                     debug_log("Successfully posted comment", "SUCCESS")
+                    print(f"[APP_OUT]Successfully posted comment on post by {author_name}")
                     posts_commented += 1
                     debug_log("Updating comment history", "DATA")
                     comment_history[post_id] = {
@@ -2022,6 +2082,7 @@ def process_posts(driver):
 def verify_active_login(driver):
     """Automatically verify and perform LinkedIn login without manual intervention."""
     debug_log("Verifying LinkedIn login status...", "LOGIN")
+    print("[APP_OUT]Verifying LinkedIn login status...")
     
     try:
         # Go to LinkedIn homepage
@@ -2154,6 +2215,7 @@ def verify_active_login(driver):
                 # Check if we're redirected to feed or home
                 if any(indicator in current_url for indicator in ["feed", "home"]) and "login" not in current_url:
                     debug_log("Login successful - redirected to main page", "LOGIN")
+                    print("[APP_OUT]LinkedIn login successful!")
                     return True
                 
                 # Check for login indicators again

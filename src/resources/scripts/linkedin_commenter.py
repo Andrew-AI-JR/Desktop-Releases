@@ -260,27 +260,27 @@ def main():
                             posts_processed_total = 0
                             hiring_posts_found_total = 0
                             
-                except Exception as inner_e:
-                    import traceback
-                    debug_log(f"[ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}", "ERROR")
-                    print(f"[APP_OUT][ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}")
-                    break
-        except Exception as loop_outer_e:
-            import traceback
-            debug_log(f"[FATAL] Unhandled exception in main loop: {repr(loop_outer_e)}\n{traceback.format_exc()}", "ERROR")
-            print(f"[APP_OUT][FATAL] Unhandled exception in main loop: {repr(loop_outer_e)}\n{traceback.format_exc()}")
-            sys.exit(1)
-    except Exception as e:
-        import traceback
-        debug_log(f"[FATAL] Unhandled exception in main: {repr(e)}\n{traceback.format_exc()}", "ERROR")
-        print(f"[APP_OUT][FATAL] Unhandled exception in main: {repr(e)}\n{traceback.format_exc()}")
-        sys.exit(1)
-                        while scroll_attempts < max_scroll_attempts:
-                            # Process posts on the current view
-                            debug_log(f"Processing posts (scroll attempt {scroll_attempts+1}/{max_scroll_attempts})", "POSTS")
-                            posts_processed, hiring_posts_found = process_posts(driver)
-                            
-                            posts_processed_total += posts_processed
+                            while scroll_attempts < max_scroll_attempts:
+                                try:
+                                    # Process posts on the current view
+                                    debug_log(f"Processing posts (scroll attempt {scroll_attempts+1}/{max_scroll_attempts})", "POSTS")
+                                    posts_processed, hiring_posts_found = process_posts(driver)
+                                    
+                                    posts_processed_total += posts_processed
+                                    hiring_posts_found_total += hiring_posts_found
+                                    
+                                    if posts_processed > 0:
+                                        debug_log(f"Found {posts_processed} posts, {hiring_posts_found} hiring posts", "POSTS")
+                                    else:
+                                        debug_log("No posts found on this scroll", "POSTS")
+                                    
+                                    scroll_attempts += 1
+                                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                                    time.sleep(SCROLL_PAUSE_TIME)
+                                except Exception as inner_e:
+                                    import traceback
+                                    debug_log(f"[ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}", "ERROR")
+                                    print(f"[APP_OUT][ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}")
                             hiring_posts_found_total += hiring_posts_found
                             
                             if posts_processed > 0:

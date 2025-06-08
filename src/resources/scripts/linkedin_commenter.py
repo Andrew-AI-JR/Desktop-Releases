@@ -297,7 +297,6 @@ def main():
                             debug_log(f"Waiting {cycle_break} seconds before next URL", "WAIT")
                             time.sleep(cycle_break)
                 
-{{ ... }}
                 # Clear recent logs
                 if random.random() < 0.2:
                     debug_log("Clearing recent posts from comment log", "CLEANUP")

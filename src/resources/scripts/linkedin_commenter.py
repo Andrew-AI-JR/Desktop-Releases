@@ -137,128 +137,144 @@ SEARCH_URLS = []
 LOG_LEVEL_OVERRIDE = None
 
 def main():
-    """Main execution function that continuously cycles through URLs while respecting limits."""
-    global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
-    global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
-    global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
-
-    debug_log("Starting LinkedIn Commenter", "START")
-    print("[APP_OUT]LinkedIn automation started and running continuously. Do not close this window.")
-
-    # Initialize variables
-    daily_comments = 0
-    session_comments = 0
-    login_attempts = 0
-    cycle_break = 5  # Base time between URL cycles
-
-    # Initialize the search performance tracker
-    search_tracker = SearchPerformanceTracker()
-    debug_log("Initialized search performance tracker", "INIT")
-
-    # Load configuration globally (always from --config)
-    config = get_config()
-
-    # Update values from config
-    DEBUG_MODE = config.get('debug_mode', DEBUG_MODE)
-    MAX_DAILY_COMMENTS = config.get('max_daily_comments', MAX_DAILY_COMMENTS)
-    MAX_SESSION_COMMENTS = config.get('max_session_comments', MAX_SESSION_COMMENTS)
-    SCROLL_PAUSE_TIME = config.get('scroll_pause_time', SCROLL_PAUSE_TIME)
-    MAX_SCROLL_CYCLES = config.get('max_scroll_cycles', MAX_SCROLL_CYCLES)
-    MAX_COMMENT_WORDS = config.get('max_comment_words', MAX_COMMENT_WORDS)
-    MIN_COMMENT_DELAY = config.get('min_comment_delay', MIN_COMMENT_DELAY)
-    SHORT_SLEEP_SECONDS = config.get('short_sleep_seconds', SHORT_SLEEP_SECONDS)
-    CALENDLY_LINK = config.get('calendly_url', CALENDLY_LINK)
-    keywords = config.get('keywords', '')
-    USER_BIO = config.get('user_bio', USER_BIO)
-
-    # Split comma-separated keywords and generate search URLs
-    if isinstance(keywords, str) and keywords:
-        keywords_list = [k.strip() for k in keywords.split(',')]
-        JOB_SEARCH_KEYWORDS = keywords_list
-        debug_log(f"Found {len(keywords_list)} keywords to search for", "INFO")
-        SEARCH_URLS = get_search_urls_for_keywords(keywords_list)
-        # Count 24h vs monthly URLs for prioritization info
-        urls_24h = [url for url in SEARCH_URLS if 'past-24h' in url]
-        urls_monthly = [url for url in SEARCH_URLS if 'past-month' in url]
-        debug_log(f"Generated {len(urls_24h)} high-priority 24h URLs and {len(urls_monthly)} monthly URLs", "INFO")
-        debug_log(f"Full list of search URLs (priority order):\n" + '\n'.join([f"[24h] {url}" if 'past-24h' in url else f"[month] {url}" for url in SEARCH_URLS]), "URL")
-
-    # Add feed and network URLs
-    SEARCH_URLS.extend([
-        "https://www.linkedin.com/feed/",
-        "https://www.linkedin.com/mynetwork/"
-    ])
-
-    # Get LinkedIn credentials
-    if 'linkedin_credentials' in config:
-        LINKEDIN_EMAIL = config['linkedin_credentials'].get('email', LINKEDIN_EMAIL)
-        LINKEDIN_PASSWORD = config['linkedin_credentials'].get('password', LINKEDIN_PASSWORD)
-
-    # Initialize the comment generator
-    comment_generator = CommentGenerator(debug_mode=DEBUG_MODE)
-
-    # Initialize the browser
-    driver = initialize_driver()
-
-    # Main automation loop
     try:
-        while True:
-            try:
-                # Check if we should sleep during inactive hours
-                if not is_active_hours():
-                    sleep_during_inactive_hours()
-                    continue
-                
-                # Verify active login
-                if not verify_active_login(driver):
-                    login_attempts += 1
-                    if login_attempts >= 3:
-                        debug_log("Maximum login attempts reached", "ERROR")
-                        break
-                    debug_log("Login verification failed, retrying...", "LOGIN")
-                    time.sleep(60)
-                    continue
-                
-                # Reset login attempts on success
-                login_attempts = 0
-                debug_log("Login verified successfully", "SUCCESS")
-                
-                # Optimize search URLs based on performance data
-                optimized_urls = search_tracker.optimize_search_urls(SEARCH_URLS)
-                debug_log(f"Optimized {len(SEARCH_URLS)} search URLs based on performance data", "OPTIMIZE")
-                
-                # Process each search URL
-                for url_index, search_url in enumerate(optimized_urls, 1):
-                    try:
-                        # Log the URL and its priority before processing
-                        url_priority = '[24h]' if 'past-24h' in search_url else '[month]' if 'past-month' in search_url else '[other]'
-                        debug_log(f"About to process URL {url_index}/{len(optimized_urls)} {url_priority}: {search_url}", "URL")
-                        
-                        # Check limits
-                        if daily_comments >= MAX_DAILY_COMMENTS:
-                            debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
-                            sleep_until_midnight_edt()
-                            daily_comments = 0
-                            continue
+        """Main execution function that continuously cycles through URLs while respecting limits."""
+        global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
+        global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
+        global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
 
-                        if session_comments >= MAX_SESSION_COMMENTS:
-                            debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                            time.sleep(300)
-                            continue
-                        
-                        # Navigate to the URL
-                        debug_log(f"Navigating to {search_url}", "NAV")
-                        driver.get(search_url)
-                        time.sleep(5)  # Wait for page load
-                        
-                        # Scroll the page to load more content
-                        debug_log("Scrolling page to load more content", "SCROLL")
-                        scroll_attempts = 0
-                        max_scroll_attempts = MAX_SCROLL_CYCLES  # Use the configured value
-                        
-                        posts_processed_total = 0
-                        hiring_posts_found_total = 0
-                        
+        debug_log("Starting LinkedIn Commenter", "START")
+        print("[APP_OUT]LinkedIn automation started and running continuously. Do not close this window.")
+
+        # Initialize variables
+        daily_comments = 0
+        session_comments = 0
+        login_attempts = 0
+        cycle_break = 5  # Base time between URL cycles
+
+        # Initialize the search performance tracker
+        search_tracker = SearchPerformanceTracker()
+        debug_log("Initialized search performance tracker", "INIT")
+
+        # Load configuration globally (always from --config)
+        config = get_config()
+
+        # Update values from config
+        DEBUG_MODE = config.get('debug_mode', DEBUG_MODE)
+        MAX_DAILY_COMMENTS = config.get('max_daily_comments', MAX_DAILY_COMMENTS)
+        MAX_SESSION_COMMENTS = config.get('max_session_comments', MAX_SESSION_COMMENTS)
+        SCROLL_PAUSE_TIME = config.get('scroll_pause_time', SCROLL_PAUSE_TIME)
+        MAX_SCROLL_CYCLES = config.get('max_scroll_cycles', MAX_SCROLL_CYCLES)
+        MAX_COMMENT_WORDS = config.get('max_comment_words', MAX_COMMENT_WORDS)
+        MIN_COMMENT_DELAY = config.get('min_comment_delay', MIN_COMMENT_DELAY)
+        SHORT_SLEEP_SECONDS = config.get('short_sleep_seconds', SHORT_SLEEP_SECONDS)
+        CALENDLY_LINK = config.get('calendly_url', CALENDLY_LINK)
+        keywords = config.get('keywords', '')
+        USER_BIO = config.get('user_bio', USER_BIO)
+
+        # Split comma-separated keywords and generate search URLs
+        if isinstance(keywords, str) and keywords:
+            keywords_list = [k.strip() for k in keywords.split(',')]
+            JOB_SEARCH_KEYWORDS = keywords_list
+            debug_log(f"Found {len(keywords_list)} keywords to search for", "INFO")
+            SEARCH_URLS = get_search_urls_for_keywords(keywords_list)
+            # Count 24h vs monthly URLs for prioritization info
+            urls_24h = [url for url in SEARCH_URLS if 'past-24h' in url]
+            urls_monthly = [url for url in SEARCH_URLS if 'past-month' in url]
+            debug_log(f"Generated {len(urls_24h)} high-priority 24h URLs and {len(urls_monthly)} monthly URLs", "INFO")
+            debug_log(f"Full list of search URLs (priority order):\n" + '\n'.join([f"[24h] {url}" if 'past-24h' in url else f"[month] {url}" for url in SEARCH_URLS]), "URL")
+
+        # Add feed and network URLs
+        SEARCH_URLS.extend([
+            "https://www.linkedin.com/feed/",
+            "https://www.linkedin.com/mynetwork/"
+        ])
+
+        # Get LinkedIn credentials
+        if 'linkedin_credentials' in config:
+            LINKEDIN_EMAIL = config['linkedin_credentials'].get('email', LINKEDIN_EMAIL)
+            LINKEDIN_PASSWORD = config['linkedin_credentials'].get('password', LINKEDIN_PASSWORD)
+
+        # Initialize the comment generator
+        comment_generator = CommentGenerator(debug_mode=DEBUG_MODE)
+
+        # Initialize the browser
+        driver = initialize_driver()
+
+        # Main automation loop
+        try:
+            while True:
+                try:
+                    # Check if we should sleep during inactive hours
+                    if not is_active_hours():
+                        sleep_during_inactive_hours()
+                        continue
+                    
+                    # Verify active login
+                    if not verify_active_login(driver):
+                        login_attempts += 1
+                        if login_attempts >= 3:
+                            debug_log("Maximum login attempts reached", "ERROR")
+                            break
+                        debug_log("Login verification failed, retrying...", "LOGIN")
+                        time.sleep(60)
+                        continue
+                    
+                    # Reset login attempts on success
+                    login_attempts = 0
+                    debug_log("Login verified successfully", "SUCCESS")
+                    
+                    # Optimize search URLs based on performance data
+                    optimized_urls = search_tracker.optimize_search_urls(SEARCH_URLS)
+                    debug_log(f"Optimized {len(SEARCH_URLS)} search URLs based on performance data", "OPTIMIZE")
+                    
+                    # Process each search URL
+                    for url_index, search_url in enumerate(optimized_urls, 1):
+                        try:
+                            # Log the URL and its priority before processing
+                            url_priority = '[24h]' if 'past-24h' in search_url else '[month]' if 'past-month' in search_url else '[other]'
+                            debug_log(f"About to process URL {url_index}/{len(optimized_urls)} {url_priority}: {search_url}", "URL")
+                            
+                            # Check limits
+                            if daily_comments >= MAX_DAILY_COMMENTS:
+                                debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
+                                sleep_until_midnight_edt()
+                                daily_comments = 0
+                                continue
+
+                            if session_comments >= MAX_SESSION_COMMENTS:
+                                debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
+                                time.sleep(300)
+                                continue
+                            
+                            # Navigate to the URL
+                            debug_log(f"Navigating to {search_url}", "NAV")
+                            driver.get(search_url)
+                            time.sleep(5)  # Wait for page load
+                            
+                            # Scroll the page to load more content
+                            debug_log("Scrolling page to load more content", "SCROLL")
+                            scroll_attempts = 0
+                            max_scroll_attempts = MAX_SCROLL_CYCLES  # Use the configured value
+                            
+                            posts_processed_total = 0
+                            hiring_posts_found_total = 0
+                            
+                except Exception as inner_e:
+                    import traceback
+                    debug_log(f"[ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}", "ERROR")
+                    print(f"[APP_OUT][ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}")
+                    break
+        except Exception as loop_outer_e:
+            import traceback
+            debug_log(f"[FATAL] Unhandled exception in main loop: {repr(loop_outer_e)}\n{traceback.format_exc()}", "ERROR")
+            print(f"[APP_OUT][FATAL] Unhandled exception in main loop: {repr(loop_outer_e)}\n{traceback.format_exc()}")
+            sys.exit(1)
+    except Exception as e:
+        import traceback
+        debug_log(f"[FATAL] Unhandled exception in main: {repr(e)}\n{traceback.format_exc()}", "ERROR")
+        print(f"[APP_OUT][FATAL] Unhandled exception in main: {repr(e)}\n{traceback.format_exc()}")
+        sys.exit(1)
                         while scroll_attempts < max_scroll_attempts:
                             # Process posts on the current view
                             debug_log(f"Processing posts (scroll attempt {scroll_attempts+1}/{max_scroll_attempts})", "POSTS")
@@ -1039,52 +1055,63 @@ class CommentGenerator:
         scoring_config['tech_relevance'] = {
             'weight': 3.0,
             'keywords': tech_keywords
-        }
-        
-        return scoring_config
 
     def calculate_post_score(self, post_text, author_name=None):
-        """
-        Calculate a score for a LinkedIn post using a fixed-weight, non-normalized system.
-        Each category contributes up to a capped maximum, and bonuses are applied directly.
-        The final score is capped at 100.
-        """
-        if not post_text:
-            return 0
-        config = get_config()
-        scoring_config = self.build_scoring_config(config)
-        post_text_lower = post_text.lower()
-        total_score = 0
-        score_breakdown = {}
-        # Category scoring (fixed weights, capped matches)
-        for category, cat_conf in scoring_config.items():
-            weight = cat_conf['weight']
-            keywords = cat_conf['keywords']
-            matches = sum(1 for kw in keywords if kw.lower() in post_text_lower)
-            capped_matches = min(matches, 5)  # Cap matches per category
-            category_score = capped_matches * weight
-            score_breakdown[category] = {
-                'matches': matches,
-                'capped_matches': capped_matches,
-                'weight': weight,
-                'score': category_score,
-                'keywords': [kw for kw in keywords if kw.lower() in post_text_lower]
-            }
-            total_score += category_score
-        # Length bonus (up to 10 points)
-        length_bonus = 0
-        if len(post_text) > 400:
-            length_bonus = 10
-        elif len(post_text) > 200:
-            length_bonus = 5
-        score_breakdown['length_bonus'] = length_bonus
-        total_score += length_bonus
-        # Cap at 100
-        final_score = min(100, total_score)
-        score_breakdown['final_score'] = final_score
-        if self.debug_mode:
-            self.debug_log(f"Post scoring breakdown: {json.dumps(score_breakdown, indent=2)}", "SCORE")
-        return final_score
+    """
+    Calculate a score for a post based on various factors to prioritize posts from hiring managers.
+    Uses FIXED scoring method without normalization.
+    Returns:
+        float: A score between 0 and 100, with higher scores indicating higher priority
+    """
+    if not post_text:
+        self.debug_log('[SCORE] Empty post text, returning 0')
+        return 0
+    # Build scoring configuration
+    scoring_config = self.build_scoring_config(get_config())
+    total_score = 0
+    post_text_lower = post_text.lower()
+    score_breakdown = {
+        'metadata': {
+            'text_length': len(post_text),
+            'word_count': len(post_text.split()),
+            'has_author': bool(author_name)
+        }
+    }
+    # Calculate scores for each category - FIXED scoring method
+    for category, config_data in scoring_config.items():
+        weight = config_data['weight']
+        keywords = config_data['keywords']
+        # Determine text to search in based on category
+        search_text = author_name.lower() if 'author' in category and author_name else post_text_lower
+        # Count keyword matches
+        matches = sum(1 for kw in keywords if kw.lower() in search_text)
+        # Give full weight for ANY match, small bonus for multiple matches (up to 2 extra)
+        if matches > 0:
+            category_score = weight * 5
+            if matches > 1:
+                category_score += weight * min(matches - 1, 2)  # Max 2 bonus matches
+        else:
+            category_score = 0
+        total_score += category_score
+        # Store breakdown for logging
+        score_breakdown[category] = {
+            'matches': matches,
+            'score': category_score,
+            'weight': weight
+        }
+    # Add length bonus (not penalty)
+    words = len(post_text.split())
+    length_bonus = 5 if words >= 50 else 0
+    total_score += length_bonus
+    score_breakdown['length'] = {
+        'words': words,
+        'score': length_bonus
+    }
+    # FIXED: Direct scoring - no normalization
+    final_score = min(100, total_score)
+    score_breakdown['final_score'] = final_score
+    self.debug_log(f'[SCORE] (patched) Post scoring breakdown: {json.dumps(score_breakdown)}')
+    return final_score
 
 
     def verify_comment(self, comment):
@@ -1300,47 +1327,46 @@ def initialize_driver():
     config = get_config()
     chrome_path = config.get('chrome_path')
     # Default to bundled Chromium if not provided
-    if not chrome_path:
-        bundled_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-win64', 'chrome-win', 'chrome.exe'))
-        if os.path.exists(bundled_path):
-            chrome_path = bundled_path
-            debug_log(f"Using bundled standard Chromium at {bundled_path}", "INFO")
-        else:
-            debug_log("Bundled standard Chromium not found, will search for system Chrome.", "WARNING")
-    else:
-        debug_log(f"Using Chromium/Chrome from CLI/config: {chrome_path}", "INFO")
-    possible_paths = [
-        chrome_path,
-        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
-        r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
-        os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
-        os.path.expandvars(r'%PROGRAMFILES%\Google\Chrome\Application\chrome.exe'),
-        os.path.expandvars(r'%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe'),
-    ]
-    # If chrome_path is provided and valid, use it directly
-    if chrome_path and os.path.exists(chrome_path):
-        chrome_options.binary_location = chrome_path
-    else:
-        for path in possible_paths[1:]:
-            if path and os.path.exists(path):
-                chrome_options.binary_location = path
-                debug_log(f"Using system Chrome at {path}", "INFO")
-                break
+    # Always use chrome_path from CLI/config if provided
+    chrome_path = config.get('chrome_path')
+    bundled_chrome = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe'))
+    bundled_driver = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe'))
 
-    # TEMPORARY: Disable headless mode for debugging ungoogled Chromium
-    debug_log("[TEST MODE] Headless mode disabled for Selenium/Chromium launch.", "WARNING")
+    if chrome_path:
+        print(f"[DIAG] Using chrome_path from CLI/config: {chrome_path}")
+        chrome_options.binary_location = chrome_path
+        driver_path = bundled_driver if os.path.exists(bundled_driver) else None
+    else:
+        print(f"[DIAG] No chrome_path provided, falling back to bundled Chromium: {bundled_chrome}")
+        if not os.path.exists(bundled_chrome):
+            print(f"[ERROR] Bundled Chromium not found at {bundled_chrome}. Exiting.")
+            exit(1)
+        chrome_options.binary_location = bundled_chrome
+        driver_path = bundled_driver
+
+    if not driver_path or not os.path.exists(driver_path):
+        print(f"[ERROR] Bundled ChromeDriver not found at {bundled_driver}. Exiting.")
+        exit(1)
+
+    print(f"[DIAG] Chrome binary path actually used: {chrome_options.binary_location}")
+    print(f"[DIAG] ChromeDriver binary path actually used: {driver_path}")
+
+    debug_log(f"[INFO] Chrome binary used: {chrome_options.binary_location}")
+    debug_log(f"[INFO] ChromeDriver used: {driver_path}")
+    # Enable headless mode for production
+    chrome_options.add_argument('--headless=new')
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--remote-debugging-port=9222')
     try:
-        service = Service(ChromeDriverManager().install())
+        service = Service(driver_path)
         driver = webdriver.Chrome(service=service, options=chrome_options)
-        debug_log(f"Successfully initialized Chrome driver in non-headless mode", "INFO")
+        debug_log(f"Successfully initialized Chrome driver in headless mode", "INFO")
         return driver
     except Exception as e:
         user_message = (
-            f"Could not initialize Chrome in non-headless mode: {e}\n"
+            f"Could not initialize Chrome in headless mode: {e}\n"
             "If the problem persists, please contact support and provide this log file."
         )
         debug_log(user_message, "ERROR")
@@ -1887,6 +1913,7 @@ def process_posts(driver):
     hiring_posts_found = 0
     posts_commented = 0
     try:
+        debug_log("[COMMENT] Beginning comment posting loop", "COMMENT")
         debug_log("Loading processed post IDs", "DATA")
         processed_log = load_log()
         comment_history = load_comment_history()
@@ -1978,23 +2005,25 @@ def process_posts(driver):
                     debug_log("No valid comment generated after all retries, skipping", "SKIP")
                     continue
                 debug_log(f"Generated comment length: {len(custom_message)} characters", "DATA")
-                if len(custom_message.split()) > len(post_text.split()):
-                    debug_log("Comment longer than post, attempting to rephrase", "REPHRASE")
-                    custom_message = rephrase_comment_shorter(custom_message, post_text)
-                    debug_log(f"Rephrased comment length: {len(custom_message)} characters", "DATA")
                 debug_log("Attempting to post comment", "ACTION")
-                comment_success = post_comment(driver, post, custom_message)
-                if comment_success:
-                    debug_log("Successfully posted comment", "SUCCESS")
-                    print(f"[APP_OUT]Successfully posted comment on post by {author_name}")
+                debug_log(f"[COMMENT] Posting comment to post_id: {compute_post_id(post)[0]}", "COMMENT")
+                try:
+                    success = post_comment(driver, post, custom_message)
+                except Exception as e:
+                    debug_log(f"[COMMENT] Exception during comment posting: {e}", "ERROR")
+                    success = False
+                if success:
+                    debug_log("Successfully posted comment", "COMMENT")
                     posts_commented += 1
-                    debug_log("Updating comment history", "DATA")
+                    # Log comment to history
+                    post_id, _ = compute_post_id(post)
                     comment_history[post_id] = {
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "message": custom_message,
-                        "post_text": post_text[:300] + ("..." if len(post_text) > 300 else "")
+                        "message": custom_message
                     }
-                    debug_log("Saving logs", "DATA")
+                    save_comment_history(comment_history)
+                else:
+                    debug_log("Failed to post comment", "COMMENT")
                     save_log(processed_log)
                     save_comment_history(comment_history)
                     debug_log("Sleeping between comments", "WAIT")

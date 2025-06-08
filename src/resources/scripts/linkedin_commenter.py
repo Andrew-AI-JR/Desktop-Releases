@@ -300,22 +300,6 @@ def main():
                             debug_log(f"Error processing URL: {str(e)}", "ERROR")
                             debug_log(traceback.format_exc(), "ERROR")
                             continue
-                        except Exception as e:
-                            debug_log(f"Error processing URL: {str(e)}", "ERROR")
-                            debug_log(traceback.format_exc(), "ERROR")
-                            continue
-                        # Record URL performance
-                        search_tracker.record_url_performance(
-                            url=search_url,
-                            posts_found=posts_processed_total,
-                            hiring_posts_found=hiring_posts_found_total
-                        )
-                        debug_log(f"Recorded performance for URL: {posts_processed_total} posts, {hiring_posts_found_total} hiring posts", "PERF")
-                        
-                        # Wait between URLs
-                        cycle_break = random.randint(10, 30)  # Randomize delay between URLs
-                        debug_log(f"Waiting {cycle_break} seconds before next URL", "WAIT")
-                        time.sleep(cycle_break)
                     except Exception as e:
                         debug_log(f"Error processing URL: {str(e)}", "ERROR")
                         debug_log(traceback.format_exc(), "ERROR")

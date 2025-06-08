@@ -300,13 +300,10 @@ def main():
                             debug_log(f"Error processing URL: {str(e)}", "ERROR")
                             debug_log(traceback.format_exc(), "ERROR")
                             continue
-                                debug_log("Reached end of page or couldn't scroll further", "SCROLL")
-                                break
-                                
-                            # Wait a bit after scrolling to let content load
-                            time.sleep(SCROLL_PAUSE_TIME)
-                            scroll_attempts += 1
-                        
+                        except Exception as e:
+                            debug_log(f"Error processing URL: {str(e)}", "ERROR")
+                            debug_log(traceback.format_exc(), "ERROR")
+                            continue
                         # Record URL performance
                         search_tracker.record_url_performance(
                             url=search_url,

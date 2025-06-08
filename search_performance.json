@@ -1,0 +1,27 @@
+{
+  "urls": {
+    "https://www.linkedin.com/mynetwork/": {
+      "total_posts": 0,
+      "hiring_posts": 0,
+      "searches": 2,
+      "last_search": "2025-06-07 20:55:32",
+      "efficiency": 0.0
+    }
+  },
+  "keywords": {},
+  "time_periods": {
+    "morning": {
+      "posts": 0,
+      "hiring_posts": 0
+    },
+    "afternoon": {
+      "posts": 0,
+      "hiring_posts": 0
+    },
+    "evening": {
+      "posts": 0,
+      "hiring_posts": 0
+    }
+  },
+  "last_updated": "2025-06-07 20:55:32"
+}

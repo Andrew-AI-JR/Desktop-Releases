@@ -668,9 +668,15 @@ const automationService = {
     // Force log level to debug for GUI rendering
     config.log_level = 'debug';
 
-    // Force chrome_path to manually downloaded Chromium for Python automation
-    config.chrome_path = 'C:/Users/asust/OneDrive/Documentos/GitHub/junior/junior-desktop/chromium-stable-win64/chrome-win64/chrome.exe';
-    console.log('[DEBUG] Forced chrome_path for Python automation:', config.chrome_path);
+    // Set Chrome path based on environment
+    if (app.isPackaged) {
+      // In production, use bundled Chromium from resources
+      config.chrome_path = path.join(process.resourcesPath, 'chromium-stable-win64', 'chrome-win64', 'chrome.exe');
+    } else {
+      // In development, use system Chrome
+      config.chrome_path = null; // Let the Python script find system Chrome
+    }
+    console.log('[DEBUG] Chrome path for Python automation:', config.chrome_path);
     if (config.linkedin_email) {
       config.linkedin_credentials.email = config.linkedin_email;
       delete config.linkedin_email;

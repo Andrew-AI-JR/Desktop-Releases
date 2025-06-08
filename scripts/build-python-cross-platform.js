@@ -149,6 +149,7 @@ function buildExecutable() {
       '--distpath', outputDir,  // Output directory
       '--workpath', BUILD_DIR,  // Work directory
       '--name', executableName.replace('.exe', ''), // Executable name
+      '--add-data', '.env:.', // Add .env file from project root to bundle root
       SCRIPT_SOURCE             // Script to build
     ];
 

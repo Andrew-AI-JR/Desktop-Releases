@@ -56,65 +56,83 @@ def get_config():
     return CONFIG
 
 def load_config_from_args():
-    """Load configuration from command line arguments."""
+    """Load configuration from command line arguments, environment variables, and config file."""
     parser = argparse.ArgumentParser(description='LinkedIn Commenter')
     parser.add_argument('--config', type=str, help='Path to configuration file')
-    parser.add_argument('--email', type=str, help='LinkedIn account email')
-    parser.add_argument('--password', type=str, help='LinkedIn account password')
-    parser.add_argument('--log_level', type=str, choices=['debug', 'info', 'warning', 'error'], help='Override log level')
-    parser.add_argument('--debug', action='store_true', help='Enable full debug mode (alias for --log_level debug)')
-    parser.add_argument('--chrome-path', type=str, help='Path to custom Chrome/Chromium binary (overrides system Chrome)')
+    parser.add_argument('--email', type=str, help='LinkedIn account email (overrides config file and env vars)')
+    parser.add_argument('--password', type=str, help='LinkedIn account password (overrides config file and env vars)')
+    parser.add_argument('--log_level', type=str, choices=['debug', 'info', 'warning', 'error'], help='Override log level from config/env')
+    parser.add_argument('--debug', action='store_true', help='Enable full debug mode (overrides log_level from config/env)')
+    parser.add_argument('--chrome-path', type=str, help='Path to custom Chrome/Chromium binary (overrides config file and system Chrome)')
     args = parser.parse_args()
 
-    # Debug: print the config path being loaded
+    config = {}
+    # Load from config file first
     if args.config:
-        print(f"[DEBUG] Attempting to load config from: {args.config}")
-        if not os.path.exists(args.config):
-            print(f"[ERROR] Config file does not exist at: {args.config}")
-            sys.exit(1)
-        config = load_config_from_file(args.config)
+        if os.path.exists(args.config):
+            print(f"[DEBUG] Attempting to load config from file: {args.config}")
+            file_config = load_config_from_file(args.config)
+            if file_config:
+                config.update(file_config) # This will load linkedin_credentials if present from file
+            else:
+                print(f"[WARN] Failed to load or parse configuration from {args.config}. File might be empty or malformed. Continuing with other sources.")
+        else:
+            print(f"[WARN] Config file specified but does not exist: {args.config}. Relying on CLI/env for all settings.")
     else:
-        print("Error: --config argument is required.")
-        sys.exit(1)
+        print("[INFO] No --config argument provided. Relying on CLI args or environment variables for settings.")
 
-    if not config:
-        print(f"[ERROR] Failed to load configuration from {args.config}. Please ensure config file exists and is valid.")
-        sys.exit(1)
-
-    # Ensure nested structure exists
+    # Ensure linkedin_credentials structure exists for overrides, even if not in file
     if 'linkedin_credentials' not in config:
         config['linkedin_credentials'] = {}
 
-    # CLI overrides highest priority
-    if args.email:
+    # Environment variable overrides (middle priority)
+    env_email = os.getenv('LINKEDIN_EMAIL')
+    env_pass = os.getenv('LINKEDIN_PASSWORD')
+    env_log_level = os.getenv('LOG_LEVEL')
+    env_chrome_path = os.getenv('CHROME_PATH')
+
+    # Populate linkedin_credentials if not already set by the config file
+    if env_email and not config['linkedin_credentials'].get('email'):
+        config['linkedin_credentials']['email'] = env_email
+    if env_pass and not config['linkedin_credentials'].get('password'):
+        config['linkedin_credentials']['password'] = env_pass 
+    # Top-level keys from env if not set by file
+    if env_log_level and not config.get('log_level'): 
+        config['log_level'] = env_log_level
+    if env_chrome_path and not config.get('chrome_path'):
+        config['chrome_path'] = env_chrome_path
+    
+    # CLI overrides (highest priority)
+    if args.email: # This will overwrite file/env values in linkedin_credentials
         config['linkedin_credentials']['email'] = args.email
-    if args.password:
+    if args.password: # This will overwrite file/env values in linkedin_credentials
         config['linkedin_credentials']['password'] = args.password
-    if args.chrome_path:
+    if args.chrome_path: # Top-level key
         config['chrome_path'] = args.chrome_path
     
-    # Log level / debug overrides
-    global LOG_LEVEL_OVERRIDE
-    if args.log_level:
-        config['log_level'] = args.log_level
-        LOG_LEVEL_OVERRIDE = args.log_level.upper()
+    global LOG_LEVEL_OVERRIDE # Top-level keys for logging
     if args.debug:
         config['log_level'] = 'debug'
         config['debug_mode'] = True
         LOG_LEVEL_OVERRIDE = 'DEBUG'
+    elif args.log_level:
+        config['log_level'] = args.log_level
+        LOG_LEVEL_OVERRIDE = args.log_level.upper()
+    elif config.get('log_level'): # From file or env
+        LOG_LEVEL_OVERRIDE = config['log_level'].upper()
+    else: # Default
+        config['log_level'] = 'info'
+        LOG_LEVEL_OVERRIDE = 'INFO'
 
-    # Environment variable fallback if still missing
-    env_email = os.getenv('LINKEDIN_EMAIL')
-    env_pass = os.getenv('LINKEDIN_PASSWORD')
-    env_log  = os.getenv('LOG_LEVEL')
-    if env_email and not config['linkedin_credentials'].get('email'):
-        config['linkedin_credentials']['email'] = env_email
-    if env_pass and not config['linkedin_credentials'].get('password'):
-        config['linkedin_credentials']['password'] = env_pass
-    if env_log and 'log_level' not in config:
-        config['log_level'] = env_log
-        LOG_LEVEL_OVERRIDE = env_log.upper()
+    # Ensure debug_mode reflects log_level if not explicitly set by --debug or in config file
+    if 'debug_mode' not in config: 
+        config['debug_mode'] = config.get('log_level', 'info').lower() == 'debug'
     
+    # Warning if credentials are still missing after all loading stages
+    creds_check = config.get('linkedin_credentials', {})
+    if not args.config and not (creds_check.get('email') and creds_check.get('password')):
+         print("[WARN] No config file specified, and LinkedIn credentials are not fully provided by CLI or environment variables. Ensure credentials are set for login if not in a config file.")
+
     return config
 
 # Default configuration values
@@ -142,25 +160,74 @@ def main():
     global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
     global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
     
-    debug_log("Starting main function", "DEBUG")
-    
-    # Get configuration
+    # Initialize global CONFIG by calling get_config() which calls load_config_from_args()
     try:
-        config = get_config()
-        debug_log("Configuration loaded successfully", "DEBUG")
+        get_config() # This populates the global CONFIG variable
+        if CONFIG is None:
+            err_msg = "[FATAL] Global CONFIG is None after get_config(). Critical configuration error. Exiting."
+            print(err_msg)
+            try: debug_log(err_msg, "ERROR") # Attempt to log if debug_log is available
+            except NameError: pass
+            sys.exit(1)
+        
+        DEBUG_MODE = CONFIG.get('debug_mode', False) # Default to False if not in config
+        debug_log(f"Starting main function. Loaded CONFIG keys: {list(CONFIG.keys()) if CONFIG else 'None'}", "DEBUG")
+
+    except SystemExit: # Catch sys.exit calls from within get_config/load_config_from_args
+        raise # Re-raise to ensure script terminates
     except Exception as config_error:
-        debug_log(f"Error loading configuration: {config_error}", "ERROR")
-        return
+        err_msg = f"[FATAL] Unhandled error during configuration loading: {config_error}. Exiting."
+        print(err_msg)
+        try: debug_log(f"{err_msg} Traceback: {traceback.format_exc() if 'traceback' in globals() else ''}", "ERROR")
+        except NameError: pass 
+        sys.exit(1)
+
+    # Populate essential global variables from CONFIG
+    # Credentials are now expected under 'linkedin_credentials'
+    linkedin_creds_from_config = CONFIG.get('linkedin_credentials', {})
+    LINKEDIN_EMAIL = linkedin_creds_from_config.get('email', LINKEDIN_EMAIL) # Use global as fallback
+    LINKEDIN_PASSWORD = linkedin_creds_from_config.get('password', LINKEDIN_PASSWORD) # Use global as fallback
     
-    # Get LinkedIn credentials
-    if config and 'linkedin_credentials' in config:
-        LINKEDIN_EMAIL = config['linkedin_credentials'].get('email', LINKEDIN_EMAIL)
-        LINKEDIN_PASSWORD = config['linkedin_credentials'].get('password', LINKEDIN_PASSWORD)
-        debug_log("LinkedIn credentials loaded", "DEBUG")
+    # Other keys are top-level
+    USER_BIO = CONFIG.get('user_bio', USER_BIO)
+    JOB_SEARCH_KEYWORDS = CONFIG.get('job_keywords', []) 
+    CALENDLY_LINK = CONFIG.get('calendly_link', CALENDLY_LINK)
+    SEARCH_URLS = CONFIG.get('search_urls', [])
+
+    # Critical: Validate essential configuration
+    if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
+        error_msg = "LinkedIn email or password not found in the configuration (expected under 'linkedin_credentials'). Script cannot proceed."
+        debug_log(f"[FATAL] {error_msg} Please check your configuration. Exiting.", "ERROR")
+        print(f"[FATAL] {error_msg} Please check your configuration. Exiting.")
+        sys.exit(1)
+    
+    debug_log(f"LinkedIn Email: {'Set' if LINKEDIN_EMAIL else 'Not Set'}", "DEBUG")
+    debug_log(f"User Bio length: {len(USER_BIO) if USER_BIO else 'Not Set'}", "DEBUG")
+    debug_log(f"Job Keywords: {JOB_SEARCH_KEYWORDS}", "DEBUG")
+    debug_log(f"Calendly Link: {CALENDLY_LINK if CALENDLY_LINK else 'Not Set'}", "DEBUG")
+    debug_log(f"Direct Search URLs from config: {SEARCH_URLS}", "DEBUG")
+
+    # If specific search URLs are not provided directly in config, try to generate them from keywords
+    if not SEARCH_URLS and JOB_SEARCH_KEYWORDS:
+        debug_log(f"No direct 'search_urls' in config. Generating from 'job_keywords': {JOB_SEARCH_KEYWORDS}", "INFO")
+        SEARCH_URLS = get_search_urls_for_keywords(JOB_SEARCH_KEYWORDS)
+        debug_log(f"Generated SEARCH_URLS: {SEARCH_URLS}", "DEBUG")
+    
+    # Critical check: If no SEARCH_URLS are available now (neither direct nor generated), script cannot proceed.
+    if not SEARCH_URLS:
+        error_msg = "No 'search_urls' found in config and no 'job_keywords' provided/effective to generate them. Script cannot proceed."
+        debug_log(f"[FATAL] {error_msg} Please check your configuration file. Exiting.", "ERROR")
+        print(f"[FATAL] {error_msg} Please check your configuration file. Exiting.")
+        sys.exit(1)
+    
+    debug_log(f"Final SEARCH_URLS to be used (before optimization): {SEARCH_URLS}", "INFO")
     
     # Add restart counter to prevent infinite restart loops
     restart_count = 0
     max_restarts = 10
+    
+    # Define cycle_break to control the sleep duration between cycles
+    cycle_break = 1  # Default value, adjust as needed
     
     while restart_count < max_restarts:  # Outer loop for automatic restarts with limit
         restart_count += 1
@@ -1354,7 +1421,9 @@ def initialize_driver():
     try:
         # Try multiple possible locations for bundled Chromium
         possible_root_dirs = [
-            # Standard path (4 levels up from script)
+            # Production path (in resources directory)
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'resources'),
+            # Development path (in junior-desktop directory)
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
             # Alternative path (3 levels up from script)
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -1386,14 +1455,19 @@ def initialize_driver():
             alt_candidate_chromedriver = os.path.join(root_dir, chromium_dir, chromedriver_subdir, chromedriver_exe)
             
             debug_log(f"Checking for Chromium at: {candidate_chromium}", "INFO")
+            debug_log(f"Checking for Chromium at: {alt_candidate_chromium}", "INFO")
             
             if os.path.exists(candidate_chromium) and os.path.exists(candidate_chromedriver):
                 chromium_path = candidate_chromium
                 chromedriver_path = candidate_chromedriver
+                debug_log(f"Found Chromium at: {chromium_path}", "INFO")
+                debug_log(f"Found ChromeDriver at: {chromedriver_path}", "INFO")
                 break
             elif os.path.exists(alt_candidate_chromium) and os.path.exists(alt_candidate_chromedriver):
                 chromium_path = alt_candidate_chromium
                 chromedriver_path = alt_candidate_chromedriver
+                debug_log(f"Found Chromium at: {chromium_path}", "INFO")
+                debug_log(f"Found ChromeDriver at: {chromedriver_path}", "INFO")
                 break
         
         if not chromium_path or not chromedriver_path:
@@ -1473,7 +1547,9 @@ def debug_log(message, level="INFO"):
         # Write to log file if enabled
         if DEBUG_MODE or LOG_LEVEL_OVERRIDE:
             try:
-                with open("linkedin_commenter.log", "a", encoding="utf-8") as f:
+                # Use log_file_path from config if available
+                log_path = config.get('log_file_path', 'linkedin_commenter.log')
+                with open(log_path, "a", encoding="utf-8") as f:
                     f.write(log_line + '\n')
             except OSError as e:
                 print(f"[APP_OUT][{timestamp}] [WARN] Failed to write to log file: {e}")

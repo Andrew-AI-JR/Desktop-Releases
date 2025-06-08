@@ -137,207 +137,176 @@ SEARCH_URLS = []
 LOG_LEVEL_OVERRIDE = None
 
 def main():
+    """Main execution function that continuously cycles through URLs while respecting limits."""
+    global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
+    global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
+    global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
+    
+    debug_log("Starting main function", "DEBUG")
+    
+    # Get configuration
     try:
-        """Main execution function that continuously cycles through URLs while respecting limits."""
-        global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
-        global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
-        global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
-
-        debug_log("Starting LinkedIn Commenter", "START")
-        print("[APP_OUT]LinkedIn automation started and running continuously. Do not close this window.")
-
-        # Initialize variables
-        daily_comments = 0
-        session_comments = 0
-        login_attempts = 0
-        cycle_break = 5  # Base time between URL cycles
-
-        # Initialize the search performance tracker
-        search_tracker = SearchPerformanceTracker()
-        debug_log("Initialized search performance tracker", "INIT")
-
-        # Load configuration globally (always from --config)
         config = get_config()
-
-        # Update values from config
-        DEBUG_MODE = config.get('debug_mode', DEBUG_MODE)
-        MAX_DAILY_COMMENTS = config.get('max_daily_comments', MAX_DAILY_COMMENTS)
-        MAX_SESSION_COMMENTS = config.get('max_session_comments', MAX_SESSION_COMMENTS)
-        SCROLL_PAUSE_TIME = config.get('scroll_pause_time', SCROLL_PAUSE_TIME)
-        MAX_SCROLL_CYCLES = config.get('max_scroll_cycles', MAX_SCROLL_CYCLES)
-        MAX_COMMENT_WORDS = config.get('max_comment_words', MAX_COMMENT_WORDS)
-        MIN_COMMENT_DELAY = config.get('min_comment_delay', MIN_COMMENT_DELAY)
-        SHORT_SLEEP_SECONDS = config.get('short_sleep_seconds', SHORT_SLEEP_SECONDS)
-        CALENDLY_LINK = config.get('calendly_url', CALENDLY_LINK)
-        keywords = config.get('keywords', '')
-        USER_BIO = config.get('user_bio', USER_BIO)
-
-        # Split comma-separated keywords and generate search URLs
-        if isinstance(keywords, str) and keywords:
-            keywords_list = [k.strip() for k in keywords.split(',')]
-            JOB_SEARCH_KEYWORDS = keywords_list
-            debug_log(f"Found {len(keywords_list)} keywords to search for", "INFO")
-            SEARCH_URLS = get_search_urls_for_keywords(keywords_list)
-            # Count 24h vs monthly URLs for prioritization info
-            urls_24h = [url for url in SEARCH_URLS if 'past-24h' in url]
-            urls_monthly = [url for url in SEARCH_URLS if 'past-month' in url]
-            debug_log(f"Generated {len(urls_24h)} high-priority 24h URLs and {len(urls_monthly)} monthly URLs", "INFO")
-            debug_log(f"Full list of search URLs (priority order):\n" + '\n'.join([f"[24h] {url}" if 'past-24h' in url else f"[month] {url}" for url in SEARCH_URLS]), "URL")
-
-        # Add feed and network URLs
-        SEARCH_URLS.extend([
-            "https://www.linkedin.com/feed/",
-            "https://www.linkedin.com/mynetwork/"
-        ])
-
-        # Get LinkedIn credentials
-        if 'linkedin_credentials' in config:
-            LINKEDIN_EMAIL = config['linkedin_credentials'].get('email', LINKEDIN_EMAIL)
-            LINKEDIN_PASSWORD = config['linkedin_credentials'].get('password', LINKEDIN_PASSWORD)
-
-        # Initialize the comment generator
-        comment_generator = CommentGenerator(debug_mode=DEBUG_MODE)
-
-        # Initialize the browser
-        driver = initialize_driver()
-
-        # Main automation loop
+        debug_log("Configuration loaded successfully", "DEBUG")
+    except Exception as config_error:
+        debug_log(f"Error loading configuration: {config_error}", "ERROR")
+        return
+    
+    # Get LinkedIn credentials
+    if config and 'linkedin_credentials' in config:
+        LINKEDIN_EMAIL = config['linkedin_credentials'].get('email', LINKEDIN_EMAIL)
+        LINKEDIN_PASSWORD = config['linkedin_credentials'].get('password', LINKEDIN_PASSWORD)
+        debug_log("LinkedIn credentials loaded", "DEBUG")
+    
+    # Add restart counter to prevent infinite restart loops
+    restart_count = 0
+    max_restarts = 10
+    
+    while restart_count < max_restarts:  # Outer loop for automatic restarts with limit
+        restart_count += 1
+        debug_log(f"Restart attempt {restart_count}/{max_restarts}", "INFO")
+        driver = None
         try:
-            while True:
+            debug_log("[START] Starting LinkedIn Commenter", "INFO")
+            
+            # Initialize search performance tracker
+            try:
+                search_tracker = SearchPerformanceTracker()
+                debug_log("[INIT] Initialized search performance tracker", "INFO")
+            except Exception as tracker_error:
+                debug_log(f"[ERROR] Failed to initialize search tracker: {tracker_error}", "ERROR")
+                raise
+            
+            # Initialize comment generator
+            try:
+                debug_log("[INIT] Initializing comment generator", "DEBUG")
+                comment_generator = CommentGenerator(USER_BIO)
+                debug_log("[INIT] Comment generator initialized", "DEBUG")
+            except Exception as gen_error:
+                debug_log(f"[ERROR] Failed to initialize comment generator: {gen_error}", "ERROR")
+                raise
+            
+            # Initialize browser driver
+            try:
+                debug_log("[INIT] Initializing browser driver", "DEBUG")
+                driver = initialize_driver()
+                debug_log("[INIT] Browser driver initialized successfully", "DEBUG")
+            except Exception as driver_error:
+                debug_log(f"[ERROR] Failed to initialize browser driver: {driver_error}", "ERROR")
+                debug_log(f"[ERROR] Driver error details: {traceback.format_exc()}", "ERROR")
+                raise
+            
+            # Verify login
+            debug_log("[LOGIN] Verifying LinkedIn login status...", "INFO")
+            print("Verifying LinkedIn login status...")
+            
+            while True:  # Inner loop for normal operation
                 try:
-                    # Check if we should sleep during inactive hours
-                    if not is_active_hours():
-                        sleep_during_inactive_hours()
+                    # Check if browser is still responsive
+                    try:
+                        driver.current_url
+                    except Exception:
+                        debug_log("Browser connection lost, reinitializing...", "WARN")
+                        if driver:
+                            try:
+                                driver.quit()
+                            except:
+                                pass
+                        driver = initialize_driver()
+                        time.sleep(5)
                         continue
                     
-                    # Verify active login
-                    if not verify_active_login(driver):
-                        login_attempts += 1
-                        if login_attempts >= 3:
-                            debug_log("Maximum login attempts reached", "ERROR")
-                            break
-                        debug_log("Login verification failed, retrying...", "LOGIN")
-                        time.sleep(60)
-                        continue
-                    
-                    # Reset login attempts on success
-                    login_attempts = 0
-                    debug_log("Login verified successfully", "SUCCESS")
-                    
-                    # Optimize search URLs based on performance data
-                    optimized_urls = search_tracker.optimize_search_urls(SEARCH_URLS)
-                    debug_log(f"Optimized {len(SEARCH_URLS)} search URLs based on performance data", "OPTIMIZE")
-                    
-                    # Process each search URL
-                    for url_index, search_url in enumerate(optimized_urls, 1):
-                        try:
-                            # Log the URL and its priority before processing
-                            url_priority = '[24h]' if 'past-24h' in search_url else '[month]' if 'past-month' in search_url else '[other]'
-                            debug_log(f"About to process URL {url_index}/{len(optimized_urls)} {url_priority}: {search_url}", "URL")
-                            
-                            # Check limits
-                            if daily_comments >= MAX_DAILY_COMMENTS:
-                                debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
-                                sleep_until_midnight_edt()
-                                daily_comments = 0
-                                continue
+                    # Verify login status
+                    debug_log("Verifying LinkedIn login status...", "LOGIN")
+                    print("[APP_OUT]Verifying LinkedIn login status...")
+                    verify_active_login(driver)
 
-                            if session_comments >= MAX_SESSION_COMMENTS:
-                                debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                                time.sleep(300)
-                                continue
-                            
-                            # Navigate to the URL
-                            debug_log(f"Navigating to {search_url}", "NAV")
-                            driver.get(search_url)
-                            time.sleep(5)  # Wait for page load
-                            
-                            # Scroll the page to load more content
-                            debug_log("Scrolling page to load more content", "SCROLL")
-                            scroll_attempts = 0
-                            max_scroll_attempts = MAX_SCROLL_CYCLES  # Use the configured value
-                            posts_processed_total = 0
-                            hiring_posts_found_total = 0
-                            scroll_attempts = 0
-                            max_scroll_attempts = MAX_SCROLL_CYCLES  # Use the configured value
-                            
-                            while scroll_attempts < max_scroll_attempts:
-                                try:
-                                    # Process posts on the current view
-                                    debug_log(f"Processing posts (scroll attempt {scroll_attempts+1}/{max_scroll_attempts})", "POSTS")
-                                    posts_processed, hiring_posts_found = process_posts(driver)
-                                    posts_processed_total += posts_processed
-                                    hiring_posts_found_total += hiring_posts_found
-                                    if posts_processed > 0:
-                                        debug_log(f"Processed {posts_processed} posts on this scroll", "POSTS")
-                                        session_comments += posts_processed
-                                        daily_comments += posts_processed
-                                        if session_comments >= MAX_SESSION_COMMENTS:
-                                            debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                                            break
-                                    continued_scrolling = scroll_page(driver)
-                                    if not continued_scrolling:
-                                        debug_log("Reached end of page or couldn't scroll further", "SCROLL")
-                                        break
-                                    time.sleep(SCROLL_PAUSE_TIME)
-                                    scroll_attempts += 1
-                                except Exception as inner_e:
-                                    import traceback
-                                    debug_log(f"[ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}", "ERROR")
-                                    print(f"[APP_OUT][ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}")
-                            # Record URL performance
-                            search_tracker.record_url_performance(
-                                url=search_url,
-                                posts_found=posts_processed_total,
-                                hiring_posts_found=hiring_posts_found_total
-                            )
-                            debug_log(f"Recorded performance for URL: {posts_processed_total} posts, {hiring_posts_found_total} hiring posts", "PERF")
-                            # Wait between URLs
-                            cycle_break = random.randint(10, 30)  # Randomize delay between URLs
-                            debug_log(f"Waiting {cycle_break} seconds before next URL", "WAIT")
-                            time.sleep(cycle_break)
-                            # Clear recent logs
-                            if random.random() < 0.2:
-                                debug_log("Clearing recent posts from comment log", "CLEANUP")
-                                cleared_count = clear_recent_logs(hours=3)
-                                debug_log(f"Cleared {cleared_count} recent entries", "CLEANUP")
-                        except KeyboardInterrupt:
-                            debug_log("Keyboard interrupt detected. Cleaning up...", "STOP")
+                    # Get active URLs from the tracker
+                    current_hour = datetime.now().hour
+                    active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
+
+                    # Process each URL
+                    for url in active_urls:
+                        if session_comments >= MAX_SESSION_COMMENTS:
+                            debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
                             break
-                        except Exception as e:
-                            debug_log(f"Error in main loop: {str(e)}", "ERROR")
-                            debug_log(traceback.format_exc(), "ERROR")
-                            debug_log("Waiting 60 seconds before retrying...", "WAIT")
-                            time.sleep(60)
+
+                        if daily_comments >= MAX_DAILY_COMMENTS:
+                            debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
+                            sleep_until_midnight_edt()
+                            daily_comments = 0  # Reset counter at midnight
                             continue
+
+                        # Navigate to the URL with retry logic
+                        retry_count = 0
+                        while retry_count < 3:
+                            try:
+                                driver.get(url)
+                                time.sleep(SHORT_SLEEP_SECONDS)  # Wait for page load
+                                break  # Successful navigation, exit retry loop
+                            except Exception as nav_e:
+                                retry_count += 1
+                                debug_log(f"Error navigating to {url} (attempt {retry_count}): {nav_e}", "ERROR")
+                                if retry_count >= 3:
+                                    debug_log(f"Failed to navigate to {url} after 3 attempts.", "ERROR")
+                                    search_tracker.record_url_performance(url, success=False, comments_made=0)
+                                    break
+                                time.sleep(5 * retry_count)  # Exponential backoff
+
+                        try:
+                            # Process posts on the current page
+                            posts_processed = process_posts(driver)
+                            if posts_processed > 0:
+                                session_comments += posts_processed
+                                daily_comments += posts_processed
+                            search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
+                            
+                            # Random delay between URLs
+                            time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
+
+                        except Exception as e_url_processing:
+                            debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
+                            debug_log(traceback.format_exc(), "ERROR")
+                            search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
+                            continue  # to next URL in the for loop
+
+                    # Sleep between cycles
+                    cycle_sleep = random.uniform(cycle_break * 60, cycle_break * 120)
+                    debug_log(f"Sleeping for {int(cycle_sleep/60)} minutes between cycles", "SLEEP")
+                    time.sleep(cycle_sleep)
+
                 except Exception as e:
-                    debug_log(f"Error in URL processing: {str(e)}", "ERROR")
+                    debug_log(f"Error in main loop: {e}", "ERROR")
                     debug_log(traceback.format_exc(), "ERROR")
-                    debug_log("Waiting 60 seconds before retrying...", "WAIT")
-                    time.sleep(60)
+                    time.sleep(30)  # Longer sleep on error
                     continue
+
+        except KeyboardInterrupt:
+            debug_log("Received keyboard interrupt", "INFO")
+            break  # Break outer loop
         except Exception as e:
-            debug_log(f"Error in main loop: {str(e)}", "ERROR")
-            debug_log(traceback.format_exc(), "ERROR")
-            debug_log("Waiting 60 seconds before retrying...", "WAIT")
-            time.sleep(60)
-    except Exception as e:
-        debug_log(f"Fatal error: {str(e)}", "FATAL")
-        debug_log(traceback.format_exc(), "FATAL")
-    finally:
-        debug_log("Cleaning up and closing browser", "CLEANUP")
-        if 'driver' in locals():
-            driver.quit()
-        debug_log("Script execution completed - will restart automatically", "END")
-        print("[APP_OUT]LinkedIn automation completed a cycle. Restarting automatically...")
-        
-        # Instead of exiting, restart the main function after a short delay
-        time.sleep(10)
-        try:
-            main()  # Restart the main function
-        except Exception as e:
-            debug_log(f"Failed to restart automation: {str(e)}", "FATAL")
-            print(f"[APP_OUT]Failed to restart automation: {str(e)}")
+            debug_log(f"[FATAL] Fatal error: {e}", "FATAL")
+            debug_log(f"[ERROR] Error details: {traceback.format_exc()}", "ERROR")
+            
+            # Add a cooldown period to prevent rapid restarts
+            cooldown = 30  # seconds
+            debug_log(f"[COOLDOWN] Waiting {cooldown} seconds before restart", "INFO")
+            time.sleep(cooldown)
+            
+            if DEBUG_MODE:
+                traceback.print_exc()
+                time.sleep(60)  # Sleep before restart
+        finally:
+            if driver:
+                debug_log("Cleaning up and closing browser", "CLEANUP")
+                try:
+                    driver.quit()
+                except:
+                    pass
+                time.sleep(5)  # Wait for cleanup
+            debug_log("Script execution completed - will restart automatically", "END")
+            print("[APP_OUT]LinkedIn automation completed a cycle. Restarting automatically...")
+            time.sleep(10)  # Wait before restarting
 
 def construct_linkedin_search_url(keywords, time_filter="past_month"):
     """
@@ -976,8 +945,10 @@ class CommentGenerator:
 
     def build_scoring_config(self, config):
         """Build scoring configuration with dynamic tech relevance based on user config."""
-        # Base scoring categories
-        scoring_config = {
+        if hasattr(self, 'scoring_config') and self.scoring_config is not None:
+            return self.scoring_config
+            
+        self.scoring_config = {
             # Recency signals (20 points max)
             'recency': {
                 'weight': 4.0,
@@ -1049,8 +1020,13 @@ class CommentGenerator:
         if not post_text:
             self.debug_log('[SCORE] Empty post text, returning 0')
             return 0
-        # Build scoring configuration
+            
+        # Get or build scoring config
         scoring_config = self.build_scoring_config(get_config())
+        if scoring_config is None:
+            self.debug_log('[SCORE] Failed to build scoring config, returning 0')
+            return 0
+            
         total_score = 0
         post_text_lower = post_text.lower()
         score_breakdown = {
@@ -1060,21 +1036,28 @@ class CommentGenerator:
                 'has_author': bool(author_name)
             }
         }
+        
         # Calculate scores for each category - FIXED scoring method
         for category, config_data in scoring_config.items():
+            if not isinstance(config_data, dict) or 'weight' not in config_data or 'keywords' not in config_data:
+                continue
+                
             weight = config_data['weight']
             keywords = config_data['keywords']
+            
             # Determine text to search in based on category
             search_text = author_name.lower() if 'author' in category and author_name else post_text_lower
+            
             # Count keyword matches
             matches = sum(1 for kw in keywords if kw.lower() in search_text)
+            
             # Give full weight for ANY match, small bonus for multiple matches (up to 2 extra)
+            category_score = 0
             if matches > 0:
                 category_score = weight * 5
                 if matches > 1:
                     category_score += weight * min(matches - 1, 2)  # Max 2 bonus matches
-            else:
-                category_score = 0
+                    
             total_score += category_score
             # Store breakdown for logging
             score_breakdown[category] = {
@@ -1082,6 +1065,7 @@ class CommentGenerator:
                 'score': category_score,
                 'weight': weight
             }
+            
         # Add length bonus (not penalty)
         words = len(post_text.split())
         length_bonus = 5 if words >= 50 else 0
@@ -1090,10 +1074,12 @@ class CommentGenerator:
             'words': words,
             'score': length_bonus
         }
+        
         # FIXED: Direct scoring - no normalization
         final_score = min(100, total_score)
         score_breakdown['final_score'] = final_score
-        self.debug_log(f'[SCORE] (patched) Post scoring breakdown: {json.dumps(score_breakdown)}')
+        
+        self.debug_log(f'[SCORE] Post scoring breakdown: {json.dumps(score_breakdown)}')
         return final_score
 
 
@@ -1312,21 +1298,53 @@ def initialize_driver():
     config = get_config()
     
     # Common browser options - always headless for production
-    chrome_options.add_argument('--headless=new')
+    # Use the older headless flag for better compatibility
+    chrome_options.add_argument('--headless')
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--remote-debugging-port=9222')
+    chrome_options.add_argument('--disable-extensions')
+    chrome_options.add_argument('--disable-infobars')
+    chrome_options.add_argument('--disable-popup-blocking')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+    chrome_options.add_experimental_option('excludeSwitches', ['enable-automation', 'enable-logging'])
+    chrome_options.add_experimental_option('detach', False)
+    chrome_options.add_experimental_option('useAutomationExtension', False)
     
     # Get Chrome profile path from config or environment
     chrome_profile = config.get('chrome_profile_path') or os.environ.get('LINKEDIN_CHROME_PROFILE_PATH')
-    if chrome_profile:
+    if chrome_profile and chrome_profile.strip():
+        debug_log(f"Using Chrome profile at: {chrome_profile}", "INFO")
         chrome_options.add_argument(f'--user-data-dir={chrome_profile}')
     
     # First try: Use system Chrome with WebDriver Manager
     try:
         debug_log("Attempting to use system Chrome with WebDriver Manager", "INFO")
-        driver = webdriver.Chrome(options=chrome_options)
+        from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
+        import socket
+        
+        # Find an available port - use a fixed port if dynamic allocation fails
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(('localhost', 0))
+            port = sock.getsockname()[1]
+            sock.close()
+            debug_log(f"Using dynamic port: {port}", "INFO")
+        except Exception as port_error:
+            # Use a fixed port as fallback
+            port = 9222
+            debug_log(f"Dynamic port allocation failed: {port_error}. Using fixed port {port}", "INFO")
+        
+        # Use the available port
+        chrome_options.add_argument(f'--remote-debugging-port={port}')
+        
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Wait for browser to be ready
+        driver.implicitly_wait(10)
         debug_log("Successfully initialized system Chrome in headless mode", "INFO")
         return driver
     except Exception as e:
@@ -1334,8 +1352,15 @@ def initialize_driver():
     
     # Fallback: Use bundled Chromium with matching ChromeDriver
     try:
-        # Get the root directory (where junior-desktop is)
-        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        # Try multiple possible locations for bundled Chromium
+        possible_root_dirs = [
+            # Standard path (4 levels up from script)
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+            # Alternative path (3 levels up from script)
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            # Direct parent of script directory
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ]
         
         # Platform-specific paths
         if sys.platform == 'win32':
@@ -1344,101 +1369,117 @@ def initialize_driver():
             chromedriver_subdir = 'chromedriver-win64'
             chromium_exe = 'chrome.exe'
             chromedriver_exe = 'chromedriver.exe'
-        elif sys.platform == 'darwin':
-            chromium_dir = 'chromium-stable-mac'
-            chromium_subdir = 'chrome-mac'
-            chromedriver_subdir = 'chromedriver-mac'
-            chromium_exe = 'chrome'
-            chromedriver_exe = 'chromedriver'
-        else:  # linux
-            chromium_dir = 'chromium-stable-linux64'
-            chromium_subdir = 'chrome-linux'
-            chromedriver_subdir = 'chromedriver-linux64'
-            chromium_exe = 'chrome'
-            chromedriver_exe = 'chromedriver'
+        else:
+            raise NotImplementedError("Only Windows is supported for bundled Chromium at this time")
         
-        # Construct paths to bundled Chromium and ChromeDriver
-        chromium_path = os.path.join(root_dir, 'junior-desktop', chromium_dir, chromium_subdir, chromium_exe)
-        chromedriver_path = os.path.join(root_dir, 'junior-desktop', chromium_dir, chromedriver_subdir, chromedriver_exe)
+        # Try to find Chromium in possible locations
+        chromium_path = None
+        chromedriver_path = None
         
-        debug_log(f"Looking for bundled Chromium at: {chromium_path}", "INFO")
-        debug_log(f"Looking for bundled ChromeDriver at: {chromedriver_path}", "INFO")
-        
-        # Verify both Chromium and ChromeDriver exist
-        if not os.path.exists(chromium_path):
-            raise FileNotFoundError(f"Bundled Chromium not found at {chromium_path}")
+        for root_dir in possible_root_dirs:
+            # Try with junior-desktop subdirectory
+            candidate_chromium = os.path.join(root_dir, 'junior-desktop', chromium_dir, chromium_subdir, chromium_exe)
+            candidate_chromedriver = os.path.join(root_dir, 'junior-desktop', chromium_dir, chromedriver_subdir, chromedriver_exe)
             
-        if not os.path.exists(chromedriver_path):
-            raise FileNotFoundError(f"Bundled ChromeDriver not found at {chromedriver_path}")
+            # Try without junior-desktop subdirectory
+            alt_candidate_chromium = os.path.join(root_dir, chromium_dir, chromium_subdir, chromium_exe)
+            alt_candidate_chromedriver = os.path.join(root_dir, chromium_dir, chromedriver_subdir, chromedriver_exe)
+            
+            debug_log(f"Checking for Chromium at: {candidate_chromium}", "INFO")
+            
+            if os.path.exists(candidate_chromium) and os.path.exists(candidate_chromedriver):
+                chromium_path = candidate_chromium
+                chromedriver_path = candidate_chromedriver
+                break
+            elif os.path.exists(alt_candidate_chromium) and os.path.exists(alt_candidate_chromedriver):
+                chromium_path = alt_candidate_chromium
+                chromedriver_path = alt_candidate_chromedriver
+                break
         
-        # Set Chromium binary location
+        if not chromium_path or not chromedriver_path:
+            debug_log("Could not find bundled Chromium in any expected location", "ERROR")
+            raise FileNotFoundError("Bundled Chromium or ChromeDriver not found in any expected location")
+            
+        # Point Chrome options to bundled binary
         chrome_options.binary_location = chromium_path
-        debug_log(f"Using bundled Chromium at: {chromium_path}", "INFO")
         
-        # Use bundled ChromeDriver with exact version match
-        service = Service(chromedriver_path)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        debug_log("Successfully initialized bundled Chromium in headless mode", "INFO")
-        return driver
+        # Create service with bundled ChromeDriver
+        service = Service(executable_path=chromedriver_path)
         
+        # Initialize driver with bundled components
+        try:
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            debug_log("Successfully initialized bundled Chromium in headless mode", "INFO")
+            return driver
+        except OSError as os_error:
+            if "[Errno 22] Invalid argument" in str(os_error):
+                # Try with minimal options as a last resort
+                debug_log("Encountered [Errno 22] Invalid argument. Trying with minimal options.", "WARN")
+                minimal_options = Options()
+                minimal_options.add_argument('--headless')
+                minimal_options.add_argument('--no-sandbox')
+                minimal_options.add_argument('--disable-dev-shm-usage')
+                
+                try:
+                    # Try with system Chrome and minimal options
+                    debug_log("Attempting to initialize Chrome with minimal options", "INFO")
+                    driver = webdriver.Chrome(options=minimal_options)
+                    debug_log("Successfully initialized Chrome with minimal options", "INFO")
+                    return driver
+                except Exception as min_error:
+                    debug_log(f"Failed with minimal options: {min_error}", "ERROR")
+                    
+                    # One final attempt with absolute minimal options
+                    debug_log("Attempting with absolute minimal options", "INFO")
+                    final_options = Options()
+                    final_options.add_argument('--headless')
+                    final_options.add_argument('--no-sandbox')
+                    driver = webdriver.Chrome(options=final_options)
+                    debug_log("Successfully initialized Chrome with absolute minimal options", "INFO")
+                    return driver
+            else:
+                raise
     except Exception as e:
+        debug_log(f"Fatal error initializing Chrome/Chromium: {e}", "FATAL")
         user_message = (
             f"Failed to initialize both system Chrome and bundled Chromium in headless mode: {e}\n"
             "If the problem persists, please contact support and provide this log file."
         )
+        raise RuntimeError(user_message)
         print(user_message)
         debug_log(user_message, "ERROR")
         sys.exit(1)
 
 def debug_log(message, level="INFO"):
     """Enhanced debug logging with timestamps and levels."""
-    # Define log level hierarchy
-    log_levels = {"DEBUG": 0, "INFO": 1, "COMMENT": 1, "SEARCH": 1, "INIT": 1, "WARNING": 2, "ERROR": 3, "START": 1, "DATA": 0, "CHECK": 0}
-
-    # <-- CHANGE: honour override first
-    global LOG_LEVEL_OVERRIDE
-    if LOG_LEVEL_OVERRIDE:
-        current_level = LOG_LEVEL_OVERRIDE
-    else:
-        # Get current log level from config file (may be stale if CLI override)
+    try:
+        # Clean message
+        message = str(message).encode('ascii', 'ignore').decode()
+        
+        # Get current log level
         config = get_config()
         current_level = (config.get('log_level', 'info') if config else 'info').upper()
-    # --> END CHANGE
-
-    current_level_num = log_levels.get(current_level, 1)
-    message_level_num = log_levels.get(level.upper(), 1)
-
-    # Only log if message level is equal or higher than current log level
-    if message_level_num >= current_level_num:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Format timestamp
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log_line = f"[{timestamp}] [{level}] {message}"
+        
+        # Always print to console
         print(log_line)
         
-        # Add APP_OUT prefix for important logs to display in UI
-        # Send ALL log levels to the GUI activity log
+        # Send to UI
         print(f"[APP_OUT]{log_line}")
         
-
-        # Also write to a log file
-        raw_log_file_path = os.getenv('LINKEDIN_LOG_FILE', 'linkedin_commenter.log')
-        # Normalize the path to handle potential OS-specific issues (e.g., mixed slashes, redundant separators)
-        log_file = os.path.normpath(raw_log_file_path)
-
-        try:
-            # Ensure the directory for the log file exists
-            log_dir = os.path.dirname(log_file)
-            # Create directory if it's specified (not an empty string) and doesn't exist
-            if log_dir and not os.path.exists(log_dir):
-                os.makedirs(log_dir, exist_ok=True)
-            
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(log_line + "\n")
-        except Exception as e:
-            # Provide more context in case of error
-            print(f"Error writing to log file '{log_file}' (raw path: '{raw_log_file_path}'): {e}")
-            # If it's an OSError with errno 22 (Invalid argument), print more details
-            if isinstance(e, OSError) and e.errno == 22:
-                 print(f"Detailed path info for OSError 22: normalized_path='{log_file}', directory_part='{os.path.dirname(log_file)}'")
+        # Write to log file if enabled
+        if DEBUG_MODE or LOG_LEVEL_OVERRIDE:
+            try:
+                with open("linkedin_commenter.log", "a", encoding="utf-8") as f:
+                    f.write(log_line + '\n')
+            except OSError as e:
+                print(f"[APP_OUT][{timestamp}] [WARN] Failed to write to log file: {e}")
+    except Exception as e:
+        # Absolute fallback - print raw error
+        print(f"Critical error in debug_log: {e}")
 
 def load_log():
     """Load processed post IDs from disk, excluding posts from the last hour."""

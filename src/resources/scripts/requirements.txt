@@ -3,3 +3,4 @@ selenium
 webdriver-manager
 ollama
 regex
+python-dotenv

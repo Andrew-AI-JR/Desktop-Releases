@@ -256,47 +256,50 @@ def main():
                             debug_log("Scrolling page to load more content", "SCROLL")
                             scroll_attempts = 0
                             max_scroll_attempts = MAX_SCROLL_CYCLES  # Use the configured value
-                            
                             posts_processed_total = 0
                             hiring_posts_found_total = 0
+                            scroll_attempts = 0
+                            max_scroll_attempts = MAX_SCROLL_CYCLES  # Use the configured value
                             
                             while scroll_attempts < max_scroll_attempts:
                                 try:
                                     # Process posts on the current view
                                     debug_log(f"Processing posts (scroll attempt {scroll_attempts+1}/{max_scroll_attempts})", "POSTS")
                                     posts_processed, hiring_posts_found = process_posts(driver)
-                                    
                                     posts_processed_total += posts_processed
                                     hiring_posts_found_total += hiring_posts_found
-                                    
                                     if posts_processed > 0:
-                                        debug_log(f"Found {posts_processed} posts, {hiring_posts_found} hiring posts", "POSTS")
-                                    else:
-                                        debug_log("No posts found on this scroll", "POSTS")
-                                    
-                                    scroll_attempts += 1
-                                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                                        debug_log(f"Processed {posts_processed} posts on this scroll", "POSTS")
+                                        session_comments += posts_processed
+                                        daily_comments += posts_processed
+                                        if session_comments >= MAX_SESSION_COMMENTS:
+                                            debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
+                                            break
+                                    continued_scrolling = scroll_page(driver)
+                                    if not continued_scrolling:
+                                        debug_log("Reached end of page or couldn't scroll further", "SCROLL")
+                                        break
                                     time.sleep(SCROLL_PAUSE_TIME)
+                                    scroll_attempts += 1
                                 except Exception as inner_e:
                                     import traceback
                                     debug_log(f"[ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}", "ERROR")
                                     print(f"[APP_OUT][ERROR] Exception in main loop: {repr(inner_e)}\n{traceback.format_exc()}")
-                            hiring_posts_found_total += hiring_posts_found
-                            
-                            if posts_processed > 0:
-                                debug_log(f"Processed {posts_processed} posts on this scroll", "POSTS")
-                                # If we found and processed posts, update counters
-                                session_comments += posts_processed
-                                daily_comments += posts_processed
-                                
-                                # If we've reached the session limit, break early
-                                if session_comments >= MAX_SESSION_COMMENTS:
-                                    debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                                    break
-                            
-                            # Scroll down to load more content
-                            continued_scrolling = scroll_page(driver)
-                            if not continued_scrolling:
+                            # Record URL performance
+                            search_tracker.record_url_performance(
+                                url=search_url,
+                                posts_found=posts_processed_total,
+                                hiring_posts_found=hiring_posts_found_total
+                            )
+                            debug_log(f"Recorded performance for URL: {posts_processed_total} posts, {hiring_posts_found_total} hiring posts", "PERF")
+                            # Wait between URLs
+                            cycle_break = random.randint(10, 30)  # Randomize delay between URLs
+                            debug_log(f"Waiting {cycle_break} seconds before next URL", "WAIT")
+                            time.sleep(cycle_break)
+                        except Exception as e:
+                            debug_log(f"Error processing URL: {str(e)}", "ERROR")
+                            debug_log(traceback.format_exc(), "ERROR")
+                            continue
                                 debug_log("Reached end of page or couldn't scroll further", "SCROLL")
                                 break
                                 

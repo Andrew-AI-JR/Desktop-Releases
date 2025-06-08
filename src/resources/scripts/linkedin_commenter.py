@@ -1305,43 +1305,85 @@ class SearchPerformanceTracker:
         return optimized_urls
 
 def initialize_driver():
-    """Initialize and return a configured Chrome WebDriver instance (PRODUCTION: hardcoded Chromium path)."""
+    """Initialize and return a configured Chrome/Chromium WebDriver instance.
+    First tries system Chrome with WebDriver Manager, then falls back to bundled Chromium.
+    Always runs in headless mode for production."""
     chrome_options = Options()
-    # Get the application's resources directory
-    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    bundled_chrome = os.path.join(app_dir, 'resources', 'resources', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe')
-    bundled_driver = os.path.join(app_dir, 'resources', 'resources', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe')
-
-    print(f"[DIAG] [PROD] Using hardcoded bundled Chromium: {bundled_chrome}")
-    if not os.path.exists(bundled_chrome):
-        print(f"[ERROR] Bundled Chromium not found at {bundled_chrome}. Exiting.")
-        sys.exit(1)
-    chrome_options.binary_location = bundled_chrome
-    driver_path = bundled_driver
-
-    if not os.path.exists(driver_path):
-        print(f"[ERROR] Bundled ChromeDriver not found at {bundled_driver}. Exiting.")
-        sys.exit(1)
-
-    print(f"[DIAG] [PROD] Chrome binary path actually used: {chrome_options.binary_location}")
-    print(f"[DIAG] [PROD] ChromeDriver binary path actually used: {driver_path}")
-
-    debug_log(f"[INFO] Chrome binary used: {chrome_options.binary_location}")
-    debug_log(f"[INFO] ChromeDriver used: {driver_path}")
-    # Enable headless mode for production
+    config = get_config()
+    
+    # Common browser options - always headless for production
     chrome_options.add_argument('--headless=new')
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--remote-debugging-port=9222')
+    
+    # Get Chrome profile path from config or environment
+    chrome_profile = config.get('chrome_profile_path') or os.environ.get('LINKEDIN_CHROME_PROFILE_PATH')
+    if chrome_profile:
+        chrome_options.add_argument(f'--user-data-dir={chrome_profile}')
+    
+    # First try: Use system Chrome with WebDriver Manager
     try:
-        service = Service(driver_path)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        debug_log(f"Successfully initialized Chrome driver in headless mode", "INFO")
+        debug_log("Attempting to use system Chrome with WebDriver Manager", "INFO")
+        driver = webdriver.Chrome(options=chrome_options)
+        debug_log("Successfully initialized system Chrome in headless mode", "INFO")
         return driver
     except Exception as e:
+        debug_log(f"System Chrome failed: {e}. Falling back to bundled Chromium.", "INFO")
+    
+    # Fallback: Use bundled Chromium with matching ChromeDriver
+    try:
+        # Get the root directory (where junior-desktop is)
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        
+        # Platform-specific paths
+        if sys.platform == 'win32':
+            chromium_dir = 'chromium-stable-win64'
+            chromium_subdir = 'chrome-win64'
+            chromedriver_subdir = 'chromedriver-win64'
+            chromium_exe = 'chrome.exe'
+            chromedriver_exe = 'chromedriver.exe'
+        elif sys.platform == 'darwin':
+            chromium_dir = 'chromium-stable-mac'
+            chromium_subdir = 'chrome-mac'
+            chromedriver_subdir = 'chromedriver-mac'
+            chromium_exe = 'chrome'
+            chromedriver_exe = 'chromedriver'
+        else:  # linux
+            chromium_dir = 'chromium-stable-linux64'
+            chromium_subdir = 'chrome-linux'
+            chromedriver_subdir = 'chromedriver-linux64'
+            chromium_exe = 'chrome'
+            chromedriver_exe = 'chromedriver'
+        
+        # Construct paths to bundled Chromium and ChromeDriver
+        chromium_path = os.path.join(root_dir, 'junior-desktop', chromium_dir, chromium_subdir, chromium_exe)
+        chromedriver_path = os.path.join(root_dir, 'junior-desktop', chromium_dir, chromedriver_subdir, chromedriver_exe)
+        
+        debug_log(f"Looking for bundled Chromium at: {chromium_path}", "INFO")
+        debug_log(f"Looking for bundled ChromeDriver at: {chromedriver_path}", "INFO")
+        
+        # Verify both Chromium and ChromeDriver exist
+        if not os.path.exists(chromium_path):
+            raise FileNotFoundError(f"Bundled Chromium not found at {chromium_path}")
+            
+        if not os.path.exists(chromedriver_path):
+            raise FileNotFoundError(f"Bundled ChromeDriver not found at {chromedriver_path}")
+        
+        # Set Chromium binary location
+        chrome_options.binary_location = chromium_path
+        debug_log(f"Using bundled Chromium at: {chromium_path}", "INFO")
+        
+        # Use bundled ChromeDriver with exact version match
+        service = Service(chromedriver_path)
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        debug_log("Successfully initialized bundled Chromium in headless mode", "INFO")
+        return driver
+        
+    except Exception as e:
         user_message = (
-            f"Could not initialize Chrome in headless mode: {e}\n"
+            f"Failed to initialize both system Chrome and bundled Chromium in headless mode: {e}\n"
             "If the problem persists, please contact support and provide this log file."
         )
         print(user_message)

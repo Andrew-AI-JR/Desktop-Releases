@@ -1307,20 +1307,21 @@ class SearchPerformanceTracker:
 def initialize_driver():
     """Initialize and return a configured Chrome WebDriver instance (PRODUCTION: hardcoded Chromium path)."""
     chrome_options = Options()
-    # Hardcoded production paths
-    bundled_chrome = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe'))
-    bundled_driver = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe'))
+    # Get the application's resources directory
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    bundled_chrome = os.path.join(app_dir, 'resources', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe')
+    bundled_driver = os.path.join(app_dir, 'resources', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe')
 
     print(f"[DIAG] [PROD] Using hardcoded bundled Chromium: {bundled_chrome}")
     if not os.path.exists(bundled_chrome):
         print(f"[ERROR] Bundled Chromium not found at {bundled_chrome}. Exiting.")
-        exit(1)
+        sys.exit(1)
     chrome_options.binary_location = bundled_chrome
     driver_path = bundled_driver
 
     if not os.path.exists(driver_path):
         print(f"[ERROR] Bundled ChromeDriver not found at {bundled_driver}. Exiting.")
-        exit(1)
+        sys.exit(1)
 
     print(f"[DIAG] [PROD] Chrome binary path actually used: {chrome_options.binary_location}")
     print(f"[DIAG] [PROD] ChromeDriver binary path actually used: {driver_path}")

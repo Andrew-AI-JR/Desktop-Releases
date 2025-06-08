@@ -1322,34 +1322,25 @@ class SearchPerformanceTracker:
         return optimized_urls
 
 def initialize_driver():
-    """Initialize and return a configured Chrome WebDriver instance."""
+    """Initialize and return a configured Chrome WebDriver instance (PRODUCTION: hardcoded Chromium path)."""
     chrome_options = Options()
-    config = get_config()
-    chrome_path = config.get('chrome_path')
-    # Default to bundled Chromium if not provided
-    # Always use chrome_path from CLI/config if provided
-    chrome_path = config.get('chrome_path')
+    # Hardcoded production paths
     bundled_chrome = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe'))
     bundled_driver = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe'))
 
-    if chrome_path:
-        print(f"[DIAG] Using chrome_path from CLI/config: {chrome_path}")
-        chrome_options.binary_location = chrome_path
-        driver_path = bundled_driver if os.path.exists(bundled_driver) else None
-    else:
-        print(f"[DIAG] No chrome_path provided, falling back to bundled Chromium: {bundled_chrome}")
-        if not os.path.exists(bundled_chrome):
-            print(f"[ERROR] Bundled Chromium not found at {bundled_chrome}. Exiting.")
-            exit(1)
-        chrome_options.binary_location = bundled_chrome
-        driver_path = bundled_driver
+    print(f"[DIAG] [PROD] Using hardcoded bundled Chromium: {bundled_chrome}")
+    if not os.path.exists(bundled_chrome):
+        print(f"[ERROR] Bundled Chromium not found at {bundled_chrome}. Exiting.")
+        exit(1)
+    chrome_options.binary_location = bundled_chrome
+    driver_path = bundled_driver
 
-    if not driver_path or not os.path.exists(driver_path):
+    if not os.path.exists(driver_path):
         print(f"[ERROR] Bundled ChromeDriver not found at {bundled_driver}. Exiting.")
         exit(1)
 
-    print(f"[DIAG] Chrome binary path actually used: {chrome_options.binary_location}")
-    print(f"[DIAG] ChromeDriver binary path actually used: {driver_path}")
+    print(f"[DIAG] [PROD] Chrome binary path actually used: {chrome_options.binary_location}")
+    print(f"[DIAG] [PROD] ChromeDriver binary path actually used: {driver_path}")
 
     debug_log(f"[INFO] Chrome binary used: {chrome_options.binary_location}")
     debug_log(f"[INFO] ChromeDriver used: {driver_path}")
@@ -1369,6 +1360,10 @@ def initialize_driver():
             f"Could not initialize Chrome in headless mode: {e}\n"
             "If the problem persists, please contact support and provide this log file."
         )
+        print(user_message)
+        debug_log(user_message, "ERROR")
+        exit(1)
+
         debug_log(user_message, "ERROR")
         print(f"[APP_OUT]{user_message}")
         raise Exception(user_message)

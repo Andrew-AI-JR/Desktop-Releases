@@ -296,15 +296,8 @@ def main():
                             cycle_break = random.randint(10, 30)  # Randomize delay between URLs
                             debug_log(f"Waiting {cycle_break} seconds before next URL", "WAIT")
                             time.sleep(cycle_break)
-                        except Exception as e:
-                            debug_log(f"Error processing URL: {str(e)}", "ERROR")
-                            debug_log(traceback.format_exc(), "ERROR")
-                            continue
-                    except Exception as e:
-                        debug_log(f"Error processing URL: {str(e)}", "ERROR")
-                        debug_log(traceback.format_exc(), "ERROR")
-                        continue
                 
+{{ ... }}
                 # Clear recent logs
                 if random.random() < 0.2:
                     debug_log("Clearing recent posts from comment log", "CLEANUP")

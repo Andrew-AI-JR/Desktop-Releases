@@ -296,28 +296,34 @@ def main():
                             cycle_break = random.randint(10, 30)  # Randomize delay between URLs
                             debug_log(f"Waiting {cycle_break} seconds before next URL", "WAIT")
                             time.sleep(cycle_break)
-                
-                # Clear recent logs
-                if random.random() < 0.2:
-                    debug_log("Clearing recent posts from comment log", "CLEANUP")
-                    cleared_count = clear_recent_logs(hours=3)
-                    debug_log(f"Cleared {cleared_count} recent entries", "CLEANUP")
-            
-            except KeyboardInterrupt:
-                debug_log("Keyboard interrupt detected. Cleaning up...", "STOP")
-                break
-                
-            except Exception as e:
-                debug_log(f"Error in main loop: {str(e)}", "ERROR")
-                debug_log(traceback.format_exc(), "ERROR")
-                debug_log("Waiting 60 seconds before retrying...", "WAIT")
-                time.sleep(60)
-                continue
-                
+                            # Clear recent logs
+                            if random.random() < 0.2:
+                                debug_log("Clearing recent posts from comment log", "CLEANUP")
+                                cleared_count = clear_recent_logs(hours=3)
+                                debug_log(f"Cleared {cleared_count} recent entries", "CLEANUP")
+                        except KeyboardInterrupt:
+                            debug_log("Keyboard interrupt detected. Cleaning up...", "STOP")
+                            break
+                        except Exception as e:
+                            debug_log(f"Error in main loop: {str(e)}", "ERROR")
+                            debug_log(traceback.format_exc(), "ERROR")
+                            debug_log("Waiting 60 seconds before retrying...", "WAIT")
+                            time.sleep(60)
+                            continue
+                except Exception as e:
+                    debug_log(f"Error in URL processing: {str(e)}", "ERROR")
+                    debug_log(traceback.format_exc(), "ERROR")
+                    debug_log("Waiting 60 seconds before retrying...", "WAIT")
+                    time.sleep(60)
+                    continue
+        except Exception as e:
+            debug_log(f"Error in main loop: {str(e)}", "ERROR")
+            debug_log(traceback.format_exc(), "ERROR")
+            debug_log("Waiting 60 seconds before retrying...", "WAIT")
+            time.sleep(60)
     except Exception as e:
         debug_log(f"Fatal error: {str(e)}", "FATAL")
         debug_log(traceback.format_exc(), "FATAL")
-        
     finally:
         debug_log("Cleaning up and closing browser", "CLEANUP")
         if 'driver' in locals():
@@ -1031,63 +1037,64 @@ class CommentGenerator:
         scoring_config['tech_relevance'] = {
             'weight': 3.0,
             'keywords': tech_keywords
+        }
 
     def calculate_post_score(self, post_text, author_name=None):
-    """
-    Calculate a score for a post based on various factors to prioritize posts from hiring managers.
-    Uses FIXED scoring method without normalization.
-    Returns:
-        float: A score between 0 and 100, with higher scores indicating higher priority
-    """
-    if not post_text:
-        self.debug_log('[SCORE] Empty post text, returning 0')
-        return 0
-    # Build scoring configuration
-    scoring_config = self.build_scoring_config(get_config())
-    total_score = 0
-    post_text_lower = post_text.lower()
-    score_breakdown = {
-        'metadata': {
-            'text_length': len(post_text),
-            'word_count': len(post_text.split()),
-            'has_author': bool(author_name)
+        """
+        Calculate a score for a post based on various factors to prioritize posts from hiring managers.
+        Uses FIXED scoring method without normalization.
+        Returns:
+            float: A score between 0 and 100, with higher scores indicating higher priority
+        """
+        if not post_text:
+            self.debug_log('[SCORE] Empty post text, returning 0')
+            return 0
+        # Build scoring configuration
+        scoring_config = self.build_scoring_config(get_config())
+        total_score = 0
+        post_text_lower = post_text.lower()
+        score_breakdown = {
+            'metadata': {
+                'text_length': len(post_text),
+                'word_count': len(post_text.split()),
+                'has_author': bool(author_name)
+            }
         }
-    }
-    # Calculate scores for each category - FIXED scoring method
-    for category, config_data in scoring_config.items():
-        weight = config_data['weight']
-        keywords = config_data['keywords']
-        # Determine text to search in based on category
-        search_text = author_name.lower() if 'author' in category and author_name else post_text_lower
-        # Count keyword matches
-        matches = sum(1 for kw in keywords if kw.lower() in search_text)
-        # Give full weight for ANY match, small bonus for multiple matches (up to 2 extra)
-        if matches > 0:
-            category_score = weight * 5
-            if matches > 1:
-                category_score += weight * min(matches - 1, 2)  # Max 2 bonus matches
-        else:
-            category_score = 0
-        total_score += category_score
-        # Store breakdown for logging
-        score_breakdown[category] = {
-            'matches': matches,
-            'score': category_score,
-            'weight': weight
+        # Calculate scores for each category - FIXED scoring method
+        for category, config_data in scoring_config.items():
+            weight = config_data['weight']
+            keywords = config_data['keywords']
+            # Determine text to search in based on category
+            search_text = author_name.lower() if 'author' in category and author_name else post_text_lower
+            # Count keyword matches
+            matches = sum(1 for kw in keywords if kw.lower() in search_text)
+            # Give full weight for ANY match, small bonus for multiple matches (up to 2 extra)
+            if matches > 0:
+                category_score = weight * 5
+                if matches > 1:
+                    category_score += weight * min(matches - 1, 2)  # Max 2 bonus matches
+            else:
+                category_score = 0
+            total_score += category_score
+            # Store breakdown for logging
+            score_breakdown[category] = {
+                'matches': matches,
+                'score': category_score,
+                'weight': weight
+            }
+        # Add length bonus (not penalty)
+        words = len(post_text.split())
+        length_bonus = 5 if words >= 50 else 0
+        total_score += length_bonus
+        score_breakdown['length'] = {
+            'words': words,
+            'score': length_bonus
         }
-    # Add length bonus (not penalty)
-    words = len(post_text.split())
-    length_bonus = 5 if words >= 50 else 0
-    total_score += length_bonus
-    score_breakdown['length'] = {
-        'words': words,
-        'score': length_bonus
-    }
-    # FIXED: Direct scoring - no normalization
-    final_score = min(100, total_score)
-    score_breakdown['final_score'] = final_score
-    self.debug_log(f'[SCORE] (patched) Post scoring breakdown: {json.dumps(score_breakdown)}')
-    return final_score
+        # FIXED: Direct scoring - no normalization
+        final_score = min(100, total_score)
+        score_breakdown['final_score'] = final_score
+        self.debug_log(f'[SCORE] (patched) Post scoring breakdown: {json.dumps(score_breakdown)}')
+        return final_score
 
 
     def verify_comment(self, comment):

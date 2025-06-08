@@ -1309,8 +1309,8 @@ def initialize_driver():
     chrome_options = Options()
     # Get the application's resources directory
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    bundled_chrome = os.path.join(app_dir, 'resources', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe')
-    bundled_driver = os.path.join(app_dir, 'resources', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe')
+    bundled_chrome = os.path.join(app_dir, 'resources', 'resources', 'chromium-stable-win64', 'chrome-win64', 'chrome.exe')
+    bundled_driver = os.path.join(app_dir, 'resources', 'resources', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe')
 
     print(f"[DIAG] [PROD] Using hardcoded bundled Chromium: {bundled_chrome}")
     if not os.path.exists(bundled_chrome):
@@ -1346,12 +1346,7 @@ def initialize_driver():
         )
         print(user_message)
         debug_log(user_message, "ERROR")
-        exit(1)
-
-        debug_log(user_message, "ERROR")
-        print(f"[APP_OUT]{user_message}")
-        raise Exception(user_message)
-
+        sys.exit(1)
 
 def debug_log(message, level="INFO"):
     """Enhanced debug logging with timestamps and levels."""

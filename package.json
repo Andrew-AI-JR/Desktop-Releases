@@ -70,9 +70,8 @@
         "to": "linkedin_commenter.py"
       },
       {
-        "from": "chromium-stable-win64",
-        "to": "resources/chromium-stable-win64",
-        "filter": "**/*"
+        "from": "chromium-win64/chrome-win",
+        "to": "chrome-win"
       }
     ],
     "mac": {

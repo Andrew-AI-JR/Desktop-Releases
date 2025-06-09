@@ -37,19 +37,22 @@ const automationService = {
    * @returns {string} Path to writable log file
    */
   getLogFilePath() {
-    // User requested log path for easier access during debugging
-    const desiredLogPath = 'C:\\Users\\asust\\OneDrive\\Documentos\\GitHub\\junior\\junior-desktop\\linkedin_commenter.log';
-    const logDir = path.dirname(desiredLogPath);
+    // Try to use the user's Documents folder first
+    const userDocumentsPath = app.getPath('documents');
+    const defaultLogPath = path.join(userDocumentsPath, 'JuniorAI', 'logs', 'linkedin_commenter.log');
+    
     try {
+      // Create the logs directory
+      const logDir = path.dirname(defaultLogPath);
       fs.mkdirSync(logDir, { recursive: true });
+      return defaultLogPath;
     } catch (e) {
       console.error(`[getLogFilePath] Error creating directory ${logDir}:`, e);
       // Fallback to userData if creating desired path fails
-      const fallbackDir = path.join(app.getPath('userData'), 'JuniorAI');
+      const fallbackDir = path.join(app.getPath('userData'), 'JuniorAI', 'logs');
       fs.mkdirSync(fallbackDir, { recursive: true });
       return path.join(fallbackDir, 'linkedin_commenter.log');
     }
-    return desiredLogPath;
   },
 
   /**
@@ -292,12 +295,14 @@ const automationService = {
       // Get writable paths for logs and Chrome profile
       const logFilePath = this.getLogFilePath();
       const chromeProfilePath = this.getChromeProfilePath();
+      const chromePath = this.getBundledChromePath();
 
       // Create environment with writable paths
       const env = {
         ...process.env,
         LINKEDIN_LOG_FILE: logFilePath,
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
+        CHROME_PATH: chromePath || '', // Pass Chrome path to Python script
       };
 
       // Run bundled Python with config
@@ -671,7 +676,7 @@ const automationService = {
     // Set Chrome path based on environment
     if (app.isPackaged) {
       // In production, use bundled Chromium from resources
-      config.chrome_path = path.join(process.resourcesPath, 'chromium-stable-win64', 'chrome-win64', 'chrome.exe');
+      config.chrome_path = path.join(process.resourcesPath, 'chrome-win', 'chrome.exe');
     } else {
       // In development, use system Chrome
       config.chrome_path = null; // Let the Python script find system Chrome
@@ -801,13 +806,62 @@ const automationService = {
   },
 
   /**
+   * Get the path to bundled Chromium
+   * @returns {string|null} Path to bundled Chromium or null if not found
+   */
+  getBundledChromePath() {
+    if (!app.isPackaged) {
+      return null;
+    }
+
+    if (process.platform === 'win32') {
+      const chromePath = path.join(process.resourcesPath, 'chrome-win', 'chrome.exe');
+      if (fs.existsSync(chromePath)) {
+        console.log(`Bundled Chrome found at: ${chromePath}`);
+        return chromePath;
+      }
+    }
+
+    const chromePaths = [];
+    if (process.platform === 'darwin') {
+      chromePaths.push(
+        path.join(process.resourcesPath, 'chrome', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome'),
+        path.join(process.resourcesPath, 'chrome-mac', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome')
+      );
+    } else {
+      chromePaths.push(
+        path.join(process.resourcesPath, 'chrome', 'chrome'),
+        path.join(process.resourcesPath, 'chrome-linux', 'chrome')
+      );
+    }
+
+    for (const chromePath of chromePaths) {
+      if (fs.existsSync(chromePath)) {
+        console.log(`Bundled Chrome found at: ${chromePath}`);
+        return chromePath;
+      }
+    }
+
+    console.log('Bundled Chrome not found');
+    return null;
+  },
+
+  /**
    * Check if Chrome is available on the system
    * @returns {Promise<boolean>} True if Chrome is found
    */
   async checkChromeAvailability() {
-    const fs = require('fs');
-
     return new Promise(resolve => {
+      // First check for bundled Chrome in production mode
+      if (app.isPackaged) {
+        const bundledChromePath = this.getBundledChromePath();
+        if (bundledChromePath) {
+          resolve(true);
+          return;
+        }
+      }
+
+      // Then check for system Chrome
       let chromePaths = [];
 
       if (process.platform === 'win32') {
@@ -842,11 +896,11 @@ const automationService = {
         return;
       }
 
-      // For Windows and macOS, just check if the file exists
+      // For Windows and macOS, check if the file exists
       for (const chromePath of chromePaths) {
         try {
           if (fs.existsSync(chromePath)) {
-            console.log(`Chrome found at: ${chromePath}`);
+            console.log(`System Chrome found at: ${chromePath}`);
             resolve(true);
             return;
           }
@@ -855,7 +909,7 @@ const automationService = {
         }
       }
 
-      console.log('Chrome not found in any expected locations');
+      console.log('No Chrome installation found');
       resolve(false);
     });
   },

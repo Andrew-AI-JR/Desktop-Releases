@@ -154,10 +154,313 @@ SEARCH_URLS = []
 # Stores CLI/env override for logging; used inside debug_log
 LOG_LEVEL_OVERRIDE = None
 
+# === POST SCORING CONFIGURATION ===
+POST_SCORING_CONFIG = {
+    'internal_hiring': {
+        'weight': 8.0,  # HIGHEST weight - internal hiring managers are most likely to book calls
+        'keywords': [
+            'hiring for my team',
+            'hiring for our team',
+            'expanding our team',
+            'scaling our team',
+            'growing the team',
+            'building the team',
+            'leading the team',
+            'my team is hiring',
+            'our team is looking',
+            'adding to my team',
+            'building out my team',
+            'expanding my organization'
+            # Note: Role-specific keywords will be added dynamically
+        ]
+    },
+    'direct_hiring': {
+        'weight': 6.0,  # Very high weight - direct hiring signals from decision makers
+        'keywords': [
+            "i'm hiring",
+            "we're hiring",
+            'hiring for',
+            'looking to hire',
+            'actively hiring',
+            'now hiring',
+            'hiring now',
+            'open position',
+            'job opening',
+            'position available',
+            'role available',
+            'opportunity available',
+            'seeking candidates',
+            'recruiting for',
+            'filling a position'
+        ]
+    },
+    'decision_maker_titles': {
+        'weight': 5.0,  # High weight for titles that indicate hiring authority
+        'keywords': [
+            'ceo', 'cto', 'cfo', 'vp', 'vice president', 'director',
+            'head of', 'chief', 'founder', 'co-founder', 'president',
+            'hiring manager', 'engineering manager', 'product manager',
+            'data science manager', 'ai director', 'ml director',
+            'lead', 'principal', 'senior director'
+        ]
+    },
+    'company_tier': {
+        'weight': 4.0,  # High weight for quality companies
+        'keywords': [
+            'faang', 'meta', 'facebook', 'apple', 'amazon', 'netflix', 'google', 'microsoft',
+            'fortune 500', 'fortune 100', 'series a', 'series b', 'series c', 'unicorn',
+            'nasdaq', 'nyse', 'public company', 'industry leader', 'market leader',
+            'well-funded', 'venture backed', 'enterprise', 'saas'
+        ]
+    },
+    'tech_relevance': {
+        'weight': 3.0,  # Important for matching your skills
+        'keywords': [
+            'python', 'machine learning', 'data science', 'ai', 'artificial intelligence',
+            'deep learning', 'nlp', 'natural language processing', 'computer vision',
+            'neural networks', 'tensorflow', 'pytorch', 'scikit-learn', 'pandas', 'numpy',
+            'data analysis', 'data engineering', 'data pipeline', 'etl', 'sql', 'database',
+            'cloud', 'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'microservices',
+            'rest api', 'api development', 'full stack', 'backend', 'frontend',
+            'web development', 'software engineering', 'devops', 'ci/cd', 'git',
+            'generative ai', 'llm', 'chatgpt', 'openai'
+        ]
+    },
+    'urgency_indicators': {
+        'weight': 4.0,  # High weight for urgent hiring needs
+        'keywords': [
+            'urgent', 'asap', 'immediately', 'right away', 'looking immediately',
+            'need someone fast', 'start immediately', 'urgent need',
+            'critical hire', 'key hire', 'must fill', 'priority hire'
+        ]
+    },
+    'work_mode': {
+        'weight': 2.0,  # Medium weight for work flexibility
+        'keywords': [
+            'remote', 'remote-first', 'remote friendly', 'work from home', 'wfh',
+            'hybrid', 'flexible location', 'flexible work', 'anywhere in us',
+            'us-based remote', 'fully remote', 'distributed team'
+        ]
+    },
+    'external_recruiter': {
+        'weight': 1.0,  # LOWEST weight - external recruiters less likely to lead to direct hires
+        'keywords': [
+            'recruitment consultant', 'talent acquisition specialist', 'technical recruiter',
+            'staffing specialist', 'recruiting agency', 'talent partner',
+            'sourcing specialist', 'recruiting firm', 'placement agency',
+            'contract recruiter', 'third party recruiter'
+        ]
+    },
+    'post_details': {
+        'weight': 1.5,  # Low weight for post quality indicators
+        'keywords': [
+            'requirements:', 'qualifications:', 'experience:',
+            'skills:', 'responsibilities:', 'salary:', 'location:',
+            'stack:', 'technologies:', 'benefits:', 'compensation:'
+        ]
+    }
+}
+
+class SearchPerformanceTracker:
+    """Tracks and optimizes search URL performance."""
+    def __init__(self):
+        self.url_stats = {}  # Store performance metrics for each URL
+        self.hourly_stats = {}  # Store hourly performance data
+        
+    def record_url_performance(self, url, success=True, comments_made=0, error=False):
+        """Record the performance of a URL search."""
+        if url not in self.url_stats:
+            self.url_stats[url] = {
+                'total_attempts': 0,
+                'successful_attempts': 0,
+                'total_comments': 0,
+                'errors': 0,
+                'last_attempt': None
+            }
+            
+        stats = self.url_stats[url]
+        stats['total_attempts'] += 1
+        if success:
+            stats['successful_attempts'] += 1
+            stats['total_comments'] += comments_made
+        if error:
+            stats['errors'] += 1
+        stats['last_attempt'] = datetime.now()
+        
+        # Record hourly stats
+        current_hour = datetime.now().hour
+        if current_hour not in self.hourly_stats:
+            self.hourly_stats[current_hour] = {}
+        if url not in self.hourly_stats[current_hour]:
+            self.hourly_stats[current_hour][url] = {
+                'attempts': 0,
+                'comments': 0
+            }
+        self.hourly_stats[current_hour][url]['attempts'] += 1
+        self.hourly_stats[current_hour][url]['comments'] += comments_made
+        
+    def optimize_search_urls(self, urls, current_hour):
+        """Optimize the order of search URLs based on performance."""
+        if not urls:
+            return []
+            
+        # Score each URL based on its performance
+        scored_urls = []
+        for url in urls:
+            if not url:  # Skip None or empty URLs
+                continue
+                
+            score = 0
+            if url in self.url_stats:
+                stats = self.url_stats[url]
+                # Calculate success rate
+                if stats['total_attempts'] > 0:
+                    success_rate = stats['successful_attempts'] / stats['total_attempts']
+                    score += success_rate * 10
+                    
+                # Consider comment yield
+                if stats['total_attempts'] > 0:
+                    comment_yield = stats['total_comments'] / stats['total_attempts']
+                    score += comment_yield * 5
+                    
+                # Penalize recent errors
+                if stats['errors'] > 0:
+                    score -= stats['errors'] * 2
+                    
+            # Consider hourly performance
+            if current_hour in self.hourly_stats and url in self.hourly_stats[current_hour]:
+                hour_stats = self.hourly_stats[current_hour][url]
+                if hour_stats['attempts'] > 0:
+                    hour_score = hour_stats['comments'] / hour_stats['attempts']
+                    score += hour_score * 3
+                    
+            scored_urls.append((url, score))
+            
+        # Sort URLs by score (highest first)
+        scored_urls.sort(key=lambda x: x[1], reverse=True)
+        return [url for url, _ in scored_urls]
+
+class CommentGenerator:
+    """
+    Generates comments for LinkedIn posts using user bio and optional AI/ML backend.
+    """
+    def __init__(self, user_bio, config=None, job_keywords=None):
+        self.user_bio = user_bio
+        self.config = config or POST_SCORING_CONFIG
+        
+        # Update tech_relevance keywords with job_keywords if provided
+        if job_keywords and isinstance(job_keywords, list) and len(job_keywords) > 0:
+            # Convert job_keywords to lowercase for case-insensitive matching
+            tech_keywords = [keyword.lower() for keyword in job_keywords]
+            # Update the tech_relevance section in the config
+            if 'tech_relevance' in self.config:
+                self.config['tech_relevance']['keywords'] = tech_keywords
+            else:
+                self.config['tech_relevance'] = {
+                    'weight': 3.0,
+                    'keywords': tech_keywords
+                }
+
+    def debug_log(self, message, level="INFO"):
+        if 'debug_log' in globals():
+            debug_log(message, level)
+        else:
+            print(f"[{level}] {message}")
+
+    def clean_post_text(self, post_text):
+        # Simple cleaning: strip, remove extra spaces, etc. (customize as needed)
+        return ' '.join(post_text.strip().split())
+
+    def classify_post(self, post_text):
+        # ... existing code ...
+        return super().classify_post(post_text)
+
+    def generate_comment(self, post_text, author_name=None):
+        if not post_text or len(post_text) < 10:
+            return None
+        comment = f"Great post, {author_name or 'there'}! As someone with experience in {self.user_bio[:50]}..., I found your insights valuable."
+        return comment
+
+    def calculate_post_score(self, post_text, author_name=None, time_filter=None):
+        if not post_text:
+            return 0
+            
+        post_text_lower = post_text.lower()
+        total_score = 0
+        score_breakdown = {}
+        
+        # Apply time-based scoring based on the URL's time filter
+        time_multiplier = get_time_based_score(time_filter) if time_filter else 1.0
+        if time_filter:
+            score_breakdown['time_relevance'] = {
+                'time_filter': time_filter,
+                'multiplier': time_multiplier,
+                'score': 0  # Will be calculated in the multiplier
+            }
+        
+        # Calculate base score from all categories
+        for category, config in self.config.items():
+            if config.get('time_based', False):
+                # Skip time-based categories as they're handled separately
+                continue
+                
+            weight = config['weight']
+            keywords = config.get('keywords', [])
+            matches = sum(1 for kw in keywords if kw.lower() in post_text_lower)
+            
+            if matches > 0:
+                category_score = weight * matches
+                total_score += category_score
+                score_breakdown[category] = {
+                    'matches': matches,
+                    'score': category_score,
+                    'weight': weight
+                }
+        
+        # Add length bonus
+        words = len(post_text.split())
+        length_bonus = 5 if words >= 50 else 0
+        total_score += length_bonus
+        score_breakdown['length'] = {'words': words, 'score': length_bonus}
+        
+        # Apply time multiplier to the total score
+        final_score = total_score * time_multiplier
+        
+        # Update time_relevance score in breakdown to show its impact
+        if 'time_relevance' in score_breakdown:
+            score_breakdown['time_relevance']['score'] = final_score - total_score
+            
+        score_breakdown['final_score'] = {
+            'base_score': total_score,
+            'time_multiplier': time_multiplier,
+            'final_score': final_score
+        }
+        
+        self.debug_log(f"Post scoring breakdown: {json.dumps(score_breakdown, indent=2, default=str)}", "SCORE")
+        return final_score
+
+def get_time_based_score(time_filter):
+    """
+    Calculate a score multiplier based on the time filter used in the URL.
+    
+    Args:
+        time_filter (str): The time filter from the URL ('past-24h', 'past-week', 'past-month')
+    
+    Returns:
+        float: Score multiplier based on recency
+    """
+    time_weights = {
+        'past-24h': 2.0,    # Highest weight for most recent posts
+        'past-week': 1.5,   # Medium weight for recent posts
+        'past-month': 1.0   # Base weight for older posts
+    }
+    return time_weights.get(time_filter, 1.0)  # Default to 1.0 if unknown filter
+
 def main():
     """Main execution function that continuously cycles through URLs while respecting limits."""
     global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
     global LINKEDIN_EMAIL, LINKEDIN_PASSWORD, DEBUG_MODE, SEARCH_URLS, CALENDLY_LINK, USER_BIO
+    # ... rest of the code remains the same ...
     global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
     
     # Initialize global CONFIG by calling get_config() which calls load_config_from_args()
@@ -248,11 +551,14 @@ def main():
                 debug_log(f"[ERROR] Failed to initialize search tracker: {tracker_error}", "ERROR")
                 raise
             
-            # Initialize comment generator
+            # Initialize comment generator with job keywords
             try:
                 debug_log("[INIT] Initializing comment generator", "DEBUG")
-                comment_generator = CommentGenerator(USER_BIO)
-                debug_log("[INIT] Comment generator initialized", "DEBUG")
+                comment_generator = CommentGenerator(
+                    user_bio=USER_BIO,
+                    job_keywords=JOB_SEARCH_KEYWORDS
+                )
+                debug_log("[INIT] Comment generator initialized with job keywords", "DEBUG")
             except Exception as gen_error:
                 debug_log(f"[ERROR] Failed to initialize comment generator: {gen_error}", "ERROR")
                 raise
@@ -260,7 +566,7 @@ def main():
             # Initialize browser driver
             try:
                 debug_log("[INIT] Initializing browser driver", "DEBUG")
-                driver = initialize_driver()
+                driver = setup_chrome_driver()
                 debug_log("[INIT] Browser driver initialized successfully", "DEBUG")
             except Exception as driver_error:
                 debug_log(f"[ERROR] Failed to initialize browser driver: {driver_error}", "ERROR")
@@ -283,7 +589,7 @@ def main():
                                 driver.quit()
                             except:
                                 pass
-                        driver = initialize_driver()
+                        driver = setup_chrome_driver()
                         time.sleep(5)
                         continue
                     
@@ -379,67 +685,72 @@ def main():
             print("[APP_OUT]LinkedIn automation completed a cycle. Restarting automatically...")
             time.sleep(10)  # Wait before restarting
 
+def get_search_urls_for_keywords(keywords):
+    """Generate search URLs from keywords."""
+    if not keywords:
+        return []
+        
+    # Convert keywords to proper format
+    if isinstance(keywords, list):
+        # Use the first keyword for the main search
+        keyword_query = keywords[0]
+    else:
+        keyword_query = keywords
+        
+    # Generate URLs for different time filters
+    urls = []
+    time_filters = ["past-24h", "past-month"]
+    for time_filter in time_filters:
+        # Add hiring-focused URL
+        hiring_url = construct_linkedin_search_url(
+            f"{keyword_query} hiring",
+            time_filter
+        )
+        if hiring_url:
+            urls.append(hiring_url)
+            
+        # Add recruiting-focused URL
+        recruiting_url = construct_linkedin_search_url(
+            f"{keyword_query} recruiting",
+            time_filter
+        )
+        if recruiting_url:
+            urls.append(recruiting_url)
+            
+    return urls
+
 def construct_linkedin_search_url(keywords, time_filter="past_month"):
     """
     Construct a LinkedIn search URL for posts with proper date filtering.
     
     Args:
-        keywords (str or list): Search keywords or list of keywords
-        time_filter (str): One of "past_24h", "past_week", "past_month", "past_year"
+        keywords (str): Search keywords
+        time_filter (str): One of "past-24h", "past-week", "past-month", "past-year"
     
     Returns:
         str: Constructed LinkedIn search URL
     """
-    # Convert keywords to proper format
-    if isinstance(keywords, list):
-        # Use the first keyword for the main search
-        # LinkedIn works better with single focused searches
-        keyword_query = keywords[0]
-    else:
-        keyword_query = keywords
-    
-    # Base URL for content search
-    base_url = "https://www.linkedin.com/search/results/content/"
-    
-    # Map time filter to LinkedIn's datePosted parameter format
-    time_map = {
-        "past_24h": "past-24h",
-        "past_week": "past-week",
-        "past_month": "past-month",
-        "past_year": "past-year"
-    }
-    
-    # Construct the query parameters
-    params = {
-        "keywords": keyword_query,
-        "origin": "FACETED_SEARCH",
-        "sid": "tnP",
-        "datePosted": f'"{time_map.get(time_filter, "past-month")}"'  # Wrap in quotes as required by LinkedIn
-    }
-
-def get_search_urls_for_keywords(keywords):
-    """
-    Generate search URLs for given keywords using 'hiring' with 24h and past_week filters.
-    All 24h URLs are returned first, then all past_week URLs.
-    Args:
-        keywords (str or list): Search keywords or list of keywords
-    Returns:
-        list: List of search URLs (24h first, then past_week, all 'hiring' only)
-    """
-    urls_24h = []
-    urls_past_week = []
-    if isinstance(keywords, str):
-        keywords = [keywords]
-    for keyword in keywords:
-        urls_24h.append(
-            construct_linkedin_search_url(f"{keyword} hiring", "past_24h")
-        )
-        urls_past_week.append(
-            construct_linkedin_search_url(f"{keyword} hiring", "past_week")
-        )
-    return urls_24h + urls_past_week
-
-# ... (rest of the code remains the same)
+    try:
+        # Encode keywords for URL
+        encoded_keywords = urllib.parse.quote(keywords)
+        
+        # Construct the base URL
+        base_url = "https://www.linkedin.com/search/results/content/"
+        
+        # Add query parameters
+        params = {
+            'keywords': encoded_keywords,
+            'origin': 'FACETED_SEARCH',
+            'sid': 'tnP',
+            'datePosted': f'"{time_filter}"'
+        }
+        
+        # Build the URL with parameters
+        query_string = '&'.join(f"{k}={v}" for k, v in params.items())
+        return f"{base_url}?{query_string}"
+    except Exception as e:
+        debug_log(f"Error constructing search URL: {e}", "ERROR")
+        return None
 
 def process_posts(driver):
     """Process visible posts on the current page."""
@@ -455,6 +766,17 @@ def process_posts(driver):
         comment_history = load_comment_history()
         debug_log(f"Loaded {len(processed_log)} processed posts and {len(comment_history)} comments", "DATA")
         debug_log("Searching for visible posts", "SEARCH")
+        
+        # Get current URL and extract time filter
+        current_url = driver.current_url
+        time_filter = None
+        if 'datePosted=' in current_url:
+            try:
+                time_filter = current_url.split('datePosted=')[1].split('&')[0].strip('\"\\'')
+                debug_log(f"Extracted time filter from URL: {time_filter}", "DEBUG")
+            except Exception as e:
+                debug_log(f"Error extracting time filter from URL: {e}", "WARNING")
+        
         posts = find_posts(driver)
         if not posts:
             debug_log("No posts found on current page", "WARNING")
@@ -472,7 +794,8 @@ def process_posts(driver):
                 if post_id in processed_log or post_id in comment_history:
                     continue
                     
-                score = comment_generator.calculate_post_score(post_text, author_name)
+                score = comment_generator.calculate_post_score(post_text, author_name, time_filter)
+                debug_log(f"Scored post with time filter '{time_filter}': {score}", "DEBUG")
                 scored_posts.append((score, post, post_text, author_name))
             except Exception as e:
                 debug_log(f"Error scoring post: {e}", "ERROR")
@@ -490,11 +813,14 @@ def process_posts(driver):
                 'max_score': max(scores),
                 'avg_score': sum(scores) / len(scores),
                 'score_distribution': {
-                    '90-100': len([s for s in scores if s >= 90]),
-                    '70-89': len([s for s in scores if 70 <= s < 90]),
-                    '50-69': len([s for s in scores if 50 <= s < 70]),
-                    '30-49': len([s for s in scores if 30 <= s < 50]),
-                    '0-29': len([s for s in scores if s < 30])
+                    '80+': len([s for s in scores if s >= 80]),
+                    '70-79': len([s for s in scores if 70 <= s < 80]),
+                    '60-69': len([s for s in scores if 60 <= s < 70]),
+                    '50-59': len([s for s in scores if 50 <= s < 60]),
+                    '40-49': len([s for s in scores if 40 <= s < 50]),
+                    '30-39': len([s for s in scores if 30 <= s < 40]),
+                    '20-29': len([s for s in scores if 20 <= s < 30]),
+                    '0-19': len([s for s in scores if s < 20])
                 }
             }
             debug_log(f"Scoring distribution: {json.dumps(score_stats, indent=2)}", "STATS")
@@ -502,7 +828,7 @@ def process_posts(driver):
         debug_log(f"Found {len(scored_posts)} new posts to process, sorted by score", "SEARCH")
         for post_index, (score, post, post_text, author_name) in enumerate(scored_posts, 1):
             try:
-                if score <= 55:
+                if score < 50:  # Changed from 55 to 50 as per new threshold
                     debug_log(f"Skipping post {post_index} (score: {score} <= 55)", "SKIP")
                     continue
                 debug_log(f"Processing post {post_index}/{len(scored_posts)} (score: {score})", "PROCESS")
@@ -1165,6 +1491,103 @@ def sleep_until_midnight_edt():
     except Exception as e:
         debug_log(f"Error calculating sleep time: {e}")
         time.sleep(3600)  # Fallback: sleep 1 hour
+
+def get_default_log_path():
+    """Get a default log path that will work on any system."""
+    try:
+        # Try to use the user's home directory
+        home_dir = os.path.expanduser("~")
+        log_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        return os.path.join(log_dir, "linkedin_commenter.log")
+    except Exception as e:
+        # Fallback to current directory
+        print(f"Warning: Could not create log directory in Documents: {e}")
+        return "linkedin_commenter.log"
+
+def debug_log(message, level="INFO"):
+    """Enhanced debug logging with timestamps and levels."""
+    # Get log level from config or use default
+    log_level = CONFIG.get('log_level', 'info').upper() if CONFIG else 'INFO'
+    level = level.upper()
+    
+    # Map of log levels to numeric values
+    level_map = {
+        'DEBUG': 0,
+        'INFO': 1,
+        'WARNING': 2,
+        'ERROR': 3,
+        'FATAL': 4
+    }
+    
+    # Only log if message level is >= configured level
+    if level_map.get(level, 0) < level_map.get(log_level, 1):
+        return
+        
+    timestamp = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
+    log_message = f"{timestamp} [{level}] {message}"
+    
+    # Get log file path from config or use default
+    log_file = CONFIG.get('log_file_path') if CONFIG else None
+    if not log_file:
+        log_file = get_default_log_path()
+    
+    try:
+        # Ensure log directory exists
+        log_dir = os.path.dirname(log_file)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+            
+        # Write to log file
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(log_message + "\n")
+            
+        # Also print to console in debug mode
+        if DEBUG_MODE:
+            print(log_message)
+    except Exception as e:
+        print(f"Error writing to log file: {e}")
+        print(log_message)  # Fallback to console
+
+def setup_chrome_driver():
+    """Set up and return a Chrome WebDriver instance."""
+    chrome_options = Options()
+    
+    # Get Chrome path from environment or config
+    chrome_path = os.getenv('CHROME_PATH') or get_config().get('chrome_path')
+    
+    if chrome_path and os.path.exists(chrome_path):
+        debug_log(f"Using Chrome at: {chrome_path}")
+        chrome_options.binary_location = chrome_path
+    else:
+        debug_log("No Chrome path provided, using system Chrome")
+    
+    # Add other options
+    chrome_profile_path = os.getenv('LINKEDIN_CHROME_PROFILE_PATH')
+    if chrome_profile_path:
+        chrome_options.add_argument(f"--user-data-dir={chrome_profile_path}")
+    
+    chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--window-size=1200,900")
+    chrome_options.add_argument("--window-position=50,50")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+    
+    try:
+        # Try using the specified Chrome binary
+        if chrome_path and os.path.exists(chrome_path):
+            service = Service()
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        else:
+            # Fall back to webdriver_manager
+            driver = webdriver.Chrome(
+                service=Service(ChromeDriverManager().install()),
+                options=chrome_options
+            )
+        return driver
+    except Exception as e:
+        debug_log(f"Error setting up Chrome driver: {e}", level="ERROR")
+        raise
 
 if __name__ == "__main__":
     try:

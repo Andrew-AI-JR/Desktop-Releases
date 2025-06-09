@@ -557,7 +557,7 @@ def process_posts(driver):
                     # Log comment to history
                     post_id, _ = compute_post_id(post)
                     comment_history[post_id] = {
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "message": custom_message
                     }
                     save_comment_history(comment_history)

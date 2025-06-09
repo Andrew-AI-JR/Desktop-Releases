@@ -263,6 +263,10 @@ def main():
                 debug_log(f"[ERROR] Driver error details: {traceback.format_exc()}", "ERROR")
                 raise
             
+            # Initialize comment counters
+            session_comments = 0
+            daily_comments = 0
+            
             # Verify login
             debug_log("[LOGIN] Verifying LinkedIn login status...", "INFO")
             print("Verifying LinkedIn login status...")
@@ -322,7 +326,7 @@ def main():
 
                         try:
                             # Process posts on the current page
-                            posts_processed = process_posts(driver)
+                            posts_processed, hiring_posts_found = process_posts(driver)
                             if posts_processed > 0:
                                 session_comments += posts_processed
                                 daily_comments += posts_processed

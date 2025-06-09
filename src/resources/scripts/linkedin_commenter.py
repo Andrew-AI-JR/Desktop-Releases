@@ -588,75 +588,76 @@ def main():
                             try:
                                 driver.quit()
                             except:
-                                pass
-                        driver = setup_chrome_driver()
-                        time.sleep(5)
-                        continue
                     
-                    # Verify login status
-                    debug_log("Verifying LinkedIn login status...", "LOGIN")
-                    print("[APP_OUT]Verifying LinkedIn login status...")
-                    verify_active_login(driver)
+            if not login_successful:
+                debug_log("Login verification failed, retrying...", "ERROR")
+                continue
+                        
+            debug_log("Login verified successfully", "LOGIN")
+            print("[APP_OUT]Login successful, proceeding to search results...")
 
-                    # Get active URLs from the tracker
-                    current_hour = datetime.now().hour
-                    active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
+            # Get active URLs from the tracker
+            current_hour = datetime.now().hour
+            active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
+                    
+            if not active_urls:
+                debug_log("No active URLs to process, using default search URLs", "WARNING")
+                active_urls = SEARCH_URLS
+                        
+            debug_log(f"Active URLs to process: {active_urls}", "DEBUG")
+            print(f"[APP_OUT]Processing {len(active_urls)} search URLs...")
 
-                    # Process each URL
-                    for url in active_urls:
-                        if session_comments >= MAX_SESSION_COMMENTS:
-                            debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                            break
+            # Process each URL
+            for url in active_urls:
+                debug_log(f"Navigating to search URL: {url}", "NAVIGATION")
+                print(f"[APP_OUT]Navigating to: {url}")
+                if session_comments >= MAX_SESSION_COMMENTS:
+                    debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
+                    break
 
-                        if daily_comments >= MAX_DAILY_COMMENTS:
-                            debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
-                            sleep_until_midnight_edt()
-                            daily_comments = 0  # Reset counter at midnight
-                            continue
-
-                        # Navigate to the URL with retry logic
-                        retry_count = 0
-                        while retry_count < 3:
-                            try:
-                                driver.get(url)
-                                time.sleep(SHORT_SLEEP_SECONDS)  # Wait for page load
-                                break  # Successful navigation, exit retry loop
-                            except Exception as nav_e:
-                                retry_count += 1
-                                debug_log(f"Error navigating to {url} (attempt {retry_count}): {nav_e}", "ERROR")
-                                if retry_count >= 3:
-                                    debug_log(f"Failed to navigate to {url} after 3 attempts.", "ERROR")
-                                    search_tracker.record_url_performance(url, success=False, comments_made=0)
-                                    break
-                                time.sleep(5 * retry_count)  # Exponential backoff
-
-                        try:
-                            # Process posts on the current page
-                            posts_processed, hiring_posts_found = process_posts(driver)
-                            if posts_processed > 0:
-                                session_comments += posts_processed
-                                daily_comments += posts_processed
-                            search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
-                            
-                            # Random delay between URLs
-                            time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
-
-                        except Exception as e_url_processing:
-                            debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
-                            debug_log(traceback.format_exc(), "ERROR")
-                            search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
-                            continue  # to next URL in the for loop
-
-                    # Sleep between cycles
-                    cycle_sleep = random.uniform(cycle_break * 60, cycle_break * 120)
-                    debug_log(f"Sleeping for {int(cycle_sleep/60)} minutes between cycles", "SLEEP")
-                    time.sleep(cycle_sleep)
-
-                except Exception as e:
-                    debug_log(f"Error in main loop: {e}", "ERROR")
-                    debug_log(traceback.format_exc(), "ERROR")
-                    time.sleep(30)  # Longer sleep on error
+                if daily_comments >= MAX_DAILY_COMMENTS:
+                    debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
+                    sleep_until_midnight_edt()
+                    daily_comments = 0  # Reset counter at midnight
                     continue
+
+                # Navigate to the URL with retry logic
+                retry_count = 0
+                while retry_count < 3:
+                    try:
+                        driver.get(url)
+                        time.sleep(SHORT_SLEEP_SECONDS)  # Wait for page load
+                        break  # Successful navigation, exit retry loop
+                    except Exception as nav_e:
+                        retry_count += 1
+                        debug_log(f"Error navigating to {url} (attempt {retry_count}): {nav_e}", "ERROR")
+                        if retry_count >= 3:
+                            debug_log(f"Failed to navigate to {url} after 3 attempts.", "ERROR")
+                            search_tracker.record_url_performance(url, success=False, comments_made=0)
+                            break
+                        time.sleep(5 * retry_count)  # Exponential backoff
+
+                try:
+                    # Process posts on the current page
+                    posts_processed, hiring_posts_found = process_posts(driver)
+                    if posts_processed > 0:
+                        session_comments += posts_processed
+                        daily_comments += posts_processed
+                    search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
+                    
+                    # Random delay between URLs
+                    time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
+
+                except Exception as e_url_processing:
+                    debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
+                    debug_log(traceback.format_exc(), "ERROR")
+                    search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
+                    continue  # to next URL in the for loop
+
+                # Sleep between cycles
+                cycle_sleep = random.uniform(cycle_break * 60, cycle_break * 120)
+                debug_log(f"Sleeping for {int(cycle_sleep/60)} minutes between cycles", "SLEEP")
+                time.sleep(cycle_sleep)
 
         except KeyboardInterrupt:
             debug_log("Received keyboard interrupt", "INFO")
@@ -915,202 +916,36 @@ def process_posts(driver):
         debug_log(traceback.format_exc(), "ERROR")
         return 0, 0  # Return tuple of zeros on error
 
-def verify_active_login(driver):
-    """Automatically verify and perform LinkedIn login without manual intervention."""
+def verify_active_login(driver, max_attempts=3):
+    """
+    Automatically verify and perform LinkedIn login without manual intervention.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        max_attempts: Maximum number of login attempts
+        
+    Returns:
+        bool: True if login was successful, False otherwise
+    """
     debug_log("Verifying LinkedIn login status...", "LOGIN")
     print("[APP_OUT]Verifying LinkedIn login status...")
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            debug_log(f"Login verification attempt {attempt}/{max_attempts}", "LOGIN")
     
     try:
         # Go to LinkedIn homepage
         driver.get("https://www.linkedin.com/")
         time.sleep(3)
-
-        # Check if we're already logged in
-        logged_in_indicators = [
-            (By.CLASS_NAME, "global-nav__me-photo"),
-            (By.CLASS_NAME, "feed-identity-module"),
-            (By.CLASS_NAME, "share-box-feed-entry__trigger"),
-            (By.CLASS_NAME, "global-nav__content"),
-            (By.CSS_SELECTOR, "[data-control-name='nav.settings_signout']")
-        ]
-
-        for by, value in logged_in_indicators:
-            try:
-                element = driver.find_element(by, value)
-                if element.is_displayed():
-                    debug_log(f"Already logged in - found indicator: {value}", "LOGIN")
-                    return True
-            except Exception:
-                continue
-
-        # Check if we're on the feed page (another login indicator)
-        if "feed" in driver.current_url.lower() and "login" not in driver.current_url.lower():
-            debug_log("Already on feed page - assuming logged in", "LOGIN")
-            return True
-
-        # If not logged in, attempt automatic login
-        debug_log("Not logged in - attempting automatic login", "LOGIN")
-        
-        if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
-            debug_log("ERROR: LinkedIn credentials not found in config", "ERROR")
-            debug_log("Please ensure linkedin_credentials.email and linkedin_credentials.password are set in config.json", "ERROR")
-            return False
-
-        # Navigate to login page if not already there
-        if "login" not in driver.current_url.lower():
-            debug_log("Navigating to LinkedIn login page", "LOGIN")
-            driver.get("https://www.linkedin.com/login")
-            time.sleep(3)
-
-        # Perform automatic login
-        max_login_attempts = 3
-        for attempt in range(max_login_attempts):
-            debug_log(f"Login attempt {attempt + 1}/{max_login_attempts}", "LOGIN")
-            
-            try:
-                # Find and fill username field
-                username_field = None
-                username_selectors = ["#username", "input[name='session_key']", "input[type='email']"]
-                
-                for selector in username_selectors:
-                    try:
-                        username_field = driver.find_element(By.CSS_SELECTOR, selector)
-                        if username_field.is_displayed():
-                            break
-                    except Exception:
-                        continue
-                
-                if not username_field:
-                    debug_log("Could not find username field", "ERROR")
-                    continue
-
-                # Find and fill password field
-                password_field = None
-                password_selectors = ["#password", "input[name='session_password']", "input[type='password']"]
-                
-                for selector in password_selectors:
-                    try:
-                        password_field = driver.find_element(By.CSS_SELECTOR, selector)
-                        if password_field.is_displayed():
-                            break
-                    except Exception:
-                        continue
-                
-                if not password_field:
-                    debug_log("Could not find password field", "ERROR")
-                    continue
-
-                # Clear and fill credentials
-                username_field.clear()
-                password_field.clear()
-                
-                # Type credentials with human-like delays
-                for char in LINKEDIN_EMAIL:
-                    username_field.send_keys(char)
-                    time.sleep(random.uniform(0.05, 0.15))
-                
-                time.sleep(random.uniform(0.5, 1.0))
-                
-                for char in LINKEDIN_PASSWORD:
-                    password_field.send_keys(char)
-                    time.sleep(random.uniform(0.05, 0.15))
-
-                time.sleep(random.uniform(1.0, 2.0))
-
-                # Find and click submit button
-                submit_button = None
-                submit_selectors = [
-                    "button[type='submit']",
-                    "input[type='submit']",
-                    ".login__form_action_container button",
-                    "button[data-litms-control-urn]"
-                ]
-                
-                for selector in submit_selectors:
-                    try:
-                        submit_button = driver.find_element(By.CSS_SELECTOR, selector)
-                        if submit_button.is_displayed() and submit_button.is_enabled():
-                            break
-                    except Exception:
-                        continue
-                
-                if not submit_button:
-                    debug_log("Could not find submit button", "ERROR")
-                    continue
-
-                # Click submit button
-                submit_button.click()
-                debug_log("Submitted login form", "LOGIN")
-                
-                # Wait for login to process
-                time.sleep(5)
-                
-                # Check for successful login
-                current_url = driver.current_url.lower()
-                
-                # Check if we're redirected to feed or home
-                if any(indicator in current_url for indicator in ["feed", "home"]) and "login" not in current_url:
-                    debug_log("Login successful - redirected to main page", "LOGIN")
-                    print("[APP_OUT]LinkedIn login successful!")
-                    return True
-                
-                # Check for login indicators again
-                for by, value in logged_in_indicators:
-                    try:
-                        element = driver.find_element(by, value)
-                        if element.is_displayed():
-                            debug_log(f"Login successful - found indicator: {value}", "LOGIN")
-                            return True
-                    except Exception:
-                        continue
-                
-                # Check for security challenge or verification
-                if any(keyword in driver.page_source.lower() for keyword in ["challenge", "verification", "security", "captcha"]):
-                    debug_log("Security challenge detected - may require manual intervention", "WARNING")
-                    time.sleep(10)  # Wait longer for potential manual intervention
-                    
-                    # Check again after waiting
-                    for by, value in logged_in_indicators:
-                        try:
-                            element = driver.find_element(by, value)
-                            if element.is_displayed():
-                                debug_log("Login successful after security challenge", "LOGIN")
-                                return True
-                        except Exception:
-                            continue
-                
-                # Check for error messages
-                error_indicators = [
-                    "error",
-                    "incorrect",
-                    "invalid",
-                    "try again"
-                ]
-                
-                page_text = driver.page_source.lower()
-                if any(error in page_text for error in error_indicators):
-                    debug_log("Login error detected - credentials may be incorrect", "ERROR")
-                    break
-                
-                debug_log(f"Login attempt {attempt + 1} did not succeed, retrying...", "LOGIN")
-                time.sleep(3)
-                
+{{ ... }}
             except Exception as e:
                 debug_log(f"Error during login attempt {attempt + 1}: {e}", "ERROR")
                 time.sleep(3)
                 continue
         
-        debug_log("All automatic login attempts failed", "ERROR")
-        return False
-        
-    except Exception as e:
-        debug_log(f"Error in verify_active_login: {e}", "ERROR")
-        return False
-
-def scroll_page(driver):
-    """Scroll down the page incrementally to load more content with human-like behavior."""
-    debug_log("Scrolling page...", "SCROLL")
-    try:
+            # If we get here, login was successful
+            debug_log("Login verification successful", "LOGIN")
         # Get current position
         old_position = driver.execute_script("return window.pageYOffset;")
         # Scroll by a random amount

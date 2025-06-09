@@ -1505,6 +1505,20 @@ def get_default_log_path():
         print(f"Warning: Could not create log directory in Documents: {e}")
         return "linkedin_commenter.log"
 
+def load_log():
+    """
+    Load processed post IDs from a JSON file in the default log directory.
+    Returns an empty list if the file does not exist.
+    """
+    try:
+        log_file = os.path.join(get_default_log_path(), "processed_log.json")
+        if os.path.exists(log_file):
+            with open(log_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        debug_log(f"Error loading processed log: {e}", level="ERROR")
+    return []
+
 def debug_log(message, level="INFO"):
     """Enhanced debug logging with timestamps and levels."""
     # Get log level from config or use default
@@ -1550,40 +1564,67 @@ def debug_log(message, level="INFO"):
         print(log_message)  # Fallback to console
 
 def setup_chrome_driver():
-    """Set up and return a Chrome WebDriver instance."""
+    """
+    Set up and return a Chrome WebDriver instance.
+    - Prefer system Chrome if available (unless overridden).
+    - Use headless mode by default unless debug_mode is set.
+    - Fallback to bundled Chromium only if needed.
+    """
     chrome_options = Options()
-    
-    # Get Chrome path from environment or config
-    chrome_path = os.getenv('CHROME_PATH') or get_config().get('chrome_path')
-    
-    if chrome_path and os.path.exists(chrome_path):
-        debug_log(f"Using Chrome at: {chrome_path}")
-        chrome_options.binary_location = chrome_path
+    config = get_config()
+    debug_mode = config.get('debug_mode', False)
+
+    # Headless mode unless debug_mode is set
+    if not debug_mode:
+        chrome_options.add_argument('--headless=new')  # Use new headless for modern Chrome
     else:
-        debug_log("No Chrome path provided, using system Chrome")
-    
-    # Add other options
-    chrome_profile_path = os.getenv('LINKEDIN_CHROME_PROFILE_PATH')
-    if chrome_profile_path:
-        chrome_options.add_argument(f"--user-data-dir={chrome_profile_path}")
-    
+        debug_log("Debug mode enabled: running Chrome in headed mode", "DEBUG")
+
     chrome_options.add_argument("--disable-notifications")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--window-size=1200,900")
     chrome_options.add_argument("--window-position=50,50")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
-    
+
+    # Add Chrome profile if specified
+    chrome_profile_path = os.getenv('LINKEDIN_CHROME_PROFILE_PATH')
+    if chrome_profile_path:
+        chrome_options.add_argument(f"--user-data-dir={chrome_profile_path}")
+
+    # Try user-specified chrome_path first
+    chrome_path = os.getenv('CHROME_PATH') or config.get('chrome_path')
+    if chrome_path and os.path.exists(chrome_path):
+        debug_log(f"Using Chrome at: {chrome_path}")
+        chrome_options.binary_location = chrome_path
+    else:
+        # Try common system Chrome install locations
+        possible_chrome_paths = [
+            r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+            r"/usr/bin/google-chrome",
+            r"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ]
+        found = False
+        for path in possible_chrome_paths:
+            if os.path.exists(path):
+                debug_log(f"Detected system Chrome at: {path}")
+                chrome_options.binary_location = path
+                found = True
+                break
+        if not found:
+            # Fallback to bundled Chromium if present
+            bundled_chrome = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../dist/win-unpacked/resources/chrome-win/chrome.exe'))
+            if os.path.exists(bundled_chrome):
+                debug_log(f"Falling back to bundled Chromium at: {bundled_chrome}")
+                chrome_options.binary_location = bundled_chrome
+            else:
+                debug_log("No Chrome or Chromium binary found. Will use webdriver_manager default.", "WARNING")
+
     try:
-        # Try using the specified Chrome binary
-        if chrome_path and os.path.exists(chrome_path):
-            service = Service()
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-        else:
-            # Fall back to webdriver_manager
-            driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
-                options=chrome_options
-            )
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=chrome_options
+        )
         return driver
     except Exception as e:
         debug_log(f"Error setting up Chrome driver: {e}", level="ERROR")

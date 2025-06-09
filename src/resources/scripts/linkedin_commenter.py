@@ -772,7 +772,7 @@ def process_posts(driver):
         time_filter = None
         if 'datePosted=' in current_url:
             try:
-                time_filter = current_url.split('datePosted=')[1].split('&')[0].strip('\"\\'')
+                time_filter = current_url.split('datePosted=')[1].split('&')[0].strip('"\'')
                 debug_log(f"Extracted time filter from URL: {time_filter}", "DEBUG")
             except Exception as e:
                 debug_log(f"Error extracting time filter from URL: {e}", "WARNING")

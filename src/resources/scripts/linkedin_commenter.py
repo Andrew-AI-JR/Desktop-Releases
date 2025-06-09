@@ -236,6 +236,10 @@ def main():
         try:
             debug_log("[START] Starting LinkedIn Commenter", "INFO")
             
+            # Initialize comment counters
+            session_comments = 0
+            daily_comments = 0
+            
             # Initialize search performance tracker
             try:
                 search_tracker = SearchPerformanceTracker()
@@ -262,10 +266,6 @@ def main():
                 debug_log(f"[ERROR] Failed to initialize browser driver: {driver_error}", "ERROR")
                 debug_log(f"[ERROR] Driver error details: {traceback.format_exc()}", "ERROR")
                 raise
-            
-            # Initialize comment counters
-            session_comments = 0
-            daily_comments = 0
             
             # Verify login
             debug_log("[LOGIN] Verifying LinkedIn login status...", "INFO")

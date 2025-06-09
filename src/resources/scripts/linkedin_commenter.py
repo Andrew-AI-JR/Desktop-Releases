@@ -1520,7 +1520,10 @@ def load_log():
     return []
 
 def debug_log(message, level="INFO"):
-    """Enhanced debug logging with timestamps and levels."""
+    """
+    Enhanced debug logging with timestamps and levels.
+    Also sends logs to Electron GUI when level is INFO or higher.
+    """
     # Get log level from config or use default
     log_level = CONFIG.get('log_level', 'info').upper() if CONFIG else 'INFO'
     level = level.upper()
@@ -1541,6 +1544,10 @@ def debug_log(message, level="INFO"):
     timestamp = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
     log_message = f"{timestamp} [{level}] {message}"
     
+    # Send to Electron GUI if level is INFO or higher
+    if level in ['INFO', 'WARNING', 'ERROR', 'FATAL']:
+        print(f"[APP_OUT]{level}: {message}", flush=True)
+    
     # Get log file path from config or use default
     log_file = CONFIG.get('log_file_path') if CONFIG else None
     if not log_file:
@@ -1557,90 +1564,176 @@ def debug_log(message, level="INFO"):
             f.write(log_message + "\n")
             
         # Also print to console in debug mode
-        if DEBUG_MODE:
+        if DEBUG_MODE or level in ['WARNING', 'ERROR', 'FATAL']:
             print(log_message)
     except Exception as e:
         print(f"Error writing to log file: {e}")
         print(log_message)  # Fallback to console
 
-def setup_chrome_driver():
+def setup_chrome_driver(max_retries=3, retry_delay=5):
     """
-    Set up and return a Chrome WebDriver instance.
-    - Prefer system Chrome if available (unless overridden).
-    - Use headless mode by default unless debug_mode is set.
-    - Fallback to bundled Chromium only if needed.
+    Set up and return a Chrome WebDriver instance with robust error handling.
+    
+    Args:
+        max_retries (int): Maximum number of retry attempts
+        retry_delay (int): Delay between retries in seconds
+        
+    Returns:
+        WebDriver: Configured Chrome WebDriver instance
+        
+    Raises:
+        Exception: If all retry attempts fail
     """
-    chrome_options = Options()
-    config = get_config()
-    debug_mode = config.get('debug_mode', False)
+    attempt = 0
+    last_error = None
+    
+    while attempt < max_retries:
+        attempt += 1
+        driver = None
+        try:
+            debug_log(f"Setting up Chrome WebDriver (Attempt {attempt}/{max_retries})")
+            
+            # Initialize Chrome options
+            chrome_options = Options()
+            config = get_config()
+            debug_mode = config.get('debug_mode', False)
 
-    # Headless mode unless debug_mode is set
-    if not debug_mode:
-        chrome_options.add_argument('--headless=new')  # Use new headless for modern Chrome
-    else:
-        debug_log("Debug mode enabled: running Chrome in headed mode", "DEBUG")
-
-    chrome_options.add_argument("--disable-notifications")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--window-size=1200,900")
-    chrome_options.add_argument("--window-position=50,50")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
-
-    # Add Chrome profile if specified
-    chrome_profile_path = os.getenv('LINKEDIN_CHROME_PROFILE_PATH')
-    if chrome_profile_path:
-        chrome_options.add_argument(f"--user-data-dir={chrome_profile_path}")
-
-    # Try user-specified chrome_path first
-    chrome_path = os.getenv('CHROME_PATH') or config.get('chrome_path')
-    if chrome_path and os.path.exists(chrome_path):
-        debug_log(f"Using Chrome at: {chrome_path}")
-        chrome_options.binary_location = chrome_path
-    else:
-        # Try common system Chrome install locations
-        possible_chrome_paths = [
-            r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-            r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-            r"/usr/bin/google-chrome",
-            r"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        ]
-        found = False
-        for path in possible_chrome_paths:
-            if os.path.exists(path):
-                debug_log(f"Detected system Chrome at: {path}")
-                chrome_options.binary_location = path
-                found = True
-                break
-        if not found:
-            # Fallback to bundled Chromium if present
-            bundled_chrome = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../dist/win-unpacked/resources/chrome-win/chrome.exe'))
-            if os.path.exists(bundled_chrome):
-                debug_log(f"Falling back to bundled Chromium at: {bundled_chrome}")
-                chrome_options.binary_location = bundled_chrome
+            # Configure headless mode
+            if not debug_mode:
+                chrome_options.add_argument('--headless=new')
+                chrome_options.add_argument('--disable-gpu')
+                debug_log("Running Chrome in headless mode")
             else:
-                debug_log("No Chrome or Chromium binary found. Will use webdriver_manager default.", "WARNING")
+                debug_log("Debug mode enabled: running Chrome in headed mode")
 
-    try:
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=chrome_options
-        )
-        return driver
-    except Exception as e:
-        debug_log(f"Error setting up Chrome driver: {e}", level="ERROR")
-        raise
+            # Common Chrome options
+            chrome_options.add_argument("--disable-notifications")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--window-size=1200,900")
+            chrome_options.add_argument("--window-position=50,50")
+            chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+            
+            # Disable automation flags that might trigger bot detection
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+
+            # Try to find Chrome/Chromium binary
+            chrome_path = os.getenv('CHROME_PATH') or config.get('chrome_path')
+            
+            # Common Chrome/Chromium paths to check
+            possible_chrome_paths = [
+                chrome_path,
+                r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../dist/win-unpacked/resources/chrome-win/chrome.exe')),
+                "/usr/bin/google-chrome",
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            ]
+            
+            # Remove None and non-existent paths
+            possible_chrome_paths = [p for p in possible_chrome_paths if p and os.path.exists(p)]
+            
+            if not possible_chrome_paths:
+                debug_log("No Chrome/Chromium binary found. Using webdriver_manager default.", "WARNING")
+                chrome_options.binary_location = None
+            else:
+                # Use the first valid path
+                chrome_options.binary_location = possible_chrome_paths[0]
+                debug_log(f"Using Chrome/Chromium at: {chrome_options.binary_location}")
+            
+            # Set up ChromeDriver service
+            service = None
+            chromedriver_path = None
+            
+            # If using bundled Chromium, try to use its chromedriver
+            if chrome_options.binary_location and 'chrome-win' in chrome_options.binary_location.replace('\\', '/'):
+                chromedriver_path = os.path.join(os.path.dirname(chrome_options.binary_location), 'chromedriver.exe')
+                if os.path.exists(chromedriver_path):
+                    debug_log(f"Using bundled chromedriver: {chromedriver_path}")
+                    service = Service(executable_path=chromedriver_path)
+            
+            # Initialize WebDriver
+            debug_log("Initializing Chrome WebDriver...")
+            
+            try:
+                if service:
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                else:
+                    # Use webdriver_manager to handle ChromeDriver
+                    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+                
+                # Test Chrome is responsive
+                driver.set_page_load_timeout(30)
+                driver.get("about:blank")
+                debug_log("Chrome WebDriver initialized successfully")
+                return driver
+                
+            except Exception as e:
+                if driver:
+                    try:
+                        driver.quit()
+                    except:
+                        pass
+                raise
+                
+        except Exception as e:
+            last_error = str(e)
+            debug_log(f"Chrome WebDriver initialization failed (Attempt {attempt}/{max_retries}): {last_error}", "WARNING")
+            
+            # Clean up any remaining Chrome processes
+            try:
+                if sys.platform == 'win32':
+                    os.system('taskkill /f /im chrome.exe >nul 2>&1')
+                    os.system('taskkill /f /im chromedriver.exe >nul 2>&1')
+                else:
+                    os.system('pkill -f chrome >/dev/null 2>&1')
+                    os.system('pkill -f chromedriver >/dev/null 2>&1')
+            except:
+                pass
+                
+            if attempt < max_retries:
+                debug_log(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                debug_log("Maximum retry attempts reached. Giving up.", "ERROR")
+                raise Exception(f"Failed to initialize Chrome WebDriver after {max_retries} attempts. Last error: {last_error}")
+    
+    # This should never be reached due to the raise in the else clause above
+    raise Exception("Failed to initialize Chrome WebDriver")
 
 if __name__ == "__main__":
+    driver = None
     try:
         main()
     except KeyboardInterrupt:
         print("\nScript interrupted by user. Cleaning up...")
-        if 'driver' in locals():
-            driver.quit()
+        if 'driver' in locals() and driver is not None:
+            try:
+                driver.quit()
+            except:
+                pass
     except Exception as e:
-        print(f"\nFatal error: {str(e)}")
+        error_msg = f"\nFatal error: {str(e)}"
+        print(error_msg)
         print(traceback.format_exc())
-        if 'driver' in locals():
-            driver.quit()
+        debug_log(error_msg, "FATAL")
+        if 'driver' in locals() and driver is not None:
+            try:
+                driver.quit()
+            except:
+                pass
     finally:
+        # Make one final attempt to clean up any remaining Chrome processes
+        try:
+            if sys.platform == 'win32':
+                os.system('taskkill /f /im chrome.exe >nul 2>&1')
+                os.system('taskkill /f /im chromedriver.exe >nul 2>&1')
+            else:
+                os.system('pkill -f chrome >/dev/null 2>&1')
+                os.system('pkill -f chromedriver >/dev/null 2>&1')
+        except:
+            pass
+            
         print("\nScript execution completed") 

@@ -934,14 +934,149 @@ def main():
                         daily_comments = 0  # Reset counter at midnight
                         continue
 
-                    # Navigate to the URL and wait for results to load
+                    # ========== ROBUST ANTI-BOT NAVIGATION ==========
                     try:
                         print("[APP_OUT]🚀 Loading search results...")
+                        
+                        # 1. Pre-navigation stealth delay
+                        pre_nav_delay = random.uniform(5, 12)
+                        debug_log(f"STEALTH: Pre-navigation delay: {pre_nav_delay:.1f}s", "STEALTH")
+                        time.sleep(pre_nav_delay)
+                        
+                        # 2. Realistic navigation pattern for first URL
+                        if i == 1:  # First URL only - establish human browsing pattern
+                            debug_log("STEALTH: Establishing human browsing pattern...", "STEALTH")
+                            
+                            # Visit LinkedIn homepage first
+                            driver.get("https://www.linkedin.com")
+                            time.sleep(random.uniform(6, 10))
+                            
+                            # Simulate human reading behavior
+                            try:
+                                # Random scrolls to simulate reading homepage
+                                for _ in range(random.randint(2, 4)):
+                                    scroll_amount = random.randint(200, 600)
+                                    driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+                                    time.sleep(random.uniform(1.5, 3.5))
+                                
+                                # Random mouse movement simulation
+                                ActionChains(driver).move_by_offset(
+                                    random.randint(100, 400), 
+                                    random.randint(100, 300)
+                                ).perform()
+                                time.sleep(random.uniform(0.8, 2.0))
+                                
+                                # Scroll back to top
+                                driver.execute_script("window.scrollTo(0, 0);")
+                                time.sleep(random.uniform(2, 4))
+                            except:
+                                pass  # Mouse/scroll simulation not critical
+                        
+                        # 3. Navigate to target URL with stealth measures
+                        debug_log(f"STEALTH: Navigating to target URL: {url}", "STEALTH")
                         driver.get(url)
                         print(f"[APP_OUT]🌐 Navigated to: {url}")
                         
-                        # Wait a moment for initial page load
-                        time.sleep(3)
+                        # 4. Extended human-like page load waiting
+                        initial_wait = random.uniform(8, 15)
+                        debug_log(f"STEALTH: Initial page load wait: {initial_wait:.1f}s", "STEALTH")
+                        time.sleep(initial_wait)
+                        
+                        # 5. Comprehensive bot detection checks
+                        current_url_check = driver.current_url.lower()
+                        page_source_check = driver.page_source.lower()
+                        
+                        bot_detection_indicators = [
+                            "challenge", "blocked", "captcha", "security", "verify", 
+                            "unusual activity", "rate limit", "temporarily unavailable",
+                            "access denied", "forbidden", "bot", "automation detected",
+                            "suspicious activity", "please try again later"
+                        ]
+                        
+                        is_bot_detected = any(indicator in current_url_check or indicator in page_source_check 
+                                            for indicator in bot_detection_indicators)
+                        
+                        if is_bot_detected:
+                            debug_log("STEALTH: Bot detection triggered - implementing countermeasures", "WARNING")
+                            print(f"[APP_OUT]🛡️ Bot detection triggered - taking defensive action...")
+                            
+                            # AGGRESSIVE COUNTERMEASURES
+                            # Phase 1: Immediate evasion
+                            extended_delay = random.uniform(90, 180)
+                            debug_log(f"STEALTH: Phase 1 - Extended evasion delay: {extended_delay:.1f}s", "STEALTH")
+                            time.sleep(extended_delay)
+                            
+                            # Phase 2: Human behavior simulation
+                            try:
+                                debug_log("STEALTH: Phase 2 - Simulating human browsing patterns", "STEALTH")
+                                
+                                # Visit multiple innocent pages to appear human
+                                innocent_pages = [
+                                    "https://www.google.com",
+                                    "https://www.linkedin.com",
+                                    "https://www.linkedin.com/feed"
+                                ]
+                                
+                                for page in innocent_pages:
+                                    driver.get(page)
+                                    time.sleep(random.uniform(15, 30))
+                                    
+                                    # Simulate reading and interaction
+                                    try:
+                                        # Random scrolling
+                                        for _ in range(random.randint(3, 6)):
+                                            scroll_amount = random.randint(300, 800)
+                                            driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+                                            time.sleep(random.uniform(2, 5))
+                                        
+                                        # Random mouse movements
+                                        ActionChains(driver).move_by_offset(
+                                            random.randint(50, 300), 
+                                            random.randint(50, 300)
+                                        ).perform()
+                                        time.sleep(random.uniform(1, 3))
+                                        
+                                        driver.execute_script("window.scrollTo(0, 0);")
+                                        time.sleep(random.uniform(2, 4))
+                                    except:
+                                        pass
+                                
+                                # Phase 3: Re-attempt target URL
+                                debug_log("STEALTH: Phase 3 - Re-attempting target URL", "STEALTH")
+                                driver.get(url)
+                                time.sleep(random.uniform(10, 20))
+                                
+                            except Exception as countermeasure_error:
+                                debug_log(f"STEALTH: Countermeasure error: {countermeasure_error}", "WARNING")
+                            
+                            # Final check - if still blocked, skip this URL
+                            final_check = driver.current_url.lower()
+                            final_source = driver.page_source.lower()
+                            if any(indicator in final_check or indicator in final_source 
+                                 for indicator in bot_detection_indicators):
+                                debug_log("STEALTH: Still blocked after countermeasures - skipping URL", "WARNING")
+                                print("[APP_OUT]🚫 Unable to bypass bot detection - skipping this URL")
+                                search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
+                                continue
+                        
+                        # 6. Additional human behavior simulation
+                        debug_log("STEALTH: Post-navigation human simulation", "STEALTH")
+                        try:
+                            # Simulate reading the page before interacting
+                            reading_time = random.uniform(3, 8)
+                            time.sleep(reading_time)
+                            
+                            # Small random scrolls to simulate reading
+                            for _ in range(random.randint(1, 3)):
+                                scroll_amount = random.randint(100, 400)
+                                driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+                                time.sleep(random.uniform(1, 3))
+                            
+                            # Return to top of page
+                            driver.execute_script("window.scrollTo(0, 0);")
+                            time.sleep(random.uniform(1, 2))
+                        except:
+                            pass  # Not critical if this fails
                         
                         # Check what page we actually landed on
                         current_url = driver.current_url
@@ -1557,15 +1692,40 @@ def process_posts(driver):
                     print(f"[APP_OUT]✍️ Comment generated: {custom_message[:50]}...")
                     debug_log(f"Generated comment: {custom_message[:100]}...", "DATA")
                     
-                    # Post comment
-                    print("[APP_OUT]📤 Posting comment...")
-                    debug_log("Attempting to post comment", "COMMENT")
+                    # ========== STEALTH COMMENT POSTING ==========
+                    print("[APP_OUT]📤 Posting comment with STEALTH measures...")
+                    debug_log("STEALTH: Initiating advanced comment posting sequence", "COMMENT")
                     try:
+                        # 1. Pre-comment human behavior simulation
+                        pre_comment_delay = random.uniform(8, 18)
+                        debug_log(f"STEALTH: Pre-comment preparation delay: {pre_comment_delay:.1f}s", "COMMENT")
+                        print(f"[APP_OUT]🧠 Simulating human thought process...")
+                        time.sleep(pre_comment_delay)
+                        
+                        # 2. Simulate reading the post again before commenting
+                        try:
+                            debug_log("STEALTH: Simulating re-reading post before commenting", "COMMENT")
+                            # Scroll to post and simulate reading
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post)
+                            time.sleep(random.uniform(3, 7))
+                            
+                            # Random small mouse movements (like focusing)
+                            ActionChains(driver).move_by_offset(
+                                random.randint(-30, 30), 
+                                random.randint(-20, 20)
+                            ).perform()
+                            time.sleep(random.uniform(1, 3))
+                        except:
+                            pass  # Not critical
+                        
+                        # 3. Attempt comment posting with retry logic
                         success = post_comment(driver, post, custom_message)
+                        
                         if success:
                             print("[APP_OUT]✅ Comment posted successfully!")
-                            debug_log("Successfully posted comment", "SUCCESS")
+                            debug_log("STEALTH: Comment posted successfully", "SUCCESS")
                             posts_commented += 1
+                            
                             # Save to comment history
                             comment_history[post_id] = {
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1573,8 +1733,58 @@ def process_posts(driver):
                                 "score": final_score
                             }
                             save_comment_history(comment_history)
-                            print(f"[APP_OUT]⏱️ Taking break between comments...")
-                            time.sleep(random.uniform(3, 7))  # Random delay between comments
+                            
+                            # 4. Extended post-comment human behavior
+                            print(f"[APP_OUT]🎭 Simulating post-comment human behavior...")
+                            debug_log("STEALTH: Post-comment human behavior simulation", "COMMENT")
+                            
+                            # Simulate checking the posted comment
+                            verification_delay = random.uniform(5, 12)
+                            debug_log(f"STEALTH: Comment verification delay: {verification_delay:.1f}s", "COMMENT")
+                            time.sleep(verification_delay)
+                            
+                            # Random scroll to see the comment in context
+                            try:
+                                scroll_adjustment = random.randint(-200, 200)
+                                driver.execute_script(f"window.scrollBy(0, {scroll_adjustment});")
+                                time.sleep(random.uniform(2, 5))
+                                
+                                # Scroll back to original position
+                                driver.execute_script(f"window.scrollBy(0, {-scroll_adjustment});")
+                                time.sleep(random.uniform(1, 3))
+                            except:
+                                pass
+                            
+                            # 5. Extended inter-comment delay with human patterns
+                            base_delay = random.uniform(45, 90)  # Much longer base delay
+                            additional_delay = random.uniform(30, 60)  # Additional randomization
+                            total_delay = base_delay + additional_delay
+                            
+                            print(f"[APP_OUT]⏱️ Taking extended human-like break: {total_delay:.1f}s")
+                            debug_log(f"STEALTH: Extended inter-comment delay: {total_delay:.1f}s", "COMMENT")
+                            
+                            # Break the delay into chunks to simulate human activity
+                            delay_chunks = 3
+                            chunk_size = total_delay / delay_chunks
+                            
+                            for chunk in range(delay_chunks):
+                                time.sleep(chunk_size)
+                                
+                                # Simulate occasional human activity during breaks
+                                if random.random() < 0.4:  # 40% chance
+                                    try:
+                                        # Small mouse movement or scroll
+                                        if random.random() < 0.5:
+                                            ActionChains(driver).move_by_offset(
+                                                random.randint(-50, 50), 
+                                                random.randint(-30, 30)
+                                            ).perform()
+                                        else:
+                                            mini_scroll = random.randint(-100, 100)
+                                            driver.execute_script(f"window.scrollBy(0, {mini_scroll});")
+                                        time.sleep(random.uniform(0.5, 2))
+                                    except:
+                                        pass
                         else:
                             print("[APP_OUT]❌ Failed to post comment")
                             debug_log("Failed to post comment", "ERROR")
@@ -1643,47 +1853,107 @@ def process_posts(driver):
         return posts_commented, hiring_posts_found
 
 def scroll_page(driver):
-    """Scroll down the page incrementally to load more content with human-like behavior."""
-    debug_log("Performing human-like scroll", "SCROLL")
-    print("[APP_OUT]📜 Executing scroll command...")
+    """Scroll down the page incrementally to load more content with EXTREMELY human-like behavior."""
+    debug_log("STEALTH: Performing advanced human-like scroll", "SCROLL")
+    print("[APP_OUT]📜 Executing STEALTH scroll command...")
     try:
-        # Get current position
+        # Get current position and viewport info
         old_position = driver.execute_script("return window.pageYOffset;")
+        viewport_height = driver.execute_script("return window.innerHeight;")
+        page_height = driver.execute_script("return document.body.scrollHeight;")
+        
         print(f"[APP_OUT]📍 Current scroll position: {old_position}px")
+        debug_log(f"STEALTH: Viewport={viewport_height}px, Page={page_height}px, Current={old_position}px", "SCROLL")
         
-        # Try different scroll methods
-        scroll_methods = [
-            # Method 1: Scroll by viewport height
-            "window.scrollBy(0, window.innerHeight * 0.8);",
-            # Method 2: Scroll by fixed amount
-            "window.scrollBy(0, 800);",
-            # Method 3: Scroll to specific position
-            f"window.scrollTo(0, {old_position + random.randint(500, 1200)});"
-        ]
+        # 1. Pre-scroll human behavior simulation
+        pre_scroll_delay = random.uniform(2, 5)
+        debug_log(f"STEALTH: Pre-scroll reading delay: {pre_scroll_delay:.1f}s", "SCROLL")
+        time.sleep(pre_scroll_delay)
         
-        # Pick a random scroll method
-        scroll_command = random.choice(scroll_methods)
-        print(f"[APP_OUT]⚙️ Using scroll method: {scroll_command}")
-        driver.execute_script(scroll_command)
+        # 2. Simulate mouse movement before scrolling (like hovering)
+        try:
+            ActionChains(driver).move_by_offset(
+                random.randint(-50, 50), 
+                random.randint(-30, 30)
+            ).perform()
+            time.sleep(random.uniform(0.3, 0.8))
+        except:
+            pass  # Mouse simulation not critical
         
-        # Random delay to mimic human behavior
-        time.sleep(random.uniform(1.5, 3.0))
+        # 3. Multi-step scrolling pattern (humans don't scroll in one big jump)
+        total_scroll_target = random.randint(600, 1200)
+        scroll_steps = random.randint(2, 4)
+        step_size = total_scroll_target // scroll_steps
         
-        # Get new position
+        debug_log(f"STEALTH: Multi-step scroll - {scroll_steps} steps of ~{step_size}px each", "SCROLL")
+        
+        actual_scrolled = 0
+        for step in range(scroll_steps):
+            # Randomize each step slightly
+            step_scroll = step_size + random.randint(-100, 100)
+            
+            # Ensure we don't scroll negative amounts
+            if step_scroll < 100:
+                step_scroll = 100
+            
+            # 4. Use realistic scroll methods with variation
+            scroll_methods = [
+                f"window.scrollBy(0, {step_scroll});",
+                f"window.scrollTo(0, {old_position + actual_scrolled + step_scroll});",
+                f"window.scrollBy({{top: {step_scroll}, behavior: 'smooth'}});",
+            ]
+            
+            scroll_command = random.choice(scroll_methods)
+            debug_log(f"STEALTH: Step {step+1}/{scroll_steps}: {scroll_command}", "SCROLL")
+            
+            try:
+                driver.execute_script(scroll_command)
+                actual_scrolled += step_scroll
+                
+                # 5. Human reading pause between scroll steps
+                reading_pause = random.uniform(1.5, 4.0)
+                debug_log(f"STEALTH: Reading pause: {reading_pause:.1f}s", "SCROLL")
+                time.sleep(reading_pause)
+                
+                # 6. Occasional micro-scrolls (humans adjust their view)
+                if random.random() < 0.3:  # 30% chance
+                    micro_scroll = random.randint(-50, 50)
+                    driver.execute_script(f"window.scrollBy(0, {micro_scroll});")
+                    time.sleep(random.uniform(0.5, 1.0))
+                    debug_log(f"STEALTH: Micro-scroll adjustment: {micro_scroll}px", "SCROLL")
+            
+            except Exception as step_error:
+                debug_log(f"STEALTH: Step scroll error: {step_error}", "WARNING")
+                continue
+        
+        # 7. Final position check and human behavior
+        time.sleep(random.uniform(1, 2))
         new_position = driver.execute_script("return window.pageYOffset;")
         scroll_delta = new_position - old_position
         
-        print(f"[APP_OUT]📊 Scroll result: {old_position}px → {new_position}px (Δ{scroll_delta}px)")
-        debug_log(f"Scrolled from {old_position} to {new_position} (+{scroll_delta}px)", "SCROLL")
+        # 8. Simulate brief reading at new position
+        if scroll_delta > 0:
+            reading_time = random.uniform(2, 6)
+            debug_log(f"STEALTH: Post-scroll reading time: {reading_time:.1f}s", "SCROLL")
+            time.sleep(reading_time)
         
-        # Return True if we actually scrolled
+        print(f"[APP_OUT]📊 STEALTH Scroll result: {old_position}px → {new_position}px (Δ{scroll_delta}px)")
+        debug_log(f"STEALTH: Multi-step scroll completed: {old_position} → {new_position} (+{scroll_delta}px)", "SCROLL")
+        
+        # 9. Return success status
         success = new_position > old_position
-        print(f"[APP_OUT]{'✅' if success else '❌'} Scroll {'successful' if success else 'failed'}")
+        print(f"[APP_OUT]{'✅' if success else '❌'} STEALTH Scroll {'successful' if success else 'failed'}")
+        
+        # 10. Check if we're near the bottom of the page
+        if new_position + viewport_height >= page_height - 100:
+            debug_log("STEALTH: Near bottom of page detected", "SCROLL")
+            print("[APP_OUT]📄 Near bottom of page")
+        
         return success
         
     except Exception as e:
-        print(f"[APP_OUT]❌ Error during scroll: {e}")
-        debug_log(f"Error during scroll: {e}", "ERROR")
+        print(f"[APP_OUT]❌ Error during STEALTH scroll: {e}")
+        debug_log(f"STEALTH: Error during advanced scroll: {e}", "ERROR")
         return False
 
 def ensure_logged_in(driver, max_attempts=2):
@@ -2216,7 +2486,7 @@ def debug_log(message, level="INFO"):
 
 def setup_chrome_driver(max_retries=3, retry_delay=5):
     """
-    Set up and return a Chrome WebDriver instance with robust error handling.
+    Set up and return a Chrome WebDriver instance with EXTREMELY robust anti-bot detection.
     
     Args:
         max_retries (int): Maximum number of retry attempts
@@ -2235,29 +2505,103 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
         attempt += 1
         driver = None
         try:
-            debug_log(f"Setting up Chrome WebDriver (Attempt {attempt}/{max_retries})")
+            debug_log(f"Setting up STEALTH Chrome WebDriver (Attempt {attempt}/{max_retries})")
             
-            # Initialize Chrome options
+            # Initialize Chrome options with STEALTH configuration
             chrome_options = Options()
             config = get_config()
             debug_mode = config.get('debug_mode', False)
 
-            # Configure headless mode
+            # ========== CRITICAL ANTI-BOT DETECTION MEASURES ==========
+            
+            # 1. Random realistic viewport sizes
+            viewports = [
+                (1920, 1080), (1366, 768), (1536, 864), (1440, 900), 
+                (1280, 720), (1600, 900), (1024, 768), (1280, 800)
+            ]
+            width, height = random.choice(viewports)
+            
+            # 2. Pool of realistic user agents (latest Chrome versions)
+            user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+            ]
+            selected_ua = random.choice(user_agents)
+            
+            # Configure headless mode with stealth
             if not debug_mode:
                 chrome_options.add_argument('--headless=new')
                 chrome_options.add_argument('--disable-gpu')
-                debug_log("Running Chrome in headless mode")
+                chrome_options.add_argument('--disable-software-rasterizer')
+                debug_log("Running Chrome in STEALTH headless mode")
             else:
-                debug_log("Debug mode enabled: running Chrome in headed mode")
+                debug_log("Debug mode enabled: running Chrome in headed STEALTH mode")
 
-            # Common Chrome options
-            chrome_options.add_argument("--disable-notifications")
+            # 3. EXTENSIVE Anti-Detection Arguments
+            chrome_options.add_argument(f"--window-size={width},{height}")
+            chrome_options.add_argument(f"--user-agent={selected_ua}")
+            
+            # Basic stealth
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            chrome_options.add_argument("--window-size=1200,900")
-            chrome_options.add_argument("--window-position=50,50")
-            chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+            chrome_options.add_argument("--disable-gpu")
+            
+            # Advanced stealth - hide automation traces
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            chrome_options.add_argument("--disable-features=TranslateUI")
+            chrome_options.add_argument("--disable-ipc-flooding-protection")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-component-extensions-with-background-pages")
+            chrome_options.add_argument("--disable-default-apps")
+            chrome_options.add_argument("--disable-extensions-http-throttling")
+            
+            # Memory and performance
+            chrome_options.add_argument("--memory-pressure-off")
+            chrome_options.add_argument("--max_old_space_size=4096")
+            
+            # Network and security
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--disable-notifications")
+            chrome_options.add_argument("--disable-popup-blocking")
+            
+            # Language and locale (randomize)
+            locales = ["en-US,en;q=0.9", "en-GB,en;q=0.9", "en-CA,en;q=0.9"]
+            selected_locale = random.choice(locales)
+            chrome_options.add_argument(f"--lang={selected_locale.split(',')[0]}")
+            
+            # 4. Advanced Experimental Options for Maximum Stealth
+            chrome_options.add_experimental_option("excludeSwitches", [
+                "enable-automation", 
+                "enable-logging",
+                "disable-extensions",
+                "disable-dev-shm-usage",
+                "disable-component-extensions-with-background-pages"
+            ])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # 5. Fake plugin and webdriver detection
+            chrome_options.add_experimental_option("prefs", {
+                "profile.default_content_setting_values.notifications": 2,
+                "profile.default_content_settings.popups": 0,
+                "profile.managed_default_content_settings.images": 1,
+                "profile.content_settings.plugin_whitelist.adobe-flash-player": 1,
+                "profile.content_settings.exceptions.plugins.*,*.per_resource.adobe-flash-player": 1,
+                "PluginsAllowedForUrls": ["https://linkedin.com"],
+                "profile.default_content_setting_values.geolocation": 2
+            })
+            
+            # 6. Randomize window position
+            chrome_options.add_argument(f"--window-position={random.randint(0, 100)},{random.randint(0, 100)}")
+            
+            debug_log(f"STEALTH CONFIG: Viewport={width}x{height}, UA={selected_ua[:50]}...")
             
             # Disable automation flags that might trigger bot detection
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -2304,10 +2648,102 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             try:
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 
-                # Test Chrome is responsive
-                driver.set_page_load_timeout(30)
-                driver.get("about:blank")
-                debug_log("Chrome WebDriver initialized successfully")
+                # ========== POST-INITIALIZATION STEALTH MEASURES ==========
+                
+                # 7. Execute stealth JavaScript to hide webdriver traces
+                stealth_js = """
+                    // Hide webdriver property
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined,
+                    });
+                    
+                    // Hide automation indicators
+                    delete navigator.__proto__.webdriver;
+                    
+                    // Fake plugins
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [
+                            {
+                                0: {type: "application/x-google-chrome-pdf", suffixes: "pdf", description: "Portable Document Format", filename: "internal-pdf-viewer"},
+                                description: "Portable Document Format",
+                                filename: "internal-pdf-viewer",
+                                length: 1,
+                                name: "Chrome PDF Plugin"
+                            },
+                            {
+                                0: {type: "application/pdf", suffixes: "pdf", description: "", filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai"},
+                                description: "",
+                                filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai",
+                                length: 1,
+                                name: "Chrome PDF Viewer"
+                            }
+                        ],
+                    });
+                    
+                    // Fake languages
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en'],
+                    });
+                    
+                    // Fake permissions
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.query = (parameters) => (
+                        parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                    );
+                    
+                    // Hide chrome runtime
+                    if (window.chrome && window.chrome.runtime) {
+                        delete window.chrome.runtime.onConnect;
+                        delete window.chrome.runtime.onMessage;
+                    }
+                    
+                    // Randomize screen properties slightly
+                    Object.defineProperty(screen, 'availHeight', {
+                        get: () => screen.height - Math.floor(Math.random() * 10),
+                    });
+                    
+                    // Override image loading to appear more human
+                    const originalCreateElement = document.createElement;
+                    document.createElement = function(tagName) {
+                        const element = originalCreateElement.call(document, tagName);
+                        if (tagName.toLowerCase() === 'img') {
+                            setTimeout(() => {
+                                if (Math.random() > 0.1) {
+                                    element.src = element.src;
+                                }
+                            }, Math.random() * 100);
+                        }
+                        return element;
+                    };
+                """
+                
+                # Execute stealth script
+                driver.execute_script(stealth_js)
+                debug_log("STEALTH: JavaScript anti-detection measures applied")
+                
+                # 8. Set realistic page load timeout and test responsiveness
+                driver.set_page_load_timeout(45)  # More realistic timeout
+                driver.implicitly_wait(10)  # Reasonable implicit wait
+                
+                # 9. Navigate to a neutral page first (appears more human)
+                debug_log("STEALTH: Initial navigation to neutral page...")
+                driver.get("https://www.google.com")
+                time.sleep(random.uniform(2, 4))  # Random delay
+                
+                # 10. Add realistic mouse movement simulation
+                try:
+                    # Simulate human-like mouse movement
+                    ActionChains(driver).move_by_offset(
+                        random.randint(50, 200), 
+                        random.randint(50, 200)
+                    ).perform()
+                    time.sleep(random.uniform(0.5, 1.5))
+                except:
+                    pass  # Mouse simulation not critical
+                
+                debug_log("STEALTH Chrome WebDriver initialized successfully with advanced anti-bot measures")
                 return driver
                 
             except Exception as e:

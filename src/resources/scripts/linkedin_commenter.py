@@ -772,7 +772,36 @@ def main():
                         print("[APP_OUT]🚀 Loading search results...")
                         driver.get(url)
                         print(f"[APP_OUT]🌐 Navigated to: {url}")
-                        # Dynamically wait for the search results container to be visible
+                        
+                        # Wait a moment for initial page load
+                        time.sleep(3)
+                        
+                        # Check what page we actually landed on
+                        current_url = driver.current_url
+                        page_title = driver.title
+                        print(f"[APP_OUT]📄 Current URL: {current_url}")
+                        print(f"[APP_OUT]📋 Page title: {page_title}")
+                        
+                        # Check for common LinkedIn issues
+                        page_source_snippet = driver.page_source[:1000].lower()
+                        
+                        # Check for subscription/premium prompts
+                        if any(keyword in page_source_snippet for keyword in ['premium', 'subscription', 'upgrade', 'linkedin premium']):
+                            print("[APP_OUT]💰 DETECTED: Premium/subscription prompt on page")
+                            debug_log("Premium subscription prompt detected", "WARNING")
+                        
+                        # Check for login issues
+                        if any(keyword in page_source_snippet for keyword in ['sign in', 'log in', 'join linkedin']):
+                            print("[APP_OUT]🔐 DETECTED: Login required")
+                            debug_log("Login required - authentication issue", "WARNING")
+                        
+                        # Check for rate limiting/blocking
+                        if any(keyword in page_source_snippet for keyword in ['blocked', 'rate limit', 'too many requests', 'captcha']):
+                            print("[APP_OUT]🚫 DETECTED: Possible rate limiting or blocking")
+                            debug_log("Rate limiting or blocking detected", "WARNING")
+                        
+                        # Look for the search results container with timeout
+                        print("[APP_OUT]⏳ Waiting for search results container...")
                         WebDriverWait(driver, 30).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, ".reusable-search__entity-result-list"))
                         )
@@ -789,14 +818,49 @@ def main():
                         
                         debug_log("Search results page loaded and is visible.", "NAVIGATION")
                     except TimeoutException:
-                        print("[APP_OUT]⚠️ No search results found or page timeout")
+                        print("[APP_OUT]⚠️ TIMEOUT: Search results container not found")
                         debug_log(f"TimeoutException: No search results found or page did not load for URL: {url}", "WARNING")
-                        # Check for "No results found" message
+                        
+                        # Comprehensive page analysis when timeout occurs
                         try:
-                            if "No results found" in driver.page_source:
-                                debug_log("Confirmed 'No results found' on page.", "NAVIGATION")
-                        except:
-                            pass
+                            current_url_timeout = driver.current_url
+                            page_title_timeout = driver.title
+                            print(f"[APP_OUT]📄 Timeout - Current URL: {current_url_timeout}")
+                            print(f"[APP_OUT]📋 Timeout - Page title: {page_title_timeout}")
+                            
+                            # Check what's actually on the page
+                            page_source = driver.page_source.lower()
+                            
+                            if "premium" in page_source or "subscription" in page_source:
+                                print("[APP_OUT]💰 TIMEOUT CAUSE: Premium subscription required")
+                            elif "sign in" in page_source or "log in" in page_source:
+                                print("[APP_OUT]🔐 TIMEOUT CAUSE: Not logged in properly")  
+                            elif "no results" in page_source:
+                                print("[APP_OUT]📭 TIMEOUT CAUSE: No search results found")
+                            elif "blocked" in page_source or "rate limit" in page_source:
+                                print("[APP_OUT]🚫 TIMEOUT CAUSE: Blocked or rate limited")
+                            else:
+                                print("[APP_OUT]❓ TIMEOUT CAUSE: Unknown - page loaded but selector not found")
+                                # Look for alternative selectors
+                                alternative_selectors = [
+                                    ".search-results-container",
+                                    ".search-results",
+                                    ".feed-shared-update-v2",
+                                    ".feed-shared-update",
+                                    "[data-test-id='search-results']",
+                                    ".artdeco-card"
+                                ]
+                                for selector in alternative_selectors:
+                                    try:
+                                        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                                        if elements:
+                                            print(f"[APP_OUT]🔍 Found {len(elements)} elements with selector: {selector}")
+                                    except:
+                                        pass
+                            
+                        except Exception as timeout_debug_e:
+                            print(f"[APP_OUT]❌ Error during timeout analysis: {timeout_debug_e}")
+                        
                         search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
                         continue # Move to the next URL
                     except Exception as nav_e:

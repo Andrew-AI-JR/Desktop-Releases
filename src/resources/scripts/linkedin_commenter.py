@@ -3140,131 +3140,47 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--disable-software-rasterizer')
-            chrome_options.add_argument('--virtual-time-budget=1000')
             debug_log("Running Chrome in ULTRA-STEALTH headless mode (production mode)")
             
-            # CRITICAL: Disable ALL Google sign-in and sync prompts
+            # CRITICAL: Essential stealth arguments (tested and working)
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--disable-plugins")
+            chrome_options.add_argument("--disable-images")
+            chrome_options.add_argument("--disable-javascript")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            
+            # CRITICAL: Google sign-in and sync prevention (streamlined)
             chrome_options.add_argument('--disable-signin-promo')
-            chrome_options.add_argument('--disable-signin-frame-client-certs')
             chrome_options.add_argument('--disable-first-run-ui')
             chrome_options.add_argument('--no-first-run')
             chrome_options.add_argument('--disable-default-browser-check')
             chrome_options.add_argument('--disable-sync')
-            chrome_options.add_argument('--disable-account-consistency')
-            chrome_options.add_argument('--disable-signin-scoped-device-id')
-            chrome_options.add_argument('--disable-features=ChromeSigninInterceptor')
-            chrome_options.add_argument('--disable-features=AccountConsistency')
-            chrome_options.add_argument('--disable-features=Sync')
-            
-            # CRITICAL: Prevent Google account prompts and suggestions
-            chrome_options.add_argument('--disable-features=GooglePasswordManager')
-            chrome_options.add_argument('--disable-features=PasswordManager')
-            chrome_options.add_argument('--disable-features=AutofillCreditCard')
-            chrome_options.add_argument('--disable-features=AutofillAddresses')
-            chrome_options.add_argument('--disable-password-generation')
-            chrome_options.add_argument('--disable-save-password-bubble')
-            
-            # Enhanced privacy to prevent ANY user prompts
+            chrome_options.add_argument('--disable-default-apps')
+            chrome_options.add_argument('--disable-translate')
             chrome_options.add_argument('--disable-infobars')
-            chrome_options.add_argument('--disable-web-resources')
+            chrome_options.add_argument('--disable-notifications')
+            chrome_options.add_argument('--disable-popup-blocking')
+            
+            # Privacy and tracking prevention (essential only)
+            chrome_options.add_argument('--disable-background-networking')
             chrome_options.add_argument('--disable-client-side-phishing-detection')
             chrome_options.add_argument('--disable-component-update')
-            chrome_options.add_argument('--disable-default-apps')
             chrome_options.add_argument('--disable-domain-reliability')
-            chrome_options.add_argument('--disable-background-networking')
-            chrome_options.add_argument('--disable-features=MediaRouter')
-            chrome_options.add_argument('--disable-features=VoiceInteraction')
-            chrome_options.add_argument('--incognito')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+            chrome_options.add_argument('--disable-ipc-flooding-protection')
             
-            # ULTIMATE: Additional protection against manual intervention
-            chrome_options.add_argument('--disable-features=TranslateUI')
-            chrome_options.add_argument('--disable-features=TabHover')
-            chrome_options.add_argument('--disable-features=ChromeLabs')
-            chrome_options.add_argument('--disable-features=DownloadBubble')
-            chrome_options.add_argument('--disable-features=DownloadBubbleV2')
-            chrome_options.add_argument('--disable-desktop-notifications')
-            chrome_options.add_argument('--disable-extensions-file-access-check')
-            chrome_options.add_argument('--disable-extensions-http-throttling')
-            chrome_options.add_argument('--disable-file-system')
-            chrome_options.add_argument('--disable-plugins')
-            chrome_options.add_argument('--disable-print-preview')
-            chrome_options.add_argument('--disable-prompt-on-repost')
-            chrome_options.add_argument('--disable-renderer-accessibility')
-            chrome_options.add_argument('--disable-search-engine-choice-screen')
-            chrome_options.add_argument('--disable-shared-workers')
-            chrome_options.add_argument('--disable-speech-api')
-            chrome_options.add_argument('--disable-translate')
-            chrome_options.add_argument('--disable-voice-input')
-            chrome_options.add_argument('--disable-wake-on-wifi')
-            chrome_options.add_argument('--no-pings')
-            chrome_options.add_argument('--no-referrers')
-            chrome_options.add_argument('--silent')
-            
-            # 3. ULTRA-ENHANCED Anti-Detection Arguments
-            chrome_options.add_argument(f"--window-size={width},{height}")
-            chrome_options.add_argument(f"--user-agent={selected_ua}")
-            
-            # Basic stealth (existing)
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            
-            # Advanced stealth - hide automation traces (existing)
-            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-            chrome_options.add_argument("--disable-features=TranslateUI")
-            chrome_options.add_argument("--disable-ipc-flooding-protection")
-            chrome_options.add_argument("--disable-renderer-backgrounding")
-            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-            chrome_options.add_argument("--disable-background-timer-throttling")
-            chrome_options.add_argument("--disable-component-extensions-with-background-pages")
-            chrome_options.add_argument("--disable-default-apps")
-            chrome_options.add_argument("--disable-extensions-http-throttling")
-            
-            # NEW ULTRA-STEALTH ADDITIONS
-            # Advanced browser fingerprint randomization
-            chrome_options.add_argument("--disable-features=WebRTC")
-            chrome_options.add_argument("--disable-features=WebGL")
-            chrome_options.add_argument("--disable-features=WebGL2")
-            chrome_options.add_argument("--disable-features=Geolocation")
-            chrome_options.add_argument("--disable-features=MediaStream")
-            chrome_options.add_argument("--disable-features=VoiceActivation")
-            chrome_options.add_argument("--disable-speech-synthesis-api")
-            chrome_options.add_argument("--disable-speech-api")
-            chrome_options.add_argument("--disable-wake-on-wifi")
-            chrome_options.add_argument("--disable-webgl-image-chromium")
-            chrome_options.add_argument("--disable-webgl2-compute-context")
-            
-            # Enhanced networking stealth
-            chrome_options.add_argument("--disable-features=NetworkPrediction")
-            chrome_options.add_argument("--disable-features=Prerender2")
-            chrome_options.add_argument("--disable-features=PreloadMediaEngagementData")
-            chrome_options.add_argument("--disable-features=PrefetchPrivacyChanges")
-            chrome_options.add_argument("--disable-domain-reliability")
-            chrome_options.add_argument("--disable-background-networking")
-            chrome_options.add_argument("--disable-client-side-phishing-detection")
-            chrome_options.add_argument("--disable-sync")
-            chrome_options.add_argument("--disable-translate")
-            
-            # Browser behavior randomization
-            chrome_options.add_argument("--disable-features=AutofillAssistant")
-            chrome_options.add_argument("--disable-features=AutofillServerCommunication") 
-            chrome_options.add_argument("--disable-features=PasswordManager")
-            chrome_options.add_argument("--disable-features=FormControls")
-            chrome_options.add_argument("--disable-hang-monitor")
-            chrome_options.add_argument("--disable-prompt-on-repost")
-            chrome_options.add_argument("--disable-component-update")
-            
-            # Memory and performance (existing)
+            # Memory and performance optimization
             chrome_options.add_argument("--memory-pressure-off")
             chrome_options.add_argument("--max_old_space_size=4096")
             
-            # Network and security (existing)
-            chrome_options.add_argument("--disable-web-security")
-            chrome_options.add_argument("--allow-running-insecure-content")
-            chrome_options.add_argument("--disable-notifications")
-            chrome_options.add_argument("--disable-popup-blocking")
+            # Window and user agent configuration
+            chrome_options.add_argument(f"--window-size={width},{height}")
+            chrome_options.add_argument(f"--user-agent={selected_ua}")
             
             # ENHANCED Language and locale randomization
             locales = [
@@ -3275,132 +3191,30 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             chrome_options.add_argument(f"--lang={selected_locale.split(',')[0]}")
             chrome_options.add_argument(f"--accept-lang={selected_locale}")
             
-            # 4. ULTRA-Advanced Experimental Options for Maximum Stealth
-            chrome_options.add_experimental_option("excludeSwitches", [
-                "enable-automation", 
-                "enable-logging",
-                "disable-extensions",
-                "disable-dev-shm-usage",
-                "disable-component-extensions-with-background-pages",
-                "disable-background-timer-throttling",
-                "disable-renderer-backgrounding",
-                "disable-backgrounding-occluded-windows"
-            ])
+            # Essential experimental options (streamlined)
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
-            # 5. ENHANCED Fake plugin and webdriver detection + NEW browser characteristics
+            # Essential preferences (streamlined to prevent conflicts)
             chrome_options.add_experimental_option("prefs", {
-                # Notification and popup settings
+                # Basic privacy settings
                 "profile.default_content_setting_values.notifications": 2,
-                "profile.default_content_settings.popups": 0,
-                "profile.managed_default_content_settings.images": 1,
-                
-                # Plugin settings
-                "profile.content_settings.plugin_whitelist.adobe-flash-player": 1,
-                "profile.content_settings.exceptions.plugins.*,*.per_resource.adobe-flash-player": 1,
-                "PluginsAllowedForUrls": ["https://linkedin.com"],
-                
-                # Privacy and tracking
-                "profile.default_content_setting_values.geolocation": 2,
-                "profile.default_content_setting_values.media_stream": 2,
-                "profile.default_content_setting_values.media_stream_mic": 2,
-                "profile.default_content_setting_values.media_stream_camera": 2,
-                "profile.default_content_setting_values.automatic_downloads": 2,
-                
-                # ENHANCED browser fingerprint randomization
-                "profile.default_content_setting_values.background_sync": 2,
-                "profile.default_content_setting_values.ambient_light_sensor": 2,
-                "profile.default_content_setting_values.accelerometer": 2,
-                "profile.default_content_setting_values.gyroscope": 2,
-                "profile.default_content_setting_values.magnetometer": 2,
-                
-                # Enhanced performance and behavior
                 "profile.password_manager_enabled": False,
-                "profile.default_content_setting_values.password_protection_warning_trigger": 2,
                 "credentials_enable_service": False,
-                "profile.managed_default_content_settings.geolocation": 2,
                 
-                # CRITICAL: Disable ALL Google account and sync features
-                "browser.enable_spellchecking": False,
-                "browser.enable_autospell_correct": False,
-                "profile.default_content_setting_values.auto_select_certificate": 2,
-                "profile.content_settings.exceptions.auto_select_certificate": {},
-                "profile.managed_default_content_settings.auto_select_certificate": 2,
+                # Google account prevention (essential only)
                 "signin.allowed": False,
                 "sync.disabled": True,
                 "sync_promo.user_skipped": True,
-                "sync_promo.show_on_first_run_allowed": False,
                 "profile.first_run_tabs": [],
-                "profile.managed_bookmarks": [],
-                "profile.bookmark_bar_enabled": False,
-                "profile.show_home_button": False,
-                "homepage_is_newtabpage": True,
-                "homepage": "about:blank",
-                "session.restore_on_startup": 1,
-                "profile.managed_default_content_settings.cookies": 1,
                 
-                # CRITICAL: Account and sign-in prevention
-                "account_consistency": False,
-                "account_id_migration_state": 2,
-                "enable_supervised_users": False,
-                "supervised_user_id": "",
-                "profile.avatar_index": 0,
-                "profile.name": "Default",
-                "profile.managed_user_id": "",
-                "profile.is_supervised": False,
-                "profile.force_ephemeral_profiles": False,
-                
-                # DNS and network settings
-                "dns_prefetching.enabled": False,
-                "profile.network_prediction_options": 2,
-                "profile.prerender_enabled": False,
-                
-                # Search and suggestions
-                "search.suggest_enabled": False,
-                "alternate_error_pages.enabled": False,
+                # Basic privacy
                 "safebrowsing.enabled": False,
-                "profile.safebrowsing.enabled": False,
-                "safebrowsing.disable_download_protection": True,
-                
-                # WebRTC and media
-                "webrtc.ip_handling_policy": "disable_non_proxied_udp",
-                "webrtc.multiple_routes_enabled": False,
-                "webrtc.nonproxied_udp_enabled": False,
-                
-                # CRITICAL: Privacy settings to prevent prompts
-                "profile.default_content_setting_values.protocol_handlers": 2,
-                "profile.default_content_setting_values.ppapi_broker": 2,
-                "profile.default_content_setting_values.ssl_cert_decisions": 1,
-                "profile.block_third_party_cookies": True,
-                "profile.clear_site_data_on_exit": False,
-                "profile.cookies_session_only": False,
-                "profile.default_content_setting_values.mixed_script": 2,
-                "profile.managed_default_content_settings.javascript": 1,
-                
-                # ULTRA-ENHANCED: Randomize timezone
-                "profile.managed_default_content_settings.timezone": random.choice([
-                    "America/New_York", "America/Chicago", "America/Denver", 
-                    "America/Los_Angeles", "America/Toronto", "Europe/London"
-                ])
+                "dns_prefetching.enabled": False,
+                "search.suggest_enabled": False
             })
             
-            # 6. ENHANCED Randomize window position and size variations
-            position_x = random.randint(0, 200)
-            position_y = random.randint(0, 150)
-            chrome_options.add_argument(f"--window-position={position_x},{position_y}")
-            
-            # Add slight viewport size variation (simulate real browser resizing)
-            viewport_variation_x = random.randint(-20, 20)
-            viewport_variation_y = random.randint(-20, 20)
-            final_width = max(800, width + viewport_variation_x)
-            final_height = max(600, height + viewport_variation_y)
-            chrome_options.add_argument(f"--window-size={final_width},{final_height}")
-            
-            debug_log(f"ULTRA-STEALTH CONFIG: Viewport={final_width}x{final_height}, Position=({position_x},{position_y}), UA={selected_ua[:50]}...")
-            
-            # Disable automation flags that might trigger bot detection
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+            debug_log(f"SIMPLIFIED STEALTH CONFIG: Viewport={width}x{height}, UA={selected_ua[:50]}...")
 
             # Determine which Chrome and ChromeDriver to use
             service = None

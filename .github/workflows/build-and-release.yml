@@ -1,0 +1,124 @@
+name: Build and Release Application
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+          - os: macos-13
+            platform: darwin
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Install Python dependencies and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r src/resources/scripts/requirements.txt
+
+      - name: Build Python executable (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          chmod +x scripts/setup-python-bundling.sh
+          ./scripts/setup-python-bundling.sh
+
+      - name: Debug build environment (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          echo "Platform: ${{ matrix.platform }}"
+          echo "Architecture: ${{ matrix.arch }}"
+          echo "Working directory: $(pwd)"
+          echo "Icon file exists: $(ls -la assets/icons/icon.icns)"
+          echo "Python executable exists: $(ls -la resources/python-executables/*/linkedin_commenter || echo 'Not found')"
+          echo "Code signing environment:"
+          echo "CSC_IDENTITY_AUTO_DISCOVERY: $CSC_IDENTITY_AUTO_DISCOVERY"
+          echo "CSC_LINK: $CSC_LINK"
+          echo "CSC_KEY_PASSWORD: [hidden]"
+
+      - name: Build Python executable (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Create platform directory
+          $platformDir = if ([System.Environment]::Is64BitOperatingSystem) { "win-x64" } else { "win-ia32" }
+          New-Item -ItemType Directory -Force -Path "resources/python-executables/$platformDir"
+
+          # Build using PyInstaller
+          python -m PyInstaller --distpath "resources/python-executables/$platformDir" --workpath "build/pyinstaller" linkedin_commenter.spec
+
+          # Verify executable was created
+          if (Test-Path "resources/python-executables/$platformDir/linkedin_commenter.exe") {
+            Write-Host "✅ Executable created successfully"
+          } else {
+            Write-Error "❌ Executable not found after build"
+            exit 1
+          }
+        shell: powershell
+
+      - name: Build Electron app (Windows)
+        if: matrix.platform == 'win32'
+        run: |
+          npm run build:python
+          $env:NODE_OPTIONS = '--max-old-space-size=4096'
+          npx electron-builder --win --publish=never
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_URL: ${{ secrets.API_URL }}
+
+      - name: Build Electron app (macOS)
+        if: matrix.platform == 'darwin'
+        run: npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_URL: ${{ env.API_URL }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ''
+          CSC_KEY_PASSWORD: ''
+          CSC_NAME: ''
+          CSC_FOR_PULL_REQUEST: true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: junior-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.pkg
+            dist/*.exe
+            dist/*.msi
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+          retention-days: 30

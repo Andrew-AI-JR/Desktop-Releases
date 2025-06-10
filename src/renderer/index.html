@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'"
+    />
+    <meta
+      http-equiv="X-Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'"
+    />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <title>Junior</title>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Login overlay - shows when not authenticated -->
+      <div id="login-overlay" class="login-overlay">
+        <div class="login-content">
+          <div class="login-logo">
+            <img
+              src="../../assets/icons/logo.svg"
+              alt="Junior Logo"
+              class="logo-large"
+            />
+          </div>
+          <form id="login-form" class="auth-form">
+            <div id="login-error" class="error-message hidden"></div>
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" required />
+            </div>
+            <div class="form-group">
+              <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+              <input type="password" id="password" name="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <div class="text-right mt-2">
+                <a href="#" id="forgot-password-link" class="text-sm text-indigo-600 hover:text-indigo-500">Forgot Password?</a>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Login</button>
+              <a href="#" id="show-register">First time user? Create your password</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Register overlay - shows when switching to register -->
+      <div id="register-overlay" class="login-overlay hidden">
+        <div class="login-content">
+          <div class="login-logo">
+            <img
+              src="../../assets/icons/logo.svg"
+              alt="Junior Logo"
+              class="logo-large"
+            />
+          </div>
+          <form id="register-form" class="auth-form">
+            <div id="register-error" class="error-message hidden"></div>
+            <div class="form-group">
+              <label for="reg-email">Email</label>
+              <input type="email" id="reg-email" name="email" required />
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Password</label>
+              <input
+                type="password"
+                id="reg-password"
+                name="password"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="reg-confirm-password">Confirm Password</label>
+              <input
+                type="password"
+                id="reg-confirm-password"
+                name="confirmPassword"
+                required
+              />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Create Password</button>
+              <a href="#" id="show-login">Already have an account? Login</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Main app - shows when authenticated -->
+      <div id="main-app" class="hidden">
+        <header class="app-header">
+          <div class="logo-container">
+            <img
+              src="../../assets/icons/icon.svg"
+              alt="Junior Logo"
+              class="logo"
+            />
+          </div>
+          <nav class="main-nav">
+            <ul>
+              <li>
+                <a href="#" data-view="dashboard" class="active">Dashboard</a>
+              </li>
+              <li><a href="#" data-view="automation">Automation</a></li>
+            </ul>
+          </nav>
+          <div class="user-menu">
+            <div class="user-profile" id="user-profile">
+              <span class="user-name">Guest</span>
+              <div class="avatar-placeholder"></div>
+              <div class="logout-dropdown hidden" id="logout-dropdown">
+                <button class="logout-btn" id="logout-btn">Logout</button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main class="app-content">
+          <!-- View containers -->
+          <section id="dashboard-view" class="view">
+            <h2>Dashboard</h2>
+            <div class="dashboard-stats">
+              <div class="stat-card">
+                <h3>Comments Generated</h3>
+                <p class="stat-value" id="comments-count">0</p>
+              </div>
+              <div class="stat-card">
+                <h3>Subscription Status</h3>
+                <p class="stat-value" id="subscription-status">Inactive</p>
+              </div>
+            </div>
+            <div class="recent-activity">
+              <h3>Recent Activity</h3>
+              <div id="activity-list" class="activity-list">
+                <p class="empty-state">No recent activity</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="automation-view" class="view hidden">
+            <div class="automation-container">
+              <div class="automation-header">
+                <h2>LinkedIn Automation</h2>
+                <div class="status-bar">
+                  <span id="automation-status-text">Ready to start</span>
+                </div>
+              </div>
+
+              <div class="automation-config">
+                <h3>Configuration</h3>
+                <form id="automation-config-form">
+                  <div class="config-section">
+                    <h4>LinkedIn Credentials</h4>
+                    <div class="form-group">
+                      <label for="linkedin-email">LinkedIn Email</label>
+                      <input
+                        type="email"
+                        id="linkedin-email"
+                        name="linkedin-email"
+                        placeholder="Your LinkedIn email"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="linkedin-password">LinkedIn Password</label>
+                      <input
+                        type="password"
+                        id="linkedin-password"
+                        name="linkedin-password"
+                        placeholder="Your LinkedIn password"
+                      />
+                    </div>
+                    <div class="checkbox-container">
+                      <input
+                        type="checkbox"
+                        id="remember-credentials"
+                        name="remember-credentials"
+                        class="checkbox-input"
+                      />
+                      <label for="remember-credentials" class="checkbox-label">
+                        Remember credentials (stored securely)
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="config-section">
+                    <h4>Profile Information</h4>
+                    <div class="form-group">
+                      <label for="calendly-url">Calendly URL</label>
+                      <input
+                        type="url"
+                        id="calendly-url"
+                        name="calendly-url"
+                        placeholder="https://calendly.com/your-username"
+                      />
+                    </div>
+                    <div class="form-group">
+                      <label for="user-bio">Professional Bio</label>
+                      <textarea
+                        id="user-bio"
+                        name="user-bio"
+                        rows="4"
+                        placeholder="Write a brief professional bio to personalize comments"
+                      ></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label for="keywords"
+                        >Job Keywords (comma-separated)</label
+                      >
+                      <input
+                        type="text"
+                        id="keywords"
+                        name="keywords"
+                        placeholder="python, machine learning, data science"
+                      />
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <div class="automation-actions">
+                <button id="start-automation" class="btn btn-primary">
+                  Start Automation
+                </button>
+                <button id="stop-automation" class="btn btn-danger" disabled>
+                  Stop Automation
+                </button>
+              </div>
+
+              <div class="automation-log">
+                <h3>Activity Log</h3>
+                <div id="log-container" class="log-container"></div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Modal components -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3 id="modal-title">Modal Title</h3>
+          <button id="modal-close" class="modal-close">&times;</button>
+        </div>
+        <div id="modal-content" class="modal-content"></div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="./js/app.js" type="module"></script>
+  </body>
+</html>

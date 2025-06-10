@@ -1,0 +1,145 @@
+{
+  "name": "junior-desktop",
+  "version": "1.0.0",
+  "description": "The desktop app for Junior",
+  "license": "ISC",
+  "author": "Hey-Junior",
+  "type": "commonjs",
+  "main": "./src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=never",
+    "build:python": "node scripts/build-python-cross-platform.js",
+    "build:python:force": "rm -rf resources/python-executables && npm run build:python",
+    "build:win": "npm run build:python && cross-env NODE_OPTIONS='--max-old-space-size=4096' electron-builder --win --publish=never",
+    "postbuild:chromium137": "node scripts/post-electron-build.js",
+    "build:win137": "npm run build:win && npm run postbuild:chromium137",
+    "build:mac": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
+    "build:linux": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --linux --publish=never",
+    "release": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=always",
+    "clean": "rm -rf dist build resources/python-executables node_modules/.cache",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "chromium": "^3.0.2",
+    "dotenv": "^16.5.0",
+    "electron-store": "^8.1.0",
+    "fs-extra": "^11.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "puppeteer-core": "^22.0.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^36.2.1",
+    "electron-builder": "^24.13.3",
+    "electron-reloader": "^1.2.3",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.1",
+    "prettier": "^3.5.3"
+  },
+  "build": {
+    "appId": "com.junior.desktop",
+    "productName": "Junior",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "buildDependenciesFromSource": false,
+    "nodeGypRebuild": false,
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      ".env",
+      {
+        "from": "resources/python-executables",
+        "to": "python-executables",
+        "filter": "**/*"
+      },
+      {
+        "from": "src/resources/scripts/requirements.txt",
+        "to": "requirements.txt"
+      },
+      {
+        "from": "src/resources/scripts/linkedin_commenter.py",
+        "to": "linkedin_commenter.py"
+      },
+      {
+        "from": "chromium-win64/chrome-win",
+        "to": "chrome-win"
+      }
+    ],
+    "mac": {
+      "icon": "assets/icons/icon.icns",
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "type": "distribution",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Junior Desktop",
+      "icon": "assets/icons/icon.icns",
+      "background": null,
+      "format": "UDBZ",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 250
+        },
+        {
+          "x": 400,
+          "y": 250,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icons/icon.ico",
+      "target": "nsis"
+    },
+    "linux": {
+      "icon": "assets/icons/icon.png",
+      "category": "Utility",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Junior AI",
+      "installerIcon": "assets/icons/icon.ico",
+      "uninstallerIcon": "assets/icons/icon.ico",
+      "installerHeaderIcon": "assets/icons/icon.ico",
+      "menuCategory": "Junior AI",
+      "perMachine": false,
+      "runAfterFinish": true,
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    }
+  }
+}

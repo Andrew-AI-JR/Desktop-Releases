@@ -4,3 +4,5 @@ webdriver-manager
 ollama
 regex
 python-dotenv
+pyinstaller
+beautifulsoup4

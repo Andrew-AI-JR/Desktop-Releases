@@ -971,7 +971,7 @@ def find_posts(driver):
         debug_log("No posts found, attempting scroll and retry", "SEARCH")
         try:
             # Scroll down a bit
-            driver.execute_script("window.scrollTo(0, 500);")
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)  # Wait for potential lazy-loaded content
             
             # Try the selectors again after scrolling
@@ -993,8 +993,30 @@ def find_posts(driver):
         except Exception as e:
             debug_log(f"Error during scroll retry: {str(e)}", "ERROR")
     
+    # NLP/Regex-based fallback mechanism
     if not posts:
-        debug_log("No posts found with any selector", "WARNING")
+        debug_log("No posts found with selectors, attempting NLP/Regex fallback", "SEARCH")
+        try:
+            # Define regex pattern for 'like' and 'reply' text
+            pattern = re.compile(r"\b(like|reply)\b", re.IGNORECASE)
+            
+            # Find all div elements and check for 'like' or 'reply' text
+            all_divs = driver.find_elements(By.TAG_NAME, "div")
+            for div in all_divs:
+                if pattern.search(div.text):
+                    debug_log("Found potential post container using NLP/Regex fallback", "SEARCH")
+                    posts.append(div)
+            
+            if posts:
+                visible_posts = [post for post in posts if is_element_visible(driver, post)]
+                if visible_posts:
+                    debug_log(f"{len(visible_posts)} posts found using NLP/Regex fallback", "SEARCH")
+                    return visible_posts
+        except Exception as e:
+            debug_log(f"Error during NLP/Regex fallback: {str(e)}", "ERROR")
+    
+    if not posts:
+        debug_log("No posts found with any method", "WARNING")
         # Take a screenshot for debugging
         try:
             take_screenshot(driver, "no_posts_found")
@@ -1040,142 +1062,126 @@ def process_posts(driver):
         
         # Get current URL and extract time filter
         current_url = driver.current_url
-        time_filter = None
+        time_filter = current_url.split('datePosted=')[1].split('&')[0].strip("\"'")
         if 'datePosted=' in current_url:
             try:
-                time_filter = current_url.split('datePosted=')[1].split('&')[0].strip('"\'')
+                time_filter = current_url.split('datePosted=')[1].split('&')[0].strip("\"'")
                 debug_log(f"Extracted time filter from URL: {time_filter}", "DEBUG")
             except Exception as e:
                 debug_log(f"Error extracting time filter from URL: {e}", "WARNING")
         
-        posts = find_posts(driver)
-        if not posts:
-            debug_log("No posts found on current page", "WARNING")
-            return posts_processed, hiring_posts_found
-            
-        # Score and sort posts
-        scored_posts = []
-        for post in posts:
-            try:
-                post_text = get_post_text(driver, post)
-                author_name = extract_author_name(post)
-                post_id, _ = compute_post_id(post)
-                
-                # Skip already processed posts early
-                if post_id in processed_log or post_id in comment_history:
-                    continue
-                    
-                score = comment_generator.calculate_post_score(post_text, author_name, time_filter)
-                debug_log(f"Scored post with time filter '{time_filter}': {score}", "DEBUG")
-                scored_posts.append((score, post, post_text, author_name))
-            except Exception as e:
-                debug_log(f"Error scoring post: {e}", "ERROR")
-                continue
-                
-        # Sort posts by score (highest first)
-        scored_posts.sort(reverse=True, key=lambda x: x[0])
+        # Continuous scrolling and post processing
+        previous_post_count = 0
+        scroll_attempts = 0
+        max_scroll_attempts = 10  # Limit to prevent infinite loops
         
-        # Log scoring distribution
-        if scored_posts:
-            scores = [score for score, _, _, _ in scored_posts]
-            score_stats = {
-                'count': len(scores),
-                'min_score': min(scores),
-                'max_score': max(scores),
-                'avg_score': sum(scores) / len(scores),
-                'score_distribution': {
-                    '80+': len([s for s in scores if s >= 80]),
-                    '70-79': len([s for s in scores if 70 <= s < 80]),
-                    '60-69': len([s for s in scores if 60 <= s < 70]),
-                    '50-59': len([s for s in scores if 50 <= s < 60]),
-                    '40-49': len([s for s in scores if 40 <= s < 50]),
-                    '30-39': len([s for s in scores if 30 <= s < 40]),
-                    '20-29': len([s for s in scores if 20 <= s < 30]),
-                    '0-19': len([s for s in scores if s < 20])
-                }
-            }
-            debug_log(f"Scoring distribution: {json.dumps(score_stats, indent=2)}", "STATS")
+        while scroll_attempts < max_scroll_attempts:
+            posts = find_posts(driver)
+            current_post_count = len(posts)
             
-        debug_log(f"Found {len(scored_posts)} new posts to process, sorted by score", "SEARCH")
-        for post_index, (score, post, post_text, author_name) in enumerate(scored_posts, 1):
-            try:
-                if score < 50:  # Changed from 55 to 50 as per new threshold
-                    debug_log(f"Skipping post {post_index} (score: {score} <= 55)", "SKIP")
-                    continue
-                debug_log(f"Processing post {post_index}/{len(scored_posts)} (score: {score})", "PROCESS")
-                post_id, id_method = compute_post_id(post)
-                debug_log(f"Post ID: {post_id} (Method: {id_method}, Score: {score})", "DATA")
-                
-                posts_processed += 1
-                processed_log.append(post_id)
-                debug_log(f"Added post {post_id} to processed log", "DATA")
-                
-                debug_log("Scrolling post into view", "ACTION")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post)
-                time.sleep(1)
-                
-                debug_log("Attempting to expand post content", "ACTION")
-                expand_post(driver, post)
-                
-                # Double-check for existing comments after expanding
-                if has_already_commented(driver, post):
-                    debug_log("Already commented on this post after expand, skipping", "SKIP")
-                    continue
-                debug_log("Generating comment", "GENERATE")
-                max_retries = 3
-                retry_count = 0
-                custom_message = None
-                
-                while retry_count < max_retries:
-                    custom_message = comment_generator.generate_comment(post_text, author_name)
-                    debug_log(f"Generated comment (attempt {retry_count + 1}): {custom_message}", "DATA")
-                    
-                    if custom_message is not None:
-                        break
-                        
-                    retry_count += 1
-                    debug_log(f"Comment generation failed, attempt {retry_count} of {max_retries}", "RETRY")
-                    time.sleep(2)  # Brief pause between retries
-                
-                if custom_message is None:
-                    debug_log("No valid comment generated after all retries, skipping", "SKIP")
-                    continue
-                debug_log(f"Generated comment length: {len(custom_message)} characters", "DATA")
-                debug_log("Attempting to post comment", "ACTION")
-                debug_log(f"[COMMENT] Posting comment to post_id: {compute_post_id(post)[0]}", "COMMENT")
+            if current_post_count == previous_post_count:
+                debug_log("No new posts found after scrolling, stopping.", "SEARCH")
+                break
+            
+            debug_log(f"Found {current_post_count} posts, processing...", "SEARCH")
+            previous_post_count = current_post_count
+            
+            # Process each post
+            for post in posts:
                 try:
-                    success = post_comment(driver, post, custom_message)
-                except Exception as e:
-                    debug_log(f"[COMMENT] Exception during comment posting: {e}", "ERROR")
-                    success = False
-                if success:
-                    debug_log("Successfully posted comment", "COMMENT")
-                    posts_commented += 1
-                    # Log comment to history
+                    post_text = get_post_text(driver, post)
+                    author_name = extract_author_name(post)
                     post_id, _ = compute_post_id(post)
-                    comment_history[post_id] = {
-                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "message": custom_message
-                    }
-                    save_comment_history(comment_history)
-                else:
-                    debug_log("Failed to post comment", "COMMENT")
-                    save_log(processed_log)
-                    save_comment_history(comment_history)
-                    debug_log("Sleeping between comments", "WAIT")
-                    time.sleep(3)
-                    if posts_commented >= MAX_COMMENTS:
-                        debug_log(f"Reached max comments limit ({MAX_COMMENTS})", "LIMIT")
-                        return posts_commented, hiring_posts_found
-            except Exception as e:
-                debug_log(f"Error processing post: {str(e)}", "ERROR")
-                debug_log(traceback.format_exc(), "ERROR")
-                try:
-                    take_screenshot(driver, f"error_post_{posts_processed}")
-                    debug_log("Screenshot taken for error", "DEBUG")
-                except Exception:
-                    debug_log("Failed to take error screenshot", "ERROR")
-                continue
+                    
+                    # Skip already processed posts early
+                    if post_id in processed_log or post_id in comment_history:
+                        continue
+                        
+                    score = comment_generator.calculate_post_score(post_text, author_name, time_filter)
+                    debug_log(f"Scored post with time filter '{time_filter}': {score}", "DEBUG")
+                    
+                    if score < 50:  # Changed from 55 to 50 as per new threshold
+                        debug_log(f"Skipping post (score: {score} <= 50)", "SKIP")
+                        continue
+                    
+                    debug_log(f"Processing post (score: {score})", "PROCESS")
+                    posts_processed += 1
+                    processed_log.append(post_id)
+                    debug_log(f"Added post {post_id} to processed log", "DATA")
+                    
+                    debug_log("Scrolling post into view", "ACTION")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post)
+                    time.sleep(1)
+                    
+                    debug_log("Attempting to expand post content", "ACTION")
+                    expand_post(driver, post)
+                    
+                    # Double-check for existing comments after expanding
+                    if has_already_commented(driver, post):
+                        debug_log("Already commented on this post after expand, skipping", "SKIP")
+                        continue
+                    debug_log("Generating comment", "GENERATE")
+                    max_retries = 3
+                    retry_count = 0
+                    custom_message = None
+                    
+                    while retry_count < max_retries:
+                        custom_message = comment_generator.generate_comment(post_text, author_name)
+                        debug_log(f"Generated comment (attempt {retry_count + 1}): {custom_message}", "DATA")
+                        
+                        if custom_message is not None:
+                            break
+                            
+                        retry_count += 1
+                        debug_log(f"Comment generation failed, attempt {retry_count} of {max_retries}", "RETRY")
+                        time.sleep(2)  # Brief pause between retries
+                    
+                    if custom_message is None:
+                        debug_log("No valid comment generated after all retries, skipping", "SKIP")
+                        continue
+                    debug_log(f"Generated comment length: {len(custom_message)} characters", "DATA")
+                    debug_log("Attempting to post comment", "ACTION")
+                    debug_log(f"[COMMENT] Posting comment to post_id: {compute_post_id(post)[0]}", "COMMENT")
+                    try:
+                        success = post_comment(driver, post, custom_message)
+                    except Exception as e:
+                        debug_log(f"[COMMENT] Exception during comment posting: {e}", "ERROR")
+                        success = False
+                    if success:
+                        debug_log("Successfully posted comment", "COMMENT")
+                        posts_commented += 1
+                        # Log comment to history
+                        post_id, _ = compute_post_id(post)
+                        comment_history[post_id] = {
+                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "message": custom_message
+                        }
+                        save_comment_history(comment_history)
+                    else:
+                        debug_log("Failed to post comment", "COMMENT")
+                        save_log(processed_log)
+                        save_comment_history(comment_history)
+                        debug_log("Sleeping between comments", "WAIT")
+                        time.sleep(3)
+                        if posts_commented >= MAX_COMMENTS:
+                            debug_log(f"Reached max comments limit ({MAX_COMMENTS})", "LIMIT")
+                            return posts_commented, hiring_posts_found
+                except Exception as e:
+                    debug_log(f"Error processing post: {str(e)}", "ERROR")
+                    debug_log(traceback.format_exc(), "ERROR")
+                    try:
+                        take_screenshot(driver, f"error_post_{posts_processed}")
+                        debug_log("Screenshot taken for error", "DEBUG")
+                    except Exception:
+                        debug_log("Failed to take error screenshot", "ERROR")
+                    continue
+            
+            # Scroll down to load more posts
+            debug_log("Scrolling down to load more posts", "ACTION")
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)  # Wait for potential lazy-loaded content
+            scroll_attempts += 1
+        
         debug_log("Saving final logs", "DATA")
         save_log(processed_log)
         save_comment_history(comment_history)

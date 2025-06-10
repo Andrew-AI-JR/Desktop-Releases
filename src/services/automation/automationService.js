@@ -160,7 +160,7 @@ const automationService = {
           // Check if Chrome is available before starting
           const chromeAvailable = await this.checkChromeAvailability();
           if (!chromeAvailable) {
-            isRunning = false;
+            global.isAutomationRunning = false;
             console.error('[runLinkedInAutomation] Chrome not found');
             reject({
               message:
@@ -214,7 +214,7 @@ const automationService = {
             );
           }
         } catch (error) {
-          isRunning = false;
+          global.isAutomationRunning = false;
 
           // Safely cleanup config file if it was created
           if (configPath) {
@@ -242,14 +242,14 @@ const automationService = {
   async _cleanupStaleProcess() {
     try {
       // If we think something is running but the process is dead, clean it up
-      if (isRunning && global.pythonProcess) {
+      if (global.isAutomationRunning && global.pythonProcess) {
         // Check if process is actually still running
         try {
           process.kill(global.pythonProcess.pid, 0); // Signal 0 just checks if process exists
         } catch (error) {
           // Process doesn't exist, clean up the state
           console.log('[_cleanupStaleProcess] Cleaning up stale process state');
-          isRunning = false;
+          global.isAutomationRunning = false;
           global.pythonProcess = null;
           return;
         }
@@ -268,7 +268,7 @@ const automationService = {
         '[_cleanupStaleProcess] Error during cleanup, forcing reset:',
         error.message
       );
-      isRunning = false;
+      global.isAutomationRunning = false;
       global.pythonProcess = null;
     }
   },
@@ -324,7 +324,7 @@ const automationService = {
         reject
       );
     } catch (error) {
-      isRunning = false;
+      global.isAutomationRunning = false;
       this.cleanupConfigFile(configPath);
       console.error('[_runProductionMode] Error:', error);
       reject({
@@ -400,7 +400,7 @@ const automationService = {
         reject
       );
     } catch (error) {
-      isRunning = false;
+      global.isAutomationRunning = false;
       this.cleanupConfigFile(configPath);
       console.error('[_runDevelopmentMode] Error:', error);
       reject({
@@ -458,7 +458,7 @@ const automationService = {
     });
 
     pythonProcess.on('close', code => {
-      isRunning = false;
+      global.isAutomationRunning = false;
       global.pythonProcess = null;
       this.cleanupConfigFile(configPath);
       // Check for errors even if exit code is 0
@@ -490,7 +490,7 @@ const automationService = {
     });
 
     pythonProcess.on('error', error => {
-      isRunning = false;
+      global.isAutomationRunning = false;
       global.pythonProcess = null;
       this.cleanupConfigFile(configPath);
 
@@ -626,30 +626,39 @@ const automationService = {
 
     return new Promise((resolve, reject) => {
       try {
-        // Kill the Python process
+        console.log('[stopAutomation] Attempting to stop automation process...');
+        
+        // Kill the Python process using the correct global reference
         if (process.platform === 'win32') {
-          // On Windows
-          spawn('taskkill', ['/pid', pythonProcess.pid, '/f', '/t']);
+          // On Windows - use taskkill to terminate process tree
+          console.log(`[stopAutomation] Killing Windows process tree for PID: ${global.pythonProcess.pid}`);
+          spawn('taskkill', ['/pid', global.pythonProcess.pid, '/f', '/t']);
         } else {
-          // On macOS/Linux
-          process.kill(pythonProcess.pid);
+          // On macOS/Linux - use process.kill
+          console.log(`[stopAutomation] Killing process for PID: ${global.pythonProcess.pid}`);
+          process.kill(global.pythonProcess.pid, 'SIGTERM');
         }
 
-        pythonProcess = null;
-        isRunning = false;
+        // Reset global state variables correctly
+        global.pythonProcess = null;
+        global.isAutomationRunning = false;
 
+        console.log('[stopAutomation] Automation stopped successfully');
         resolve({
           success: true,
           message: 'Automation stopped successfully',
         });
       } catch (error) {
-        // Reset state even if there was an error
+        // Reset state even if there was an error to prevent stuck states
         global.pythonProcess = null;
         global.isAutomationRunning = false;
         console.error('[stopAutomation] Error stopping automation:', error);
-        reject({
-          message: error.message || 'Failed to stop automation',
-          status: error.status || 500,
+        
+        // Still resolve successfully since we reset the state
+        resolve({
+          success: true,
+          message: 'Automation process terminated (with cleanup)',
+          warning: error.message,
         });
       }
     });

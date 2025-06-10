@@ -1221,25 +1221,33 @@ def main():
                         debug_log("Re-login successful.", "INFO")
                         
                 debug_log("Login verified successfully", "LOGIN")
-                print("[APP_OUT]✅ Login successful, proceeding to search results...")
+                print("[APP_OUT]✅ Login successful, beginning advanced session warming...")
 
-                # Get active URLs from the tracker
-                current_hour = datetime.now().hour
-                active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
-                        
-                if not active_urls:
-                    print("[APP_OUT]⚠️ No active URLs, using default search URLs")
-                    debug_log("No active URLs to process, using default search URLs", "WARNING")
-                    active_urls = SEARCH_URLS
-                            
-                debug_log(f"Active URLs to process: {active_urls}", "DEBUG")
-                print(f"[APP_OUT]🔍 Processing {len(active_urls)} search URLs...")
+                # ========== LEVEL 5: ADVANCED SESSION WARMING ==========
+                print("[APP_OUT]🔥 Starting comprehensive session warming sequence...")
+                warming_success = advanced_session_warming(driver)
+                
+                if warming_success:
+                    print("[APP_OUT]✅ Session warming completed successfully")
+                    debug_log("✅ Advanced session warming completed - ready for natural searches", "STEALTH")
+                else:
+                    print("[APP_OUT]⚠️ Session warming had issues but continuing...")
+                    debug_log("⚠️ Session warming encountered issues but proceeding", "STEALTH")
 
-                # Process each URL
-                for i, url in enumerate(active_urls, 1):
-                    print(f"[APP_OUT]📍 Processing URL {i}/{len(active_urls)}")
-                    debug_log(f"Navigating to search URL: {url}", "NAVIGATION")
-                    print(f"[APP_OUT]🔗 Navigating to: {url}")
+                # ========== NATURAL JOB SEARCH STRATEGY ==========
+                print("[APP_OUT]🔍 Beginning natural job search strategy...")
+                
+                # Instead of using direct URLs, perform natural searches based on job keywords
+                search_keywords = JOB_SEARCH_KEYWORDS if JOB_SEARCH_KEYWORDS else ["technology", "software", "business"]
+                
+                print(f"[APP_OUT]🎯 Processing {len(search_keywords)} job keywords...")
+                debug_log(f"Natural search strategy with keywords: {search_keywords}", "SEARCH")
+
+                # Process each keyword with natural searches
+                for i, keyword in enumerate(search_keywords, 1):
+                    print(f"[APP_OUT]📍 Processing keyword {i}/{len(search_keywords)}: {keyword}")
+                    debug_log(f"Natural search for keyword: {keyword}", "SEARCH")
+                    
                     if session_comments >= MAX_SESSION_COMMENTS:
                         print(f"[APP_OUT]🛑 Session limit reached ({MAX_SESSION_COMMENTS} comments)")
                         debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
@@ -1252,55 +1260,49 @@ def main():
                         daily_comments = 0  # Reset counter at midnight
                         continue
 
-                    # ========== ROBUST ANTI-BOT NAVIGATION ==========
+                    # ========== NATURAL SEARCH INSTEAD OF DIRECT URLS ==========
                     try:
-                        print("[APP_OUT]🚀 Loading search results...")
+                        print(f"[APP_OUT]🔍 Performing natural search for: {keyword}")
                         
-                        # 1. Pre-navigation stealth delay
-                        pre_nav_delay = random.uniform(5, 12)
-                        debug_log(f"STEALTH: Pre-navigation delay: {pre_nav_delay:.1f}s", "STEALTH")
-                        time.sleep(pre_nav_delay)
+                        # Use natural job search instead of direct URL navigation
+                        search_success = natural_job_search(driver, keyword, "past-24h")
                         
-                        # 2. Realistic navigation pattern for first URL
-                        if i == 1:  # First URL only - establish human browsing pattern
-                            debug_log("STEALTH: Establishing human browsing pattern...", "STEALTH")
+                        if not search_success:
+                            print(f"[APP_OUT]⚠️ Natural search failed for '{keyword}' - trying fallback method")
+                            debug_log(f"Natural search failed for keyword: {keyword}", "WARNING")
                             
-                            # Visit LinkedIn homepage first
-                            driver.get("https://www.linkedin.com")
-                            time.sleep(random.uniform(6, 10))
-                            
-                            # Simulate human reading behavior
+                            # Fallback: try a more generic approach
                             try:
-                                # Random scrolls to simulate reading homepage
-                                for _ in range(random.randint(2, 4)):
-                                    scroll_amount = random.randint(200, 600)
-                                    driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-                                    time.sleep(random.uniform(1.5, 3.5))
+                                driver.get("https://www.linkedin.com/search/results/content/")
+                                time.sleep(random.uniform(5, 8))
                                 
-                                # Random mouse movement simulation
-                                ActionChains(driver).move_by_offset(
-                                    random.randint(100, 400), 
-                                    random.randint(100, 300)
-                                ).perform()
-                                time.sleep(random.uniform(0.8, 2.0))
+                                # Try direct search box interaction
+                                search_box = driver.find_element(By.CSS_SELECTOR, 'input[placeholder*="Search"]')
+                                search_box.clear()
+                                time.sleep(random.uniform(0.5, 1))
                                 
-                                # Scroll back to top
-                                driver.execute_script("window.scrollTo(0, 0);")
-                                time.sleep(random.uniform(2, 4))
-                            except:
-                                pass  # Mouse/scroll simulation not critical
+                                fallback_query = f"{keyword} hiring"
+                                for char in fallback_query:
+                                    search_box.send_keys(char)
+                                    time.sleep(random.uniform(0.1, 0.25))
+                                
+                                search_box.send_keys(Keys.RETURN)
+                                time.sleep(random.uniform(4, 7))
+                                
+                                print(f"[APP_OUT]✅ Fallback search completed for: {keyword}")
+                            except Exception as fallback_error:
+                                print(f"[APP_OUT]❌ Fallback search also failed: {fallback_error}")
+                                debug_log(f"Both natural and fallback search failed for {keyword}: {fallback_error}", "ERROR")
+                                continue
+                        else:
+                            print(f"[APP_OUT]✅ Natural search successful for: {keyword}")
                         
-                        # 3. Navigate to target URL with stealth measures
-                        debug_log(f"STEALTH: Navigating to target URL: {url}", "STEALTH")
-                        driver.get(url)
-                        print(f"[APP_OUT]🌐 Navigated to: {url}")
+                        # Enhanced waiting after search
+                        search_wait = random.uniform(5, 10)
+                        debug_log(f"STEALTH: Post-search stabilization wait: {search_wait:.1f}s", "STEALTH")
+                        time.sleep(search_wait)
                         
-                        # 4. Extended human-like page load waiting
-                        initial_wait = random.uniform(8, 15)
-                        debug_log(f"STEALTH: Initial page load wait: {initial_wait:.1f}s", "STEALTH")
-                        time.sleep(initial_wait)
-                        
-                        # 5. Comprehensive bot detection checks
+                        # Simplified bot detection check for natural search
                         current_url_check = driver.current_url.lower()
                         page_source_check = driver.page_source.lower()
                         
@@ -1315,76 +1317,18 @@ def main():
                                             for indicator in bot_detection_indicators)
                         
                         if is_bot_detected:
-                            debug_log("STEALTH: Bot detection triggered - implementing countermeasures", "WARNING")
-                            print(f"[APP_OUT]🛡️ Bot detection triggered - taking defensive action...")
-                            
-                            # AGGRESSIVE COUNTERMEASURES
-                            # Phase 1: Immediate evasion
-                            extended_delay = random.uniform(90, 180)
-                            debug_log(f"STEALTH: Phase 1 - Extended evasion delay: {extended_delay:.1f}s", "STEALTH")
-                            time.sleep(extended_delay)
-                            
-                            # Phase 2: Human behavior simulation
-                            try:
-                                debug_log("STEALTH: Phase 2 - Simulating human browsing patterns", "STEALTH")
-                                
-                                # Visit multiple innocent pages to appear human
-                                innocent_pages = [
-                                    "https://www.google.com",
-                                    "https://www.linkedin.com",
-                                    "https://www.linkedin.com/feed"
-                                ]
-                                
-                                for page in innocent_pages:
-                                    driver.get(page)
-                                    time.sleep(random.uniform(15, 30))
-                                    
-                                    # Simulate reading and interaction
-                                    try:
-                                        # Random scrolling
-                                        for _ in range(random.randint(3, 6)):
-                                            scroll_amount = random.randint(300, 800)
-                                            driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-                                            time.sleep(random.uniform(2, 5))
-                                        
-                                        # Random mouse movements
-                                        ActionChains(driver).move_by_offset(
-                                            random.randint(50, 300), 
-                                            random.randint(50, 300)
-                                        ).perform()
-                                        time.sleep(random.uniform(1, 3))
-                                        
-                                        driver.execute_script("window.scrollTo(0, 0);")
-                                        time.sleep(random.uniform(2, 4))
-                                    except:
-                                        pass
-                                
-                                # Phase 3: Re-attempt target URL
-                                debug_log("STEALTH: Phase 3 - Re-attempting target URL", "STEALTH")
-                                driver.get(url)
-                                time.sleep(random.uniform(10, 20))
-                                
-                            except Exception as countermeasure_error:
-                                debug_log(f"STEALTH: Countermeasure error: {countermeasure_error}", "WARNING")
-                            
-                            # Final check - if still blocked, skip this URL
-                            final_check = driver.current_url.lower()
-                            final_source = driver.page_source.lower()
-                            if any(indicator in final_check or indicator in final_source 
-                                 for indicator in bot_detection_indicators):
-                                debug_log("STEALTH: Still blocked after countermeasures - skipping URL", "WARNING")
-                                print("[APP_OUT]🚫 Unable to bypass bot detection - skipping this URL")
-                                search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
-                                continue
+                            debug_log("STEALTH: Bot detection triggered - skipping this keyword", "WARNING")
+                            print(f"[APP_OUT]🛡️ Bot detection triggered for '{keyword}' - moving to next keyword")
+                            continue
                         
-                        # 6. Additional human behavior simulation
-                        debug_log("STEALTH: Post-navigation human simulation", "STEALTH")
+                        # Post-search human behavior simulation
+                        debug_log("STEALTH: Post-search human simulation", "STEALTH")
                         try:
-                            # Simulate reading the page before interacting
+                            # Simulate reading the search results before interacting
                             reading_time = random.uniform(3, 8)
                             time.sleep(reading_time)
                             
-                            # Small random scrolls to simulate reading
+                            # Small random scrolls to simulate reading results
                             for _ in range(random.randint(1, 3)):
                                 scroll_amount = random.randint(100, 400)
                                 driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
@@ -1396,7 +1340,7 @@ def main():
                         except:
                             pass  # Not critical if this fails
                         
-                        # Check what page we actually landed on
+                        # Check current status
                         current_url = driver.current_url
                         page_title = driver.title
                         print(f"[APP_OUT]📄 Current URL: {current_url}")
@@ -1406,88 +1350,61 @@ def main():
                         page_source_snippet = driver.page_source[:1000].lower()
                         
                         # Check for subscription/premium prompts
-                        if any(keyword in page_source_snippet for keyword in ['premium', 'subscription', 'upgrade', 'linkedin premium']):
+                        if any(issue_keyword in page_source_snippet for issue_keyword in ['premium', 'subscription', 'upgrade', 'linkedin premium']):
                             print("[APP_OUT]💰 DETECTED: Premium/subscription prompt on page")
                             debug_log("Premium subscription prompt detected", "WARNING")
                         
                         # Check for login issues
-                        if any(keyword in page_source_snippet for keyword in ['sign in', 'log in', 'join linkedin']):
+                        if any(issue_keyword in page_source_snippet for issue_keyword in ['sign in', 'log in', 'join linkedin']):
                             print("[APP_OUT]🔐 DETECTED: Login required")
                             debug_log("Login required - authentication issue", "WARNING")
                         
                         # Check for rate limiting/blocking
-                        if any(keyword in page_source_snippet for keyword in ['blocked', 'rate limit', 'too many requests', 'captcha']):
+                        if any(issue_keyword in page_source_snippet for issue_keyword in ['blocked', 'rate limit', 'too many requests', 'captcha']):
                             print("[APP_OUT]🚫 DETECTED: Possible rate limiting or blocking")
                             debug_log("Rate limiting or blocking detected", "WARNING")
                         
-                        # Look for the search results container with timeout
-                        print("[APP_OUT]⏳ Waiting for search results container...")
-                        WebDriverWait(driver, 30).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, ".reusable-search__entity-result-list"))
-                        )
-                        print("[APP_OUT]✅ Search results container loaded")
-                        
-                        # Additional verification - check if we actually have content
+                        # Look for search results with flexible selectors
+                        print("[APP_OUT]⏳ Waiting for search results...")
                         try:
-                            result_list = driver.find_element(By.CSS_SELECTOR, ".reusable-search__entity-result-list")
-                            all_results = result_list.find_elements(By.CSS_SELECTOR, "*")
-                            print(f"[APP_OUT]📊 Found {len(all_results)} elements in search results container")
-                            debug_log(f"Search results container has {len(all_results)} child elements", "NAVIGATION")
-                        except Exception as check_e:
-                            print(f"[APP_OUT]⚠️ Could not verify search results content: {check_e}")
-                        
-                        debug_log("Search results page loaded and is visible.", "NAVIGATION")
-                    except TimeoutException:
-                        print("[APP_OUT]⚠️ TIMEOUT: Search results container not found")
-                        debug_log(f"TimeoutException: No search results found or page did not load for URL: {url}", "WARNING")
-                        
-                        # Comprehensive page analysis when timeout occurs
-                        try:
-                            current_url_timeout = driver.current_url
-                            page_title_timeout = driver.title
-                            print(f"[APP_OUT]📄 Timeout - Current URL: {current_url_timeout}")
-                            print(f"[APP_OUT]📋 Timeout - Page title: {page_title_timeout}")
+                            # Try multiple selectors for search results
+                            result_selectors = [
+                                ".reusable-search__entity-result-list",
+                                ".search-results-container",
+                                ".search-results",
+                                ".feed-shared-update-v2",
+                                "[data-test-id='search-results']"
+                            ]
                             
-                            # Check what's actually on the page
-                            page_source = driver.page_source.lower()
+                            search_results_found = False
+                            for selector in result_selectors:
+                                try:
+                                    WebDriverWait(driver, 10).until(
+                                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                                    )
+                                    print(f"[APP_OUT]✅ Search results found with selector: {selector}")
+                                    search_results_found = True
+                                    break
+                                except:
+                                    continue
                             
-                            if "premium" in page_source or "subscription" in page_source:
-                                print("[APP_OUT]💰 TIMEOUT CAUSE: Premium subscription required")
-                            elif "sign in" in page_source or "log in" in page_source:
-                                print("[APP_OUT]🔐 TIMEOUT CAUSE: Not logged in properly")  
-                            elif "no results" in page_source:
-                                print("[APP_OUT]📭 TIMEOUT CAUSE: No search results found")
-                            elif "blocked" in page_source or "rate limit" in page_source:
-                                print("[APP_OUT]🚫 TIMEOUT CAUSE: Blocked or rate limited")
-                            else:
-                                print("[APP_OUT]❓ TIMEOUT CAUSE: Unknown - page loaded but selector not found")
-                                # Look for alternative selectors
-                                alternative_selectors = [
-                                    ".search-results-container",
-                                    ".search-results",
-                                    ".feed-shared-update-v2",
-                                    ".feed-shared-update",
-                                    "[data-test-id='search-results']",
-                                    ".artdeco-card"
-                                ]
-                                for selector in alternative_selectors:
-                                    try:
-                                        elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                                        if elements:
-                                            print(f"[APP_OUT]🔍 Found {len(elements)} elements with selector: {selector}")
-                                    except:
-                                        pass
-                            
-                        except Exception as timeout_debug_e:
-                            print(f"[APP_OUT]❌ Error during timeout analysis: {timeout_debug_e}")
+                            if not search_results_found:
+                                print("[APP_OUT]⚠️ No standard search results container found")
+                                debug_log("No standard search results container found", "WARNING")
+                                
+                        except Exception as results_error:
+                            print(f"[APP_OUT]⚠️ Search results detection error: {results_error}")
+                            debug_log(f"Search results detection error: {results_error}", "WARNING")
                         
-                        search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
-                        continue # Move to the next URL
-                    except Exception as nav_e:
-                        print(f"[APP_OUT]❌ Error loading page: {nav_e}")
-                        debug_log(f"Error navigating to {url} or waiting for results: {nav_e}", "ERROR")
-                        search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
-                        continue # Move to the next URL
+                        debug_log(f"Natural search completed for keyword: {keyword}", "SEARCH")
+                    except Exception as search_error:
+                        print(f"[APP_OUT]❌ Error during natural search for '{keyword}': {search_error}")
+                        debug_log(f"Error during natural search for keyword '{keyword}': {search_error}", "ERROR")
+                        
+                        # Log search performance for keyword (converting to dummy URL format for tracking)
+                        dummy_url = f"natural_search:{keyword}"
+                        search_tracker.record_url_performance(dummy_url, success=False, comments_made=0, error=True)
+                        continue # Move to the next keyword
 
                     try:
                         print("[APP_OUT]🔍 Starting post analysis and commenting...")
@@ -1500,7 +1417,10 @@ def main():
                         if posts_processed > 0:
                             session_comments += posts_processed
                             daily_comments += posts_processed
-                        search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
+                        
+                        # Log performance for keyword (converting to dummy URL format for tracking)
+                        dummy_url = f"natural_search:{keyword}"
+                        search_tracker.record_url_performance(dummy_url, success=True, comments_made=posts_processed)
                         
                         # ENHANCED: Behavioral pattern-based delays and breaks
                         try:
@@ -3777,6 +3697,378 @@ def human_like_distraction(driver):
     except Exception as e:
         debug_log(f"STEALTH: Error during distraction activity '{chosen_activity}': {e}", "STEALTH")
         return False
+
+# ========== LEVEL 5: ADVANCED SESSION WARMING & NATURAL NAVIGATION ==========
+
+def advanced_session_warming(driver):
+    """
+    Comprehensive LinkedIn session warming to establish human-like browsing patterns
+    before attempting any job-related searches. This prevents immediate bot detection.
+    """
+    debug_log("🔥 ULTRA-STEALTH: Beginning advanced session warming sequence")
+    
+    try:
+        # Phase 1: Natural LinkedIn entry via search engine
+        debug_log("Phase 1: Natural entry via search engine")
+        
+        # Start from Google and search for LinkedIn naturally
+        driver.get("https://www.google.com")
+        time.sleep(random.uniform(2, 4))
+        
+        # Find search box and type "linkedin" naturally
+        try:
+            search_box = driver.find_element(By.NAME, "q")
+            search_box.click()
+            time.sleep(random.uniform(0.5, 1.2))
+            
+            # Type "linkedin" character by character with human timing
+            linkedin_query = "linkedin"
+            for char in linkedin_query:
+                search_box.send_keys(char)
+                time.sleep(random.uniform(0.15, 0.35))
+            
+            time.sleep(random.uniform(1, 2))
+            search_box.send_keys(Keys.RETURN)
+            time.sleep(random.uniform(3, 5))
+            
+            # Click on LinkedIn.com link (first organic result usually)
+            try:
+                linkedin_links = driver.find_elements(By.PARTIAL_LINK_TEXT, "LinkedIn")
+                if linkedin_links:
+                    linkedin_links[0].click()
+                    debug_log("✅ Successfully navigated to LinkedIn via Google search")
+                else:
+                    # Fallback: direct navigation
+                    driver.get("https://www.linkedin.com")
+            except:
+                driver.get("https://www.linkedin.com")
+                
+        except:
+            # Fallback if Google interaction fails
+            driver.get("https://www.linkedin.com")
+            
+        time.sleep(random.uniform(4, 7))
+        
+        # Phase 2: Casual LinkedIn browsing patterns
+        debug_log("Phase 2: Casual browsing simulation")
+        
+        # Browse different LinkedIn sections naturally
+        casual_pages = [
+            "https://www.linkedin.com/feed/",
+            "https://www.linkedin.com/in/",
+            "https://www.linkedin.com/mynetwork/",
+            "https://www.linkedin.com/learning/",
+            "https://www.linkedin.com/notifications/"
+        ]
+        
+        # Visit 2-3 casual pages
+        pages_to_visit = random.sample(casual_pages, random.randint(2, 3))
+        
+        for page_url in pages_to_visit:
+            try:
+                debug_log(f"Casually browsing: {page_url}")
+                driver.get(page_url)
+                time.sleep(random.uniform(3, 8))
+                
+                # Simulate reading/scrolling
+                scroll_times = random.randint(1, 3)
+                for i in range(scroll_times):
+                    driver.execute_script(f"window.scrollBy(0, {random.randint(200, 600)});")
+                    time.sleep(random.uniform(1.5, 3.5))
+                
+                # Random mouse movements
+                try:
+                    ActionChains(driver).move_by_offset(
+                        random.randint(-100, 100), 
+                        random.randint(-50, 100)
+                    ).perform()
+                    time.sleep(random.uniform(0.5, 1.5))
+                except:
+                    pass
+                    
+            except Exception as e:
+                debug_log(f"Casual browsing error (non-critical): {e}")
+                continue
+        
+        # Phase 3: Gradual transition to search interest
+        debug_log("Phase 3: Gradual transition to professional search")
+        
+        # Visit LinkedIn's main search or jobs page first (not specific searches)
+        transition_pages = [
+            "https://www.linkedin.com/search/",
+            "https://www.linkedin.com/jobs/",
+            "https://www.linkedin.com/posts/"
+        ]
+        
+        for transition_url in random.sample(transition_pages, 2):
+            try:
+                debug_log(f"Transitioning via: {transition_url}")
+                driver.get(transition_url)
+                time.sleep(random.uniform(5, 10))
+                
+                # Simulate exploration
+                driver.execute_script(f"window.scrollBy(0, {random.randint(300, 800)});")
+                time.sleep(random.uniform(2, 5))
+                
+                # Try some generic interactions
+                try:
+                    # Look for any clickable elements and occasionally click them
+                    clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']")
+                    if clickable_elements and random.random() < 0.3:  # 30% chance
+                        safe_element = random.choice(clickable_elements[:5])  # Only first 5 to avoid ads
+                        if safe_element.is_displayed():
+                            safe_element.click()
+                            time.sleep(random.uniform(2, 4))
+                            # Go back
+                            driver.back()
+                            time.sleep(random.uniform(1, 3))
+                except:
+                    pass
+                    
+            except Exception as e:
+                debug_log(f"Transition browsing error (non-critical): {e}")
+                continue
+        
+        # Phase 4: Human-like search preparation
+        debug_log("Phase 4: Search preparation and pattern establishment")
+        
+        # Visit the main search page and do some generic searches first
+        try:
+            driver.get("https://www.linkedin.com/search/results/all/")
+            time.sleep(random.uniform(4, 7))
+            
+            # Find search box and try some generic searches
+            try:
+                search_selectors = [
+                    'input[placeholder*="Search"]',
+                    'input[aria-label*="Search"]',
+                    '.search-global-typeahead__input',
+                    'input[type="text"]'
+                ]
+                
+                search_box = None
+                for selector in search_selectors:
+                    try:
+                        search_box = driver.find_element(By.CSS_SELECTOR, selector)
+                        if search_box.is_displayed():
+                            break
+                    except:
+                        continue
+                
+                if search_box:
+                    # Do 1-2 generic searches first
+                    generic_searches = [
+                        "technology",
+                        "business",
+                        "innovation", 
+                        "professional development",
+                        "networking"
+                    ]
+                    
+                    for search_term in random.sample(generic_searches, random.randint(1, 2)):
+                        debug_log(f"Generic search: {search_term}")
+                        
+                        search_box.clear()
+                        time.sleep(random.uniform(0.5, 1))
+                        
+                        # Type naturally
+                        for char in search_term:
+                            search_box.send_keys(char)
+                            time.sleep(random.uniform(0.1, 0.3))
+                        
+                        time.sleep(random.uniform(1, 2))
+                        search_box.send_keys(Keys.RETURN)
+                        time.sleep(random.uniform(4, 8))
+                        
+                        # Browse results briefly
+                        driver.execute_script(f"window.scrollBy(0, {random.randint(200, 500)});")
+                        time.sleep(random.uniform(2, 4))
+                        
+                        # Clear search for next one
+                        try:
+                            search_box = driver.find_element(By.CSS_SELECTOR, search_selectors[0])
+                        except:
+                            break
+                            
+            except Exception as e:
+                debug_log(f"Generic search simulation error (non-critical): {e}")
+        
+        except Exception as e:
+            debug_log(f"Search preparation error (non-critical): {e}")
+        
+        # Phase 5: Final behavioral establishment
+        debug_log("Phase 5: Final behavioral pattern establishment")
+        
+        # Spend some time on feed to look like a regular user
+        try:
+            driver.get("https://www.linkedin.com/feed/")
+            time.sleep(random.uniform(3, 6))
+            
+            # Simulate typical feed interactions
+            for i in range(random.randint(2, 4)):
+                driver.execute_script(f"window.scrollBy(0, {random.randint(400, 800)});")
+                time.sleep(random.uniform(2, 5))
+                
+                # Occasionally simulate hover or brief stops
+                if random.random() < 0.4:  # 40% chance
+                    try:
+                        posts = driver.find_elements(By.CSS_SELECTOR, "[data-id*='urn:li:activity']")[:3]
+                        if posts:
+                            post = random.choice(posts)
+                            ActionChains(driver).move_to_element(post).perform()
+                            time.sleep(random.uniform(1, 3))
+                    except:
+                        pass
+        
+        except Exception as e:
+            debug_log(f"Feed simulation error (non-critical): {e}")
+        
+        # Final warming delay
+        total_warming_time = random.uniform(15, 30)
+        debug_log(f"🔥 Session warming complete! Total time: {total_warming_time:.1f}s")
+        debug_log("✅ Human-like browsing patterns established - ready for job searches")
+        time.sleep(total_warming_time)
+        
+        return True
+        
+    except Exception as e:
+        debug_log(f"⚠️ Session warming encountered issues: {e}")
+        debug_log("Proceeding with basic delay as fallback")
+        time.sleep(random.uniform(10, 20))  # Fallback delay
+        return False
+
+def natural_job_search(driver, keywords, time_filter="past-24h"):
+    """
+    Perform job-related searches using LinkedIn's search interface naturally
+    instead of direct URL navigation to avoid bot detection.
+    """
+    debug_log(f"🔍 Natural search for: {keywords}")
+    
+    try:
+        # Go to main search page first
+        driver.get("https://www.linkedin.com/search/results/all/")
+        time.sleep(random.uniform(3, 6))
+        
+        # Find and use search box
+        search_selectors = [
+            'input[placeholder*="Search"]',
+            'input[aria-label*="Search"]', 
+            '.search-global-typeahead__input',
+            'input[type="text"]'
+        ]
+        
+        search_box = None
+        for selector in search_selectors:
+            try:
+                search_box = driver.find_element(By.CSS_SELECTOR, selector)
+                if search_box.is_displayed():
+                    break
+            except:
+                continue
+        
+        if not search_box:
+            debug_log("⚠️ Could not find search box - using fallback URL method")
+            return False
+        
+        # Clear and type search term naturally
+        search_box.clear()
+        time.sleep(random.uniform(0.5, 1.2))
+        
+        # Create natural search query
+        search_variations = [
+            f"{keywords} hiring",
+            f"{keywords} jobs", 
+            f"{keywords} recruiting",
+            f"{keywords} opportunities",
+            f"hiring {keywords}",
+            f"jobs in {keywords}"
+        ]
+        
+        search_query = random.choice(search_variations)
+        debug_log(f"Using search query: {search_query}")
+        
+        # Type naturally with human timing
+        for char in search_query:
+            search_box.send_keys(char)
+            time.sleep(random.uniform(0.12, 0.28))
+        
+        # Human-like pause before search
+        time.sleep(random.uniform(1.5, 3))
+        search_box.send_keys(Keys.RETURN)
+        time.sleep(random.uniform(4, 8))
+        
+        # Now try to filter to Posts/Content
+        try:
+            # Look for "Posts" filter
+            filter_selectors = [
+                "button[aria-label*='Posts']",
+                "button[data-test-search-results-filter-button*='POSTS']",
+                "a[href*='content']",
+                ".search-reusables__filter-binary-toggle button"
+            ]
+            
+            posts_filter = None
+            for selector in filter_selectors:
+                try:
+                    posts_filter = driver.find_element(By.CSS_SELECTOR, selector)
+                    if posts_filter.is_displayed():
+                        break
+                except:
+                    continue
+            
+            if posts_filter:
+                debug_log("🎯 Clicking Posts filter")
+                posts_filter.click()
+                time.sleep(random.uniform(3, 6))
+            else:
+                debug_log("ℹ️ Posts filter not found - continuing with all results")
+        
+        except Exception as e:
+            debug_log(f"Filter selection error (non-critical): {e}")
+        
+        # Try to apply time filter if possible
+        try:
+            if time_filter == "past-24h":
+                # Look for date filter options
+                date_filter_selectors = [
+                    "button[aria-label*='Date posted']",
+                    "button[data-test*='date']",
+                    ".search-reusables__filter-binary-toggle"
+                ]
+                
+                for selector in date_filter_selectors:
+                    try:
+                        date_filter = driver.find_element(By.CSS_SELECTOR, selector)
+                        if date_filter.is_displayed():
+                            date_filter.click()
+                            time.sleep(random.uniform(1, 2))
+                            
+                            # Look for "Past 24 hours" option
+                            day_options = driver.find_elements(By.XPATH, "//*[contains(text(), '24') or contains(text(), 'day')]")
+                            if day_options:
+                                day_options[0].click()
+                                time.sleep(random.uniform(2, 4))
+                                debug_log("✅ Applied 24-hour filter")
+                                break
+                    except:
+                        continue
+        
+        except Exception as e:
+            debug_log(f"Time filter error (non-critical): {e}")
+        
+        # Simulate result browsing
+        time.sleep(random.uniform(2, 5))
+        driver.execute_script(f"window.scrollBy(0, {random.randint(300, 600)});")
+        time.sleep(random.uniform(2, 4))
+        
+        debug_log("✅ Natural search completed successfully")
+        return True
+        
+    except Exception as e:
+        debug_log(f"❌ Natural search failed: {e}")
+        return False
+
+# ========== ENHANCED BEHAVIORAL PATTERNS ==========
 
 if __name__ == "__main__":
     driver = None

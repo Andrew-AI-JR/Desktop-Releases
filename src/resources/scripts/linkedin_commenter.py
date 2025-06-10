@@ -10,6 +10,7 @@ import re
 import subprocess
 import traceback
 import urllib.parse
+import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 import pytz
@@ -101,6 +102,17 @@ def load_config_from_args():
         config['log_level'] = env_log_level
     if env_chrome_path and not config.get('chrome_path'):
         config['chrome_path'] = env_chrome_path
+    # Try to load backend URL from .env file if not in config
+    if not config.get('backend_url'):
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            backend_url = os.getenv('BACKEND_URL')
+            if backend_url:
+                config['backend_url'] = backend_url
+        except ImportError:
+            pass  # dotenv not available, continue without it
+    # Backend URL is only loaded from config file
     
     # CLI overrides (highest priority)
     if args.email: # This will overwrite file/env values in linkedin_credentials
@@ -109,6 +121,7 @@ def load_config_from_args():
         config['linkedin_credentials']['password'] = args.password
     if args.chrome_path: # Top-level key
         config['chrome_path'] = args.chrome_path
+    # Backend URL is only loaded from config file
     
     global LOG_LEVEL_OVERRIDE # Top-level keys for logging
     if args.debug:
@@ -342,11 +355,13 @@ class SearchPerformanceTracker:
 
 class CommentGenerator:
     """
-    Generates comments for LinkedIn posts using user bio and optional AI/ML backend.
+    Generates comments for LinkedIn posts using a backend API.
     """
     def __init__(self, user_bio, config=None, job_keywords=None):
         self.user_bio = user_bio
-        self.config = config or POST_SCORING_CONFIG
+        self.config = config or {}
+        # First try to get from config, then from environment, then use default
+        self.backend_url = self.config.get('backend_url') or os.getenv('BACKEND_URL') or 'http://localhost:3000/api/comments/generate'
         
         # Update tech_relevance keywords with job_keywords if provided
         if job_keywords and isinstance(job_keywords, list) and len(job_keywords) > 0:
@@ -375,11 +390,71 @@ class CommentGenerator:
         # ... existing code ...
         return super().classify_post(post_text)
 
-    def generate_comment(self, post_text, author_name=None):
+    def generate_comment(self, post_text, post_url=None):
         if not post_text or len(post_text) < 10:
             return None
-        comment = f"Great post, {author_name or 'there'}! As someone with experience in {self.user_bio[:50]}..., I found your insights valuable."
-        return comment
+            
+        try:
+            # Prepare the request payload according to the expected API format
+            payload = {
+                'post_text': post_text,
+                'source_linkedin_url': post_url or '',
+                'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            }
+            
+            self.debug_log(f"Sending request to comment API: {json.dumps(payload, indent=2)}", "DEBUG")
+            
+            # Make the API request
+            response = requests.post(
+                self.backend_url,
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # Get Calendly link from config with fallback
+            calendly_link = self.config.get('calendly_link', '')
+            
+            # Check if the request was successful
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    if isinstance(data, dict) and 'comment' in data:
+                        comment = data['comment']
+                        # Append Calendly link if available and not already in comment
+                        if calendly_link and calendly_link not in comment:
+                            comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+                        return comment
+                    elif isinstance(data, str):
+                        # Handle case where the API directly returns the comment string
+                        comment = data
+                        if calendly_link and calendly_link not in comment:
+                            comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+                        return comment
+                except ValueError:
+                    # If response is not JSON, return it as is with Calendly link
+                    comment = response.text
+                    if calendly_link and calendly_link not in comment:
+                        comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+                    return comment
+            
+            # Log error if API call failed
+            self.debug_log(
+                f"Failed to generate comment. Status: {response.status_code}, Response: {response.text}",
+                "ERROR"
+            )
+            
+        except requests.exceptions.RequestException as e:
+            self.debug_log(f"Network error while generating comment: {str(e)}", "ERROR")
+        except Exception as e:
+            self.debug_log(f"Unexpected error generating comment: {str(e)}", "ERROR")
+        
+        # Fallback to simple comment if API call fails, with Calendly link if available
+        fallback_comment = f"Great post! As someone with experience in {self.user_bio[:50]}..., I found your insights valuable."
+        calendly_link = self.config.get('calendly_link', '')
+        if calendly_link and calendly_link not in fallback_comment:
+            fallback_comment = f"{fallback_comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+        return fallback_comment
 
     def calculate_post_score(self, post_text, author_name=None, time_filter=None):
         if not post_text:
@@ -919,46 +994,52 @@ def process_posts(driver):
 def verify_active_login(driver, max_attempts=3):
     """
     Automatically verify and perform LinkedIn login without manual intervention.
-    
     Args:
         driver: Selenium WebDriver instance
         max_attempts: Maximum number of login attempts
-        
     Returns:
         bool: True if login was successful, False otherwise
     """
     debug_log("Verifying LinkedIn login status...", "LOGIN")
     print("[APP_OUT]Verifying LinkedIn login status...")
-    
+
     for attempt in range(1, max_attempts + 1):
+        debug_log(f"Login verification attempt {attempt}/{max_attempts}", "LOGIN")
         try:
-            debug_log(f"Login verification attempt {attempt}/{max_attempts}", "LOGIN")
+            # Go to the LinkedIn feed, a reliable page to check login status
+            driver.get("https://www.linkedin.com/feed/")
+            time.sleep(random.uniform(3, 5))
+
+            # Check for an element that reliably indicates a logged-in state.
+            # The global navigation search bar is a good candidate.
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
+                )
+                debug_log("Login confirmed: Found main navigation search bar.", "LOGIN")
+                return True  # Success, exit the function
+            except TimeoutException:
+                debug_log("Login check failed. Could not find a key element indicating a logged-in state.", "LOGIN")
+                # If it fails, it could be a page load issue or we are logged out.
+                # Let the loop retry.
+                if attempt < max_attempts:
+                    debug_log("Retrying login verification...", "LOGIN")
+                    continue
+                else:
+                    debug_log("Final login verification attempt failed.", "ERROR")
+                    return False
+
+        except Exception as e:
+            debug_log(f"An unexpected error occurred during login verification (attempt {attempt}): {e}", "ERROR")
+            if attempt < max_attempts:
+                time.sleep(5)  # Wait before the next attempt
     
-    try:
-        # Go to LinkedIn homepage
-        driver.get("https://www.linkedin.com/")
-        time.sleep(3)
-{{ ... }}
-            except Exception as e:
-                debug_log(f"Error during login attempt {attempt + 1}: {e}", "ERROR")
-                time.sleep(3)
-                continue
-        
-            # If we get here, login was successful
-            debug_log("Login verification successful", "LOGIN")
-        # Get current position
-        old_position = driver.execute_script("return window.pageYOffset;")
-        # Scroll by a random amount
-        scroll_amount = random.randint(600, 1000)
-        driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-        time.sleep(random.uniform(1.0, 2.0))
-        # Get new position
-        new_position = driver.execute_script("return window.pageYOffset;")
-        debug_log(f"Scrolled from {old_position} to {new_position} ({new_position - old_position} pixels)", "SCROLL")
-        return new_position > old_position
-    except Exception as e:
-        debug_log(f"Error scrolling page: {e}", "SCROLL")
-        return False
+    debug_log("Failed to verify active login after all attempts.", "ERROR")
+    return False
+
+def has_already_commented(driver, post):
+    """Check if the user has already commented on a post."""
+    # ... existing code ...
 
 def expand_post(driver, post):
     """Expand the post by clicking 'see more' if present, using robust multi-selector logic."""

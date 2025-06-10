@@ -652,87 +652,96 @@ def main():
             debug_log("[LOGIN] Verifying LinkedIn login status...", "INFO")
             print("Verifying LinkedIn login status...")
             
+            login_successful = verify_active_login(driver)
+            if not login_successful:
+                debug_log("Login verification failed, will attempt to log in within the main loop if necessary.", "ERROR")
+                # We can choose to continue and let the main loop handle it, or exit.
+                # For now, let's allow it to continue.
+
             while True:  # Inner loop for normal operation
                 try:
-                    # Check if browser is still responsive
-                    try:
-                        driver.current_url
-                    except Exception:
-                        debug_log("Browser connection lost, reinitializing...", "WARN")
-                        if driver:
-                            try:
-                                driver.quit()
-                            except:
-                    
-            if not login_successful:
-                debug_log("Login verification failed, retrying...", "ERROR")
-                continue
+                    # Check if browser is still responsive before each cycle
+                    _ = driver.current_url
+                except Exception:
+                    debug_log("Browser connection lost, reinitializing...", "WARN")
+                    if driver:
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+                    # Re-initialize driver and re-verify login
+                    driver = setup_chrome_driver()
+                    if not verify_active_login(driver):
+                        debug_log("Re-login failed after browser crash. Breaking inner loop.", "FATAL")
+                        break # Exit the inner while loop to trigger a full restart
+                    else:
+                        debug_log("Re-login successful.", "INFO")
                         
-            debug_log("Login verified successfully", "LOGIN")
-            print("[APP_OUT]Login successful, proceeding to search results...")
+                debug_log("Login verified successfully", "LOGIN")
+                print("[APP_OUT]Login successful, proceeding to search results...")
 
-            # Get active URLs from the tracker
-            current_hour = datetime.now().hour
-            active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
-                    
-            if not active_urls:
-                debug_log("No active URLs to process, using default search URLs", "WARNING")
-                active_urls = SEARCH_URLS
+                # Get active URLs from the tracker
+                current_hour = datetime.now().hour
+                active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
                         
-            debug_log(f"Active URLs to process: {active_urls}", "DEBUG")
-            print(f"[APP_OUT]Processing {len(active_urls)} search URLs...")
+                if not active_urls:
+                    debug_log("No active URLs to process, using default search URLs", "WARNING")
+                    active_urls = SEARCH_URLS
+                            
+                debug_log(f"Active URLs to process: {active_urls}", "DEBUG")
+                print(f"[APP_OUT]Processing {len(active_urls)} search URLs...")
 
-            # Process each URL
-            for url in active_urls:
-                debug_log(f"Navigating to search URL: {url}", "NAVIGATION")
-                print(f"[APP_OUT]Navigating to: {url}")
-                if session_comments >= MAX_SESSION_COMMENTS:
-                    debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                    break
+                # Process each URL
+                for url in active_urls:
+                    debug_log(f"Navigating to search URL: {url}", "NAVIGATION")
+                    print(f"[APP_OUT]Navigating to: {url}")
+                    if session_comments >= MAX_SESSION_COMMENTS:
+                        debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
+                        break
 
-                if daily_comments >= MAX_DAILY_COMMENTS:
-                    debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
-                    sleep_until_midnight_edt()
-                    daily_comments = 0  # Reset counter at midnight
-                    continue
+                    if daily_comments >= MAX_DAILY_COMMENTS:
+                        debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
+                        sleep_until_midnight_edt()
+                        daily_comments = 0  # Reset counter at midnight
+                        continue
 
-                # Navigate to the URL with retry logic
-                retry_count = 0
-                while retry_count < 3:
+                    # Navigate to the URL with retry logic
+                    retry_count = 0
+                    while retry_count < 3:
+                        try:
+                            driver.get(url)
+                            time.sleep(SHORT_SLEEP_SECONDS)  # Wait for page load
+                            break  # Successful navigation, exit retry loop
+                        except Exception as nav_e:
+                            retry_count += 1
+                            debug_log(f"Error navigating to {url} (attempt {retry_count}): {nav_e}", "ERROR")
+                            if retry_count >= 3:
+                                debug_log(f"Failed to navigate to {url} after 3 attempts.", "ERROR")
+                                search_tracker.record_url_performance(url, success=False, comments_made=0)
+                                break
+                            time.sleep(5 * retry_count)  # Exponential backoff
+
                     try:
-                        driver.get(url)
-                        time.sleep(SHORT_SLEEP_SECONDS)  # Wait for page load
-                        break  # Successful navigation, exit retry loop
-                    except Exception as nav_e:
-                        retry_count += 1
-                        debug_log(f"Error navigating to {url} (attempt {retry_count}): {nav_e}", "ERROR")
-                        if retry_count >= 3:
-                            debug_log(f"Failed to navigate to {url} after 3 attempts.", "ERROR")
-                            search_tracker.record_url_performance(url, success=False, comments_made=0)
-                            break
-                        time.sleep(5 * retry_count)  # Exponential backoff
+                        # Process posts on the current page
+                        posts_processed, hiring_posts_found = process_posts(driver)
+                        if posts_processed > 0:
+                            session_comments += posts_processed
+                            daily_comments += posts_processed
+                        search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
+                        
+                        # Random delay between URLs
+                        time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
 
-                try:
-                    # Process posts on the current page
-                    posts_processed, hiring_posts_found = process_posts(driver)
-                    if posts_processed > 0:
-                        session_comments += posts_processed
-                        daily_comments += posts_processed
-                    search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
-                    
-                    # Random delay between URLs
-                    time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
+                    except Exception as e_url_processing:
+                        debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
+                        debug_log(traceback.format_exc(), "ERROR")
+                        search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
+                        continue  # to next URL in the for loop
 
-                except Exception as e_url_processing:
-                    debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
-                    debug_log(traceback.format_exc(), "ERROR")
-                    search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
-                    continue  # to next URL in the for loop
-
-                # Sleep between cycles
-                cycle_sleep = random.uniform(cycle_break * 60, cycle_break * 120)
-                debug_log(f"Sleeping for {int(cycle_sleep/60)} minutes between cycles", "SLEEP")
-                time.sleep(cycle_sleep)
+                    # Sleep between cycles
+                    cycle_sleep = random.uniform(cycle_break * 60, cycle_break * 120)
+                    debug_log(f"Sleeping for {int(cycle_sleep/60)} minutes between cycles", "SLEEP")
+                    time.sleep(cycle_sleep)
 
         except KeyboardInterrupt:
             debug_log("Received keyboard interrupt", "INFO")

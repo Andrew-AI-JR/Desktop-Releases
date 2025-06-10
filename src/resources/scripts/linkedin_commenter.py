@@ -173,6 +173,115 @@ SEARCH_URLS = []
 LOG_LEVEL_OVERRIDE = None
 
 # === POST SCORING CONFIGURATION ===
+# Dynamic keyword expansion for tech relevance
+def expand_tech_keywords(base_keywords):
+    """
+    Expand tech keywords with synonyms and related terms for better post matching.
+    
+    Args:
+        base_keywords (list): Base keywords from configuration
+        
+    Returns:
+        list: Expanded keywords including synonyms and related terms
+    """
+    
+    # Keyword expansion mapping - add synonyms and related terms
+    expansion_map = {
+        # Data Science & Analytics
+        'data science': ['machine learning', 'data analysis', 'data analytics', 'predictive analytics', 'statistical analysis', 'data mining', 'business intelligence', 'data scientist', 'data analyst'],
+        'data scientist': ['data science', 'machine learning', 'data analysis', 'analytics', 'statistical modeling', 'data mining'],
+        'data analysis': ['data science', 'analytics', 'data analytics', 'business intelligence', 'statistical analysis', 'data visualization'],
+        'analytics': ['data analytics', 'business analytics', 'predictive analytics', 'data analysis', 'business intelligence', 'metrics'],
+        
+        # Machine Learning & AI
+        'machine learning': ['ml', 'data science', 'artificial intelligence', 'ai', 'deep learning', 'neural networks', 'predictive modeling', 'statistical learning'],
+        'ml': ['machine learning', 'data science', 'artificial intelligence', 'ai', 'deep learning', 'predictive modeling'],
+        'artificial intelligence': ['ai', 'machine learning', 'ml', 'deep learning', 'neural networks', 'cognitive computing', 'intelligent systems'],
+        'ai': ['artificial intelligence', 'machine learning', 'ml', 'deep learning', 'neural networks', 'cognitive computing'],
+        'deep learning': ['neural networks', 'ai', 'artificial intelligence', 'machine learning', 'ml', 'deep neural networks', 'cnn', 'rnn'],
+        'neural networks': ['deep learning', 'ai', 'artificial intelligence', 'machine learning', 'neural nets', 'deep neural networks'],
+        
+        # Programming Languages
+        'python': ['python programming', 'python developer', 'python development', 'django', 'flask', 'pandas', 'numpy', 'scikit-learn', 'tensorflow', 'pytorch'],
+        'javascript': ['js', 'node.js', 'nodejs', 'react', 'angular', 'vue', 'javascript developer', 'frontend', 'backend'],
+        'java': ['java developer', 'java programming', 'spring', 'spring boot', 'jvm', 'java development'],
+        'c++': ['cpp', 'c plus plus', 'c++ developer', 'c++ programming'],
+        'r': ['r programming', 'r language', 'rstudio', 'statistical computing'],
+        'sql': ['database', 'mysql', 'postgresql', 'oracle', 'sql server', 'data querying', 'database management'],
+        
+        # Cloud & Infrastructure
+        'cloud': ['cloud computing', 'aws', 'azure', 'gcp', 'google cloud', 'cloud infrastructure', 'cloud services', 'cloud platform'],
+        'aws': ['amazon web services', 'cloud', 'ec2', 's3', 'lambda', 'aws cloud', 'amazon cloud'],
+        'azure': ['microsoft azure', 'cloud', 'azure cloud', 'microsoft cloud'],
+        'gcp': ['google cloud platform', 'google cloud', 'cloud', 'google cloud services'],
+        'kubernetes': ['k8s', 'container orchestration', 'docker', 'containers', 'microservices', 'devops'],
+        'docker': ['containers', 'containerization', 'kubernetes', 'microservices', 'devops'],
+        
+        # Web Development
+        'web development': ['frontend', 'backend', 'full stack', 'web developer', 'web programming', 'web design', 'web applications'],
+        'frontend': ['front-end', 'ui', 'user interface', 'javascript', 'react', 'angular', 'vue', 'css', 'html'],
+        'backend': ['back-end', 'server-side', 'api', 'database', 'web services', 'microservices'],
+        'full stack': ['fullstack', 'full-stack', 'web development', 'frontend', 'backend', 'web developer'],
+        'react': ['reactjs', 'react.js', 'frontend', 'javascript', 'ui', 'web development'],
+        'angular': ['angularjs', 'frontend', 'javascript', 'typescript', 'web development'],
+        
+        # DevOps & Infrastructure
+        'devops': ['dev ops', 'ci/cd', 'continuous integration', 'continuous deployment', 'infrastructure', 'automation', 'docker', 'kubernetes'],
+        'ci/cd': ['continuous integration', 'continuous deployment', 'devops', 'automation', 'pipeline', 'jenkins'],
+        'automation': ['devops', 'ci/cd', 'scripting', 'infrastructure automation', 'test automation'],
+        
+        # Data Engineering
+        'data engineering': ['data pipeline', 'etl', 'data infrastructure', 'big data', 'data warehouse', 'data processing'],
+        'etl': ['extract transform load', 'data pipeline', 'data processing', 'data engineering', 'data integration'],
+        'big data': ['data engineering', 'hadoop', 'spark', 'data processing', 'distributed computing'],
+        
+        # Mobile Development
+        'mobile development': ['ios', 'android', 'mobile app', 'mobile developer', 'mobile programming', 'app development'],
+        'ios': ['iphone', 'ipad', 'swift', 'objective-c', 'mobile development', 'apple'],
+        'android': ['mobile development', 'kotlin', 'java', 'mobile app', 'google'],
+        
+        # Databases
+        'database': ['sql', 'mysql', 'postgresql', 'mongodb', 'nosql', 'database management', 'data storage'],
+        'mongodb': ['nosql', 'database', 'document database', 'json'],
+        'postgresql': ['postgres', 'sql', 'database', 'relational database'],
+        'mysql': ['sql', 'database', 'relational database', 'mariadb'],
+        
+        # Software Engineering
+        'software engineering': ['software development', 'programming', 'software engineer', 'coding', 'software design'],
+        'software development': ['software engineering', 'programming', 'coding', 'application development'],
+        'programming': ['coding', 'software development', 'software engineering', 'developer'],
+        
+        # Emerging Technologies
+        'blockchain': ['cryptocurrency', 'bitcoin', 'ethereum', 'smart contracts', 'web3', 'defi'],
+        'iot': ['internet of things', 'embedded systems', 'sensors', 'connected devices'],
+        'cybersecurity': ['security', 'information security', 'cyber security', 'infosec', 'penetration testing'],
+        
+        # Business & Product
+        'product management': ['product manager', 'pm', 'product development', 'product strategy', 'product owner'],
+        'project management': ['project manager', 'pmp', 'agile', 'scrum', 'project coordination'],
+        'agile': ['scrum', 'agile methodology', 'sprint', 'kanban', 'project management'],
+        'scrum': ['agile', 'scrum master', 'sprint', 'product owner', 'project management']
+    }
+    
+    expanded_keywords = set()
+    
+    # Add original keywords
+    for keyword in base_keywords:
+        if keyword:  # Skip empty keywords
+            keyword_lower = keyword.lower().strip()
+            expanded_keywords.add(keyword_lower)
+            
+            # Add expanded terms if available
+            if keyword_lower in expansion_map:
+                expanded_keywords.update(expansion_map[keyword_lower])
+                debug_log(f"KEYWORD_EXPANSION: '{keyword}' expanded with {len(expansion_map[keyword_lower])} related terms", "CONFIG")
+    
+    # Convert back to sorted list for consistency
+    result = sorted(list(expanded_keywords))
+    debug_log(f"KEYWORD_EXPANSION: {len(base_keywords)} base keywords expanded to {len(result)} total keywords", "CONFIG")
+    
+    return result
+
 POST_SCORING_CONFIG = {
     'internal_hiring': {
         'weight': 8.0,  # HIGHEST weight - internal hiring managers are most likely to book calls
@@ -234,16 +343,7 @@ POST_SCORING_CONFIG = {
     },
     'tech_relevance': {
         'weight': 3.0,  # Important for matching your skills
-        'keywords': [
-            'python', 'machine learning', 'data science', 'ai', 'artificial intelligence',
-            'deep learning', 'nlp', 'natural language processing', 'computer vision',
-            'neural networks', 'tensorflow', 'pytorch', 'scikit-learn', 'pandas', 'numpy',
-            'data analysis', 'data engineering', 'data pipeline', 'etl', 'sql', 'database',
-            'cloud', 'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'microservices',
-            'rest api', 'api development', 'full stack', 'backend', 'frontend',
-            'web development', 'software engineering', 'devops', 'ci/cd', 'git',
-            'generative ai', 'llm', 'chatgpt', 'openai'
-        ]
+        'keywords': []  # Will be populated dynamically from config with keyword expansion
     },
     'urgency_indicators': {
         'weight': 4.0,  # High weight for urgent hiring needs
@@ -280,6 +380,218 @@ POST_SCORING_CONFIG = {
         ]
     }
 }
+
+def initialize_tech_relevance_keywords(job_keywords):
+    """
+    Initialize the tech_relevance keywords from config with expansion.
+    
+    Args:
+        job_keywords (list): Job keywords from configuration
+    """
+    global POST_SCORING_CONFIG
+    
+    if job_keywords and isinstance(job_keywords, list) and len(job_keywords) > 0:
+        # Expand the job keywords with synonyms and related terms
+        expanded_keywords = expand_tech_keywords(job_keywords)
+        POST_SCORING_CONFIG['tech_relevance']['keywords'] = expanded_keywords
+        print(f"[APP_OUT]🔍 Tech relevance initialized: {len(job_keywords)} base keywords → {len(expanded_keywords)} expanded keywords")
+        debug_log(f"Tech relevance keywords expanded from {job_keywords} to {len(expanded_keywords)} total keywords", "CONFIG")
+    else:
+        # Fallback to a minimal set if no job keywords provided
+        fallback_keywords = ['software engineering', 'programming', 'technology']
+        expanded_keywords = expand_tech_keywords(fallback_keywords)
+        POST_SCORING_CONFIG['tech_relevance']['keywords'] = expanded_keywords
+        print(f"[APP_OUT]⚠️ No job keywords provided, using fallback tech keywords: {len(expanded_keywords)} keywords")
+        debug_log(f"Using fallback tech keywords: {fallback_keywords} expanded to {len(expanded_keywords)} keywords", "CONFIG")
+
+# NEW ULTRA-STEALTH ADDITION: Advanced Behavioral Pattern Manager
+class BehavioralPatternManager:
+    """
+    Manages advanced behavioral patterns to simulate realistic human usage cycles.
+    """
+    def __init__(self):
+        self.session_start_time = datetime.now()
+        self.daily_activity_pattern = self._generate_daily_pattern()
+        self.weekly_activity_pattern = self._generate_weekly_pattern()
+        self.session_characteristics = self._generate_session_characteristics()
+        self.behavior_history = []
+        
+    def _generate_daily_pattern(self):
+        """Generate realistic daily activity patterns based on professional work hours."""
+        # Professional work hours with realistic variations
+        patterns = {
+            'early_bird': {  # 7 AM - 6 PM peak
+                'peak_hours': [(7, 10), (13, 15), (17, 19)],
+                'low_hours': [(0, 6), (11, 12), (20, 23)],
+                'activity_multiplier': 1.2
+            },
+            'standard': {  # 9 AM - 5 PM peak
+                'peak_hours': [(9, 11), (14, 16), (18, 20)],
+                'low_hours': [(0, 8), (12, 13), (21, 23)],
+                'activity_multiplier': 1.0
+            },
+            'night_owl': {  # Later hours peak
+                'peak_hours': [(10, 12), (15, 17), (20, 22)],
+                'low_hours': [(0, 9), (13, 14), (23, 24)],
+                'activity_multiplier': 0.9
+            }
+        }
+        selected_pattern = random.choice(list(patterns.keys()))
+        debug_log(f"BEHAVIORAL: Selected daily pattern: {selected_pattern}", "BEHAVIORAL")
+        return patterns[selected_pattern]
+    
+    def _generate_weekly_pattern(self):
+        """Generate realistic weekly activity patterns."""
+        return {
+            'monday': 1.1,      # Strong start to week
+            'tuesday': 1.2,     # Peak activity
+            'wednesday': 1.0,   # Steady
+            'thursday': 0.9,    # Slight decline
+            'friday': 0.7,      # Wind down
+            'saturday': 0.3,    # Low weekend activity
+            'sunday': 0.4       # Preparation for week
+        }
+    
+    def _generate_session_characteristics(self):
+        """Generate characteristics for this specific session."""
+        session_types = [
+            {
+                'type': 'focused',
+                'duration_range': (45, 90),     # 45-90 minutes
+                'comment_rate': 1.2,            # Higher comment rate
+                'break_frequency': 0.15,        # Less frequent breaks
+                'distraction_chance': 0.1       # Low distraction
+            },
+            {
+                'type': 'casual',
+                'duration_range': (20, 45),     # 20-45 minutes
+                'comment_rate': 1.0,            # Normal comment rate
+                'break_frequency': 0.25,        # Moderate breaks
+                'distraction_chance': 0.3       # Higher distraction
+            },
+            {
+                'type': 'brief',
+                'duration_range': (10, 25),     # 10-25 minutes
+                'comment_rate': 0.8,            # Lower comment rate
+                'break_frequency': 0.35,        # Frequent breaks
+                'distraction_chance': 0.4       # High distraction
+            }
+        ]
+        
+        # Weight selection based on time of day
+        current_hour = datetime.now().hour
+        if 9 <= current_hour <= 17:  # Work hours
+            weights = [0.5, 0.4, 0.1]  # Favor focused sessions
+        elif 18 <= current_hour <= 22:  # Evening
+            weights = [0.3, 0.5, 0.2]  # Favor casual sessions
+        else:  # Off hours
+            weights = [0.2, 0.3, 0.5]  # Favor brief sessions
+        
+        selected = random.choices(session_types, weights=weights)[0]
+        debug_log(f"BEHAVIORAL: Session type: {selected['type']}", "BEHAVIORAL")
+        return selected
+    
+    def get_current_activity_multiplier(self):
+        """Get activity multiplier based on current time and patterns."""
+        now = datetime.now()
+        current_hour = now.hour
+        current_day = now.strftime('%A').lower()
+        
+        # Get daily multiplier
+        daily_mult = self.daily_activity_pattern['activity_multiplier']
+        
+        # Adjust for peak/low hours
+        for start_hour, end_hour in self.daily_activity_pattern['peak_hours']:
+            if start_hour <= current_hour < end_hour:
+                daily_mult *= 1.3
+                break
+        
+        for start_hour, end_hour in self.daily_activity_pattern['low_hours']:
+            if start_hour <= current_hour < end_hour:
+                daily_mult *= 0.6
+                break
+        
+        # Get weekly multiplier
+        weekly_mult = self.weekly_activity_pattern.get(current_day, 1.0)
+        
+        # Get session multiplier
+        session_mult = self.session_characteristics['comment_rate']
+        
+        # Combined multiplier
+        total_multiplier = daily_mult * weekly_mult * session_mult
+        
+        debug_log(f"BEHAVIORAL: Activity multiplier: {total_multiplier:.2f} (daily: {daily_mult:.2f}, weekly: {weekly_mult:.2f}, session: {session_mult:.2f})", "BEHAVIORAL")
+        return total_multiplier
+    
+    def should_take_break(self):
+        """Determine if a break should be taken based on behavioral patterns."""
+        session_duration = (datetime.now() - self.session_start_time).total_seconds() / 60
+        break_chance = self.session_characteristics['break_frequency']
+        
+        # Increase break chance with session duration
+        duration_factor = min(session_duration / 60, 2.0)  # Cap at 2x
+        adjusted_break_chance = break_chance * duration_factor
+        
+        should_break = random.random() < adjusted_break_chance
+        if should_break:
+            debug_log(f"BEHAVIORAL: Break triggered (chance: {adjusted_break_chance:.2f}, duration: {session_duration:.1f}m)", "BEHAVIORAL")
+        
+        return should_break
+    
+    def get_break_duration(self):
+        """Get appropriate break duration based on patterns."""
+        base_duration = random.uniform(30, 120)  # 30 seconds to 2 minutes
+        
+        # Adjust based on session type
+        if self.session_characteristics['type'] == 'focused':
+            return base_duration * random.uniform(0.7, 1.0)
+        elif self.session_characteristics['type'] == 'casual':
+            return base_duration * random.uniform(1.0, 1.5)
+        else:  # brief
+            return base_duration * random.uniform(1.2, 2.0)
+    
+    def should_show_distraction(self):
+        """Determine if a distraction activity should be performed."""
+        return random.random() < self.session_characteristics['distraction_chance']
+    
+    def get_typing_speed_multiplier(self):
+        """Get typing speed variation based on behavioral patterns."""
+        base_multiplier = 1.0
+        
+        # Time of day affects typing speed
+        current_hour = datetime.now().hour
+        if 6 <= current_hour <= 10:  # Morning - slower, getting warmed up
+            base_multiplier *= random.uniform(1.1, 1.3)
+        elif 10 <= current_hour <= 16:  # Peak hours - normal to fast
+            base_multiplier *= random.uniform(0.8, 1.1)
+        elif 16 <= current_hour <= 20:  # Afternoon - moderate
+            base_multiplier *= random.uniform(0.9, 1.2)
+        else:  # Evening/night - slower, tired
+            base_multiplier *= random.uniform(1.2, 1.5)
+        
+        # Session type affects speed
+        session_type = self.session_characteristics['type']
+        if session_type == 'focused':
+            base_multiplier *= random.uniform(0.8, 1.0)  # Faster, more focused
+        elif session_type == 'casual':
+            base_multiplier *= random.uniform(1.0, 1.2)  # Normal to slightly slower
+        else:  # brief
+            base_multiplier *= random.uniform(1.1, 1.4)  # Slower, more hurried
+        
+        return max(0.5, min(2.0, base_multiplier))  # Cap between 0.5x and 2.0x
+    
+    def log_behavior(self, action_type, details=None):
+        """Log behavioral actions for pattern analysis."""
+        behavior_entry = {
+            'timestamp': datetime.now(),
+            'action': action_type,
+            'details': details or {}
+        }
+        self.behavior_history.append(behavior_entry)
+        
+        # Keep only last 100 entries to manage memory
+        if len(self.behavior_history) > 100:
+            self.behavior_history = self.behavior_history[-100:]
 
 class SearchPerformanceTracker:
     """Tracks and optimizes search URL performance."""
@@ -382,18 +694,9 @@ class CommentGenerator:
         print(f"[APP_OUT]🔗 Backend API configured: {self.backend_url}")
         self.debug_log(f"Comment generation backend URL: {self.backend_url}", "INFO")
         
-        # Update tech_relevance keywords with job_keywords if provided
-        if job_keywords and isinstance(job_keywords, list) and len(job_keywords) > 0:
-            # Convert job_keywords to lowercase for case-insensitive matching
-            tech_keywords = [keyword.lower() for keyword in job_keywords]
-            # Update the tech_relevance section in the config
-            if 'tech_relevance' in self.config:
-                self.config['tech_relevance']['keywords'] = tech_keywords
-            else:
-                self.config['tech_relevance'] = {
-                    'weight': 3.0,
-                    'keywords': tech_keywords
-                }
+        # Note: Tech relevance keywords are now initialized globally via initialize_tech_relevance_keywords()
+        # This ensures consistent keyword expansion across all components
+        self.debug_log(f"CommentGenerator initialized with job keywords: {job_keywords}", "DEBUG")
 
     def debug_log(self, message, level="INFO"):
         if 'debug_log' in globals():
@@ -773,6 +1076,9 @@ def main():
     CALENDLY_LINK = CONFIG.get('calendly_link', CALENDLY_LINK)
     SEARCH_URLS = CONFIG.get('search_urls', [])
 
+    # Initialize tech relevance keywords with expansion from job keywords
+    initialize_tech_relevance_keywords(JOB_SEARCH_KEYWORDS)
+
     # Critical: Validate essential configuration
     if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
         error_msg = "LinkedIn email or password not found in the configuration (expected under 'linkedin_credentials'). Script cannot proceed."
@@ -839,6 +1145,18 @@ def main():
             except Exception as tracker_error:
                 print(f"[APP_OUT]❌ Failed to initialize search tracker: {tracker_error}")
                 debug_log(f"[ERROR] Failed to initialize search tracker: {tracker_error}", "ERROR")
+                raise
+            
+            # NEW: Initialize behavioral pattern manager for ultra-stealth behavior
+            try:
+                print("[APP_OUT]🧠 Initializing behavioral pattern manager...")
+                behavioral_manager = BehavioralPatternManager()
+                activity_multiplier = behavioral_manager.get_current_activity_multiplier()
+                print(f"[APP_OUT]📊 Behavioral profile: {behavioral_manager.session_characteristics['type']} session (activity: {activity_multiplier:.2f}x)")
+                debug_log(f"[INIT] Initialized behavioral pattern manager with {behavioral_manager.session_characteristics['type']} session profile", "BEHAVIORAL")
+            except Exception as behavioral_error:
+                print(f"[APP_OUT]❌ Failed to initialize behavioral manager: {behavioral_error}")
+                debug_log(f"[ERROR] Failed to initialize behavioral manager: {behavioral_error}", "ERROR")
                 raise
             
             # Initialize comment generator with job keywords
@@ -1184,12 +1502,35 @@ def main():
                             daily_comments += posts_processed
                         search_tracker.record_url_performance(url, success=True, comments_made=posts_processed)
                         
-                        # Random delay between URLs
-                        time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
-                        
-                        # Perform a human-like distraction with a certain probability
-                        if random.random() < 0.25:  # 25% chance of distraction
-                            human_like_distraction(driver)
+                        # ENHANCED: Behavioral pattern-based delays and breaks
+                        try:
+                            # Apply behavioral activity multiplier to delay
+                            base_delay = random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2)
+                            activity_multiplier = behavioral_manager.get_current_activity_multiplier()
+                            adjusted_delay = base_delay / max(0.5, activity_multiplier)  # More active = shorter delays
+                            
+                            debug_log(f"BEHAVIORAL: Inter-URL delay: {adjusted_delay:.1f}s (base: {base_delay:.1f}s, multiplier: {activity_multiplier:.2f})", "BEHAVIORAL")
+                            time.sleep(adjusted_delay)
+                            
+                            # Check for behavioral breaks
+                            if behavioral_manager.should_take_break():
+                                break_duration = behavioral_manager.get_break_duration()
+                                print(f"[APP_OUT]☕ Taking behavioral break: {break_duration:.1f}s")
+                                debug_log(f"BEHAVIORAL: Taking break for {break_duration:.1f}s", "BEHAVIORAL")
+                                behavioral_manager.log_behavior('break', {'duration': break_duration})
+                                time.sleep(break_duration)
+                            
+                            # Perform human-like distraction based on behavioral patterns
+                            if behavioral_manager.should_show_distraction():
+                                debug_log("BEHAVIORAL: Performing behavioral distraction", "BEHAVIORAL")
+                                human_like_distraction(driver)
+                                behavioral_manager.log_behavior('distraction', {'type': 'human_like_distraction'})
+                        except Exception as behavioral_error:
+                            # Fallback to original behavior if behavioral manager fails
+                            debug_log(f"BEHAVIORAL: Error in behavioral patterns, using fallback: {behavioral_error}", "WARNING")
+                            time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
+                            if random.random() < 0.25:
+                                human_like_distraction(driver)
 
                     except Exception as e_url_processing:
                         debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
@@ -2043,7 +2384,74 @@ def ensure_logged_in(driver, max_attempts=2):
 
 def has_already_commented(driver, post):
     """Check if the user has already commented on a post."""
-    # ... existing code ...
+    try:
+        # Look for comment sections within the post
+        comment_selectors = [
+            ".//div[contains(@class, 'comments-comment-item')]",
+            ".//article[contains(@class, 'comments-comment-item')]",
+            ".//div[contains(@class, 'comment-item')]",
+            ".//div[contains(@class, 'social-comments-comment')]"
+        ]
+        
+        # Get current user info to identify our own comments
+        try:
+            # Try to get current user name from page
+            user_name = None
+            name_selectors = [
+                "//span[contains(@class, 'global-nav__me-name')]",
+                "//div[contains(@class, 'identity-headline')]//h1",
+                "//button[contains(@class, 'global-nav__primary-link-me')]//span"
+            ]
+            
+            for selector in name_selectors:
+                try:
+                    name_element = driver.find_element(By.XPATH, selector)
+                    if name_element and name_element.text.strip():
+                        user_name = name_element.text.strip()
+                        break
+                except:
+                    continue
+            
+            # Look for existing comments in the post
+            for comment_selector in comment_selectors:
+                try:
+                    comments = post.find_elements(By.XPATH, comment_selector)
+                    for comment in comments:
+                        if not comment.is_displayed():
+                            continue
+                            
+                        # Check comment author
+                        author_selectors = [
+                            ".//span[contains(@class, 'comments-comment-item__commenter-name')]",
+                            ".//a[contains(@class, 'comment-author')]",
+                            ".//div[contains(@class, 'comment-author-name')]"
+                        ]
+                        
+                        for author_selector in author_selectors:
+                            try:
+                                author_element = comment.find_element(By.XPATH, author_selector)
+                                if author_element and author_element.text.strip():
+                                    comment_author = author_element.text.strip()
+                                    
+                                    # Check if this is our comment
+                                    if user_name and comment_author.lower() == user_name.lower():
+                                        debug_log(f"Found existing comment by {comment_author}", "COMMENT_CHECK")
+                                        return True
+                            except:
+                                continue
+                except:
+                    continue
+            
+            debug_log("No existing comments found by current user", "COMMENT_CHECK")
+            return False
+            
+        except Exception as e:
+            debug_log(f"Error checking for existing comments: {e}", "COMMENT_CHECK")
+            return False
+            
+    except Exception as e:
+        debug_log(f"Error in has_already_commented: {e}", "ERROR")
+        return False
 
 def expand_post(driver, post):
     """Expand the post by clicking 'see more' if present, using robust multi-selector logic."""
@@ -2167,7 +2575,7 @@ def get_post_text(driver, post):
 
 def post_comment(driver, post, message):
     """Post a comment on a post with extremely granular debug logging and robust error handling."""
-    debug_log("[post_comment] Starting comment posting process...", "COMMENT")
+    debug_log("[post_comment] Starting ULTRA-STEALTH comment posting process...", "COMMENT")
     take_screenshot(driver, "before_comment")
     try:
         # Step 1: Find and click the comment button
@@ -2216,15 +2624,26 @@ def post_comment(driver, post, message):
                 take_screenshot(driver, "comment_button_not_found")
                 return False
         else:
-            # Click the comment button
+            # ENHANCED: Human-like button interaction
             try:
+                # Simulate hovering before clicking
+                ActionChains(driver).move_to_element(comment_button).perform()
+                time.sleep(random.uniform(0.3, 0.8))
+                
+                # Random slight mouse movement (human hesitation)
+                ActionChains(driver).move_by_offset(
+                    random.randint(-2, 2), random.randint(-2, 2)
+                ).perform()
+                time.sleep(random.uniform(0.1, 0.3))
+                
                 comment_button.click()
-                time.sleep(2)
+                time.sleep(random.uniform(1.5, 3.0))  # Extended wait after click
             except Exception as e:
                 debug_log(f"[post_comment] Failed to click comment button: {e}", "COMMENT")
                 take_screenshot(driver, "comment_button_click_failed")
                 return False
         take_screenshot(driver, "after_click_comment_button")
+        
         # Step 2: Find the comment input field
         comment_input = None
         input_selectors = [
@@ -2260,38 +2679,163 @@ def post_comment(driver, post, message):
             debug_log("[post_comment] Could not find comment input field", "COMMENT")
             take_screenshot(driver, "comment_input_not_found")
             return False
-        # Step 3: Enter the comment text
-        debug_log(f"[post_comment] Entering comment text: {message[:50]}... (length: {len(message)})", "COMMENT")
+        
+        # Step 3: ULTRA-ENHANCED Human-like text entry with realistic typing patterns
+        debug_log(f"[post_comment] Entering comment text with ULTRA-STEALTH typing: {message[:50]}... (length: {len(message)})", "COMMENT")
         try:
-            # Click to ensure focus
+            # ENHANCED: Human-like focus behavior
+            # Simulate looking for the input field
+            ActionChains(driver).move_to_element(comment_input).perform()
+            time.sleep(random.uniform(0.5, 1.2))
+            
+            # Click to ensure focus with human-like precision
             comment_input.click()
-            time.sleep(0.5)
+            time.sleep(random.uniform(0.3, 0.8))
+            
             # Clear any existing text
             try:
                 comment_input.clear()
             except Exception:
                 pass
-            # Enter text character by character for reliability
-            for chunk in [message[i:i+50] for i in range(0, len(message), 50)]:
-                comment_input.send_keys(chunk)
-                time.sleep(0.2)
-            time.sleep(1)
-            # Verify text entry
-            actual_text = comment_input.get_attribute("value") or comment_input.text
-            debug_log(f"[post_comment] Text verification - actual content: {actual_text[:50]}... (length: {len(actual_text) if actual_text else 0})", "COMMENT")
-            if not actual_text or len(actual_text) < 10:
-                debug_log("[post_comment] Text entry verification failed, trying send_keys method", "COMMENT")
-                comment_input.clear()
-                time.sleep(0.5)
-                comment_input.send_keys(message)
-            time.sleep(1)
+            
+                         # ULTRA-ENHANCED: Realistic human typing simulation with behavioral patterns
+             def human_type_text(element, text):
+                 """Simulate realistic human typing with variable speeds, pauses, and occasional corrections."""
+                 
+                 # Get behavioral typing speed multiplier
+                 try:
+                     speed_multiplier = behavioral_manager.get_typing_speed_multiplier()
+                     behavioral_manager.log_behavior('typing_start', {'text_length': len(text), 'speed_multiplier': speed_multiplier})
+                 except:
+                     speed_multiplier = 1.0  # Fallback if behavioral manager not available
+                 
+                 # Human typing characteristics (adjusted by behavioral patterns)
+                 base_typing_speed = random.uniform(0.08, 0.15) * speed_multiplier
+                 typing_rhythm_variation = 0.5  # How much typing speed varies
+                 word_pause_chance = 0.15  # Chance of pausing between words
+                 sentence_pause_chance = 0.8  # Chance of pausing at sentence end
+                 typo_chance = 0.02  # 2% chance of making a typo
+                 correction_delay = random.uniform(0.3, 0.8) * speed_multiplier  # Delay before correcting typos
+                
+                debug_log(f"ULTRA-STEALTH: Starting human typing simulation for {len(text)} characters", "TYPING")
+                
+                words = text.split(' ')
+                
+                for word_idx, word in enumerate(words):
+                    # Add space before word (except first word)
+                    if word_idx > 0:
+                        element.send_keys(' ')
+                        time.sleep(random.uniform(0.05, 0.12))
+                        
+                        # Random pause between words
+                        if random.random() < word_pause_chance:
+                            pause_duration = random.uniform(0.2, 0.6)
+                            debug_log(f"TYPING: Word pause ({pause_duration:.2f}s)", "TYPING")
+                            time.sleep(pause_duration)
+                    
+                    # Type each character in the word
+                    for char_idx, char in enumerate(word):
+                        # Simulate typos occasionally
+                        if random.random() < typo_chance and char.isalpha():
+                            # Make a typo
+                            typo_chars = 'qwertyuiopasdfghjklzxcvbnm'
+                            typo_char = random.choice(typo_chars)
+                            element.send_keys(typo_char)
+                            
+                            # Typing speed for typo
+                            typing_delay = base_typing_speed * random.uniform(0.8, 1.2)
+                            time.sleep(typing_delay)
+                            
+                            # Realize mistake and correct it
+                            time.sleep(correction_delay)
+                            element.send_keys(Keys.BACKSPACE)
+                            time.sleep(random.uniform(0.1, 0.3))
+                            
+                            debug_log(f"TYPING: Simulated typo '{typo_char}' -> corrected to '{char}'", "TYPING")
+                        
+                        # Type the correct character
+                        element.send_keys(char)
+                        
+                        # Variable typing speed (humans don't type at constant speed)
+                        speed_variation = random.uniform(1 - typing_rhythm_variation, 1 + typing_rhythm_variation)
+                        typing_delay = base_typing_speed * speed_variation
+                        
+                        # Longer pauses for certain characters
+                        if char in '.,!?;:':
+                            typing_delay *= random.uniform(1.5, 2.5)
+                        elif char in '"\'()[]{}':
+                            typing_delay *= random.uniform(1.2, 2.0)
+                        elif char.isupper():
+                            typing_delay *= random.uniform(1.1, 1.6)
+                        
+                        time.sleep(typing_delay)
+                    
+                    # Pause at end of sentences
+                    if word.endswith(('.', '!', '?')) and random.random() < sentence_pause_chance:
+                        sentence_pause = random.uniform(0.5, 1.2)
+                        debug_log(f"TYPING: Sentence pause ({sentence_pause:.2f}s)", "TYPING")
+                        time.sleep(sentence_pause)
+                
+                debug_log("ULTRA-STEALTH: Human typing simulation completed", "TYPING")
+            
+            # Use the human typing function
+            human_type_text(comment_input, message)
+            
+            # ENHANCED: Verify text entry with multiple methods
+            time.sleep(random.uniform(0.5, 1.0))
+            actual_text = None
+            
+            # Try multiple ways to get the actual text
+            for verification_method in ['value', 'text', 'textContent', 'innerText']:
+                try:
+                    if verification_method == 'value':
+                        actual_text = comment_input.get_attribute("value")
+                    elif verification_method == 'text':
+                        actual_text = comment_input.text
+                    else:
+                        actual_text = driver.execute_script(f"return arguments[0].{verification_method};", comment_input)
+                    
+                    if actual_text and len(actual_text.strip()) > 10:
+                        debug_log(f"[post_comment] Text verification successful via {verification_method}: {actual_text[:50]}... (length: {len(actual_text)})", "COMMENT")
+                        break
+                except:
+                    continue
+            
+            # If verification failed, try alternative input method
+            if not actual_text or len(actual_text.strip()) < 10:
+                debug_log("[post_comment] Text verification failed, trying alternative input method", "COMMENT")
+                
+                # Clear and try again with more aggressive method
+                try:
+                    # Focus and select all first
+                    comment_input.click()
+                    time.sleep(0.2)
+                    comment_input.send_keys(Keys.CONTROL + "a")
+                    time.sleep(0.2)
+                    comment_input.send_keys(Keys.DELETE)
+                    time.sleep(0.3)
+                    
+                    # Type in chunks to avoid input buffer issues
+                    chunk_size = 25
+                    for i in range(0, len(message), chunk_size):
+                        chunk = message[i:i+chunk_size]
+                        comment_input.send_keys(chunk)
+                        time.sleep(random.uniform(0.1, 0.3))
+                    
+                except Exception as alt_error:
+                    debug_log(f"[post_comment] Alternative input method failed: {alt_error}", "ERROR")
+                    take_screenshot(driver, "comment_text_error")
+                    return False
+                
         except Exception as e:
             debug_log(f"[post_comment] Error entering comment text: {e}", "COMMENT")
             take_screenshot(driver, "comment_text_error")
             return False
+        
         take_screenshot(driver, "after_entering_comment")
-        # Step 4: Submit the comment
-        debug_log("[post_comment] Looking for submit button", "COMMENT")
+        
+        # Step 4: ENHANCED Submit button detection and interaction
+        debug_log("[post_comment] Looking for submit button with enhanced detection", "COMMENT")
         submit_button = None
         submit_button_selectors = [
             ".//button[normalize-space(text())='Post']",
@@ -2304,7 +2848,7 @@ def post_comment(driver, post, message):
             try:
                 buttons = driver.find_elements(By.XPATH, selector)
                 for btn in buttons:
-                    if btn.is_displayed():
+                    if btn.is_displayed() and btn.is_enabled():
                         debug_log(f"[post_comment] Found submit button using {selector}", "COMMENT")
                         submit_button = btn
                         break
@@ -2313,43 +2857,81 @@ def post_comment(driver, post, message):
             except Exception as e:
                 debug_log(f"[post_comment] Error with submit selector {selector}: {e}", "COMMENT")
                 continue
+        
         if not submit_button:
             debug_log("[post_comment] Could not find submit button", "COMMENT")
             take_screenshot(driver, "submit_button_not_found")
             return False
-        # Try to click the submit button
+        
+        # ENHANCED: Human-like submission behavior
         try:
-            submit_button.click()
-            debug_log("[post_comment] Clicked submit button", "COMMENT")
-            time.sleep(random.uniform(1.0, 2.0))
+            # Simulate reviewing the comment before submitting
+            review_time = random.uniform(1.5, 4.0)
+            debug_log(f"ULTRA-STEALTH: Simulating comment review ({review_time:.1f}s)", "COMMENT")
+            time.sleep(review_time)
+            
+            # Hover over submit button
+            ActionChains(driver).move_to_element(submit_button).perform()
+            time.sleep(random.uniform(0.4, 0.9))
+            
+            # Small hesitation (human uncertainty)
+            if random.random() < 0.3:  # 30% chance of hesitation
+                hesitation_time = random.uniform(0.5, 1.5)
+                debug_log(f"ULTRA-STEALTH: Human hesitation simulation ({hesitation_time:.1f}s)", "COMMENT")
+                time.sleep(hesitation_time)
+            
+            # Click with slight mouse movement variation
+            ActionChains(driver).move_by_offset(
+                random.randint(-1, 1), random.randint(-1, 1)
+            ).click().perform()
+            
+            debug_log("[post_comment] Clicked submit button with human-like behavior", "COMMENT")
+            time.sleep(random.uniform(1.5, 3.0))
+            
         except Exception as e:
             debug_log(f"[post_comment] Failed to click submit button: {e}", "COMMENT")
             take_screenshot(driver, "submit_button_click_failed")
             return False
+        
         take_screenshot(driver, "after_submit_attempt")
-        # Step 5: Verify the comment was posted by checking if input field is cleared/gone
-        time.sleep(3)
+        
+        # Step 5: ENHANCED Verification with multiple checks
+        verification_delay = random.uniform(2.0, 4.0)
+        debug_log(f"ULTRA-STEALTH: Comment verification delay ({verification_delay:.1f}s)", "COMMENT")
+        time.sleep(verification_delay)
+        
+        # Check if input field is cleared/gone (indication of successful submission)
         try:
             if comment_input.is_displayed():
                 current_value = comment_input.get_attribute("value") or comment_input.text
-                if current_value and message in current_value:
-                    debug_log("[post_comment] Comment still in input field - submission failed", "COMMENT")
+                if current_value and message[:50] in current_value:
+                    debug_log("[post_comment] Comment still in input field - submission may have failed", "COMMENT")
                     take_screenshot(driver, "comment_still_in_input")
-                    return False
+                    
+                    # Try alternative verification
+                    time.sleep(2)
+                    if has_already_commented(driver, post):
+                        debug_log("✅ COMMENT VERIFIED in post despite input field retention", "COMMENT")
+                        return True
+                    else:
+                        return False
         except Exception as e:
-            debug_log(f"[post_comment] Error verifying comment submission: {e}", "COMMENT")
-        # Final check - search for our comment in the post
-        time.sleep(2)
+            debug_log(f"[post_comment] Error during input field verification: {e}", "COMMENT")
+        
+        # Final verification - search for our comment in the post
+        time.sleep(random.uniform(1.0, 2.5))
         if has_already_commented(driver, post):
             # SUCCESS! Log this prominently for the desktop app
-            debug_log("✅ COMMENT POSTED SUCCESSFULLY! Comment has been verified in the post.", "COMMENT")
+            debug_log("✅ ULTRA-STEALTH COMMENT POSTED SUCCESSFULLY! Comment has been verified in the post.", "COMMENT")
             debug_log(f"📝 Comment content (first 100 chars): {message[:100]}{'...' if len(message) > 100 else ''}", "COMMENT")
             return True
-        debug_log("✅ COMMENT POSTED! Could not verify but submission appears successful.", "COMMENT")
+        
+        debug_log("✅ ULTRA-STEALTH COMMENT POSTED! Could not verify but submission appears successful.", "COMMENT")
         debug_log(f"📝 Comment content (first 100 chars): {message[:100]}{'...' if len(message) > 100 else ''}", "COMMENT")
         return True
+        
     except Exception as e:
-        debug_log(f"[post_comment] Error posting comment: {e}", "COMMENT")
+        debug_log(f"[post_comment] Error during ULTRA-STEALTH comment posting: {e}", "COMMENT")
         debug_log(traceback.format_exc(), "COMMENT")
         take_screenshot(driver, "comment_error")
         return False
@@ -2520,7 +3102,7 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
         attempt += 1
         driver = None
         try:
-            debug_log(f"Setting up STEALTH Chrome WebDriver (Attempt {attempt}/{max_retries})")
+            debug_log(f"Setting up ULTRA-STEALTH Chrome WebDriver (Attempt {attempt}/{max_retries})")
             
             # Initialize Chrome options with STEALTH configuration
             chrome_options = Options()
@@ -2529,20 +3111,28 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
 
             # ========== CRITICAL ANTI-BOT DETECTION MEASURES ==========
             
-            # 1. Random realistic viewport sizes
+            # 1. ENHANCED Random realistic viewport sizes with device-specific ratios
             viewports = [
+                # Desktop viewports with realistic proportions
                 (1920, 1080), (1366, 768), (1536, 864), (1440, 900), 
-                (1280, 720), (1600, 900), (1024, 768), (1280, 800)
+                (1280, 720), (1600, 900), (1024, 768), (1280, 800),
+                (1680, 1050), (1280, 1024), (1152, 864), (1024, 600),
+                # Laptop viewports
+                (1366, 768), (1360, 768), (1280, 800), (1440, 900),
+                # High-DPI viewports
+                (2560, 1440), (3840, 2160), (2048, 1152), (1920, 1200)
             ]
             width, height = random.choice(viewports)
             
-            # 2. Pool of realistic user agents (latest Chrome versions)
+            # 2. ENHANCED Pool of realistic user agents with browser version consistency
             user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
             ]
             selected_ua = random.choice(user_agents)
             
@@ -2551,22 +3141,22 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
                 chrome_options.add_argument('--headless=new')
                 chrome_options.add_argument('--disable-gpu')
                 chrome_options.add_argument('--disable-software-rasterizer')
-                debug_log("Running Chrome in STEALTH headless mode")
+                debug_log("Running Chrome in ULTRA-STEALTH headless mode")
             else:
-                debug_log("Debug mode enabled: running Chrome in headed STEALTH mode")
+                debug_log("Debug mode enabled: running Chrome in headed ULTRA-STEALTH mode")
 
-            # 3. EXTENSIVE Anti-Detection Arguments
+            # 3. ULTRA-ENHANCED Anti-Detection Arguments
             chrome_options.add_argument(f"--window-size={width},{height}")
             chrome_options.add_argument(f"--user-agent={selected_ua}")
             
-            # Basic stealth
+            # Basic stealth (existing)
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
             
-            # Advanced stealth - hide automation traces
+            # Advanced stealth - hide automation traces (existing)
             chrome_options.add_argument("--disable-features=VizDisplayCompositor")
             chrome_options.add_argument("--disable-features=TranslateUI")
             chrome_options.add_argument("--disable-ipc-flooding-protection")
@@ -2577,46 +3167,140 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             chrome_options.add_argument("--disable-default-apps")
             chrome_options.add_argument("--disable-extensions-http-throttling")
             
-            # Memory and performance
+            # NEW ULTRA-STEALTH ADDITIONS
+            # Advanced browser fingerprint randomization
+            chrome_options.add_argument("--disable-features=WebRTC")
+            chrome_options.add_argument("--disable-features=WebGL")
+            chrome_options.add_argument("--disable-features=WebGL2")
+            chrome_options.add_argument("--disable-features=Geolocation")
+            chrome_options.add_argument("--disable-features=MediaStream")
+            chrome_options.add_argument("--disable-features=VoiceActivation")
+            chrome_options.add_argument("--disable-speech-synthesis-api")
+            chrome_options.add_argument("--disable-speech-api")
+            chrome_options.add_argument("--disable-wake-on-wifi")
+            chrome_options.add_argument("--disable-webgl-image-chromium")
+            chrome_options.add_argument("--disable-webgl2-compute-context")
+            
+            # Enhanced networking stealth
+            chrome_options.add_argument("--disable-features=NetworkPrediction")
+            chrome_options.add_argument("--disable-features=Prerender2")
+            chrome_options.add_argument("--disable-features=PreloadMediaEngagementData")
+            chrome_options.add_argument("--disable-features=PrefetchPrivacyChanges")
+            chrome_options.add_argument("--disable-domain-reliability")
+            chrome_options.add_argument("--disable-background-networking")
+            chrome_options.add_argument("--disable-client-side-phishing-detection")
+            chrome_options.add_argument("--disable-sync")
+            chrome_options.add_argument("--disable-translate")
+            
+            # Browser behavior randomization
+            chrome_options.add_argument("--disable-features=AutofillAssistant")
+            chrome_options.add_argument("--disable-features=AutofillServerCommunication") 
+            chrome_options.add_argument("--disable-features=PasswordManager")
+            chrome_options.add_argument("--disable-features=FormControls")
+            chrome_options.add_argument("--disable-hang-monitor")
+            chrome_options.add_argument("--disable-prompt-on-repost")
+            chrome_options.add_argument("--disable-component-update")
+            
+            # Memory and performance (existing)
             chrome_options.add_argument("--memory-pressure-off")
             chrome_options.add_argument("--max_old_space_size=4096")
             
-            # Network and security
+            # Network and security (existing)
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--allow-running-insecure-content")
             chrome_options.add_argument("--disable-notifications")
             chrome_options.add_argument("--disable-popup-blocking")
             
-            # Language and locale (randomize)
-            locales = ["en-US,en;q=0.9", "en-GB,en;q=0.9", "en-CA,en;q=0.9"]
+            # ENHANCED Language and locale randomization
+            locales = [
+                "en-US,en;q=0.9", "en-GB,en;q=0.9", "en-CA,en;q=0.9",
+                "en-AU,en;q=0.9", "en-NZ,en;q=0.9"
+            ]
             selected_locale = random.choice(locales)
             chrome_options.add_argument(f"--lang={selected_locale.split(',')[0]}")
+            chrome_options.add_argument(f"--accept-lang={selected_locale}")
             
-            # 4. Advanced Experimental Options for Maximum Stealth
+            # 4. ULTRA-Advanced Experimental Options for Maximum Stealth
             chrome_options.add_experimental_option("excludeSwitches", [
                 "enable-automation", 
                 "enable-logging",
                 "disable-extensions",
                 "disable-dev-shm-usage",
-                "disable-component-extensions-with-background-pages"
+                "disable-component-extensions-with-background-pages",
+                "disable-background-timer-throttling",
+                "disable-renderer-backgrounding",
+                "disable-backgrounding-occluded-windows"
             ])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
-            # 5. Fake plugin and webdriver detection
+            # 5. ENHANCED Fake plugin and webdriver detection + NEW browser characteristics
             chrome_options.add_experimental_option("prefs", {
+                # Notification and popup settings
                 "profile.default_content_setting_values.notifications": 2,
                 "profile.default_content_settings.popups": 0,
                 "profile.managed_default_content_settings.images": 1,
+                
+                # Plugin settings
                 "profile.content_settings.plugin_whitelist.adobe-flash-player": 1,
                 "profile.content_settings.exceptions.plugins.*,*.per_resource.adobe-flash-player": 1,
                 "PluginsAllowedForUrls": ["https://linkedin.com"],
-                "profile.default_content_setting_values.geolocation": 2
+                
+                # Privacy and tracking
+                "profile.default_content_setting_values.geolocation": 2,
+                "profile.default_content_setting_values.media_stream": 2,
+                "profile.default_content_setting_values.media_stream_mic": 2,
+                "profile.default_content_setting_values.media_stream_camera": 2,
+                "profile.default_content_setting_values.automatic_downloads": 2,
+                
+                # ENHANCED browser fingerprint randomization
+                "profile.default_content_setting_values.background_sync": 2,
+                "profile.default_content_setting_values.ambient_light_sensor": 2,
+                "profile.default_content_setting_values.accelerometer": 2,
+                "profile.default_content_setting_values.gyroscope": 2,
+                "profile.default_content_setting_values.magnetometer": 2,
+                
+                # Enhanced performance and behavior
+                "profile.password_manager_enabled": False,
+                "profile.default_content_setting_values.password_protection_warning_trigger": 2,
+                "credentials_enable_service": False,
+                "profile.managed_default_content_settings.geolocation": 2,
+                
+                # DNS and network settings
+                "dns_prefetching.enabled": False,
+                "profile.network_prediction_options": 2,
+                "profile.prerender_enabled": False,
+                
+                # Search and suggestions
+                "search.suggest_enabled": False,
+                "alternate_error_pages.enabled": False,
+                "safebrowsing.enabled": False,
+                "profile.safebrowsing.enabled": False,
+                
+                # WebRTC and media
+                "webrtc.ip_handling_policy": "disable_non_proxied_udp",
+                "webrtc.multiple_routes_enabled": False,
+                "webrtc.nonproxied_udp_enabled": False,
+                
+                # ULTRA-ENHANCED: Randomize timezone
+                "profile.managed_default_content_settings.timezone": random.choice([
+                    "America/New_York", "America/Chicago", "America/Denver", 
+                    "America/Los_Angeles", "America/Toronto", "Europe/London"
+                ])
             })
             
-            # 6. Randomize window position
-            chrome_options.add_argument(f"--window-position={random.randint(0, 100)},{random.randint(0, 100)}")
+            # 6. ENHANCED Randomize window position and size variations
+            position_x = random.randint(0, 200)
+            position_y = random.randint(0, 150)
+            chrome_options.add_argument(f"--window-position={position_x},{position_y}")
             
-            debug_log(f"STEALTH CONFIG: Viewport={width}x{height}, UA={selected_ua[:50]}...")
+            # Add slight viewport size variation (simulate real browser resizing)
+            viewport_variation_x = random.randint(-20, 20)
+            viewport_variation_y = random.randint(-20, 20)
+            final_width = max(800, width + viewport_variation_x)
+            final_height = max(600, height + viewport_variation_y)
+            chrome_options.add_argument(f"--window-size={final_width},{final_height}")
+            
+            debug_log(f"ULTRA-STEALTH CONFIG: Viewport={final_width}x{final_height}, Position=({position_x},{position_y}), UA={selected_ua[:50]}...")
             
             # Disable automation flags that might trigger bot detection
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -2663,19 +3347,28 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             try:
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 
-                # ========== POST-INITIALIZATION STEALTH MEASURES ==========
+                # ========== POST-INITIALIZATION ULTRA-STEALTH MEASURES ==========
                 
-                # 7. Execute stealth JavaScript to hide webdriver traces
-                stealth_js = """
-                    // Hide webdriver property
+                # 7. ULTRA-ENHANCED stealth JavaScript to hide webdriver traces
+                ultra_stealth_js = """
+                    // Hide webdriver property (existing)
                     Object.defineProperty(navigator, 'webdriver', {
                         get: () => undefined,
                     });
                     
-                    // Hide automation indicators
+                    // Hide automation indicators (existing)
                     delete navigator.__proto__.webdriver;
                     
-                    // Fake plugins
+                    // ENHANCED: Hide additional automation traces
+                    Object.defineProperty(navigator, 'automation', {
+                        get: () => undefined,
+                    });
+                    
+                    Object.defineProperty(navigator, 'driver', {
+                        get: () => undefined,
+                    });
+                    
+                    // ENHANCED: Fake more comprehensive plugins array
                     Object.defineProperty(navigator, 'plugins', {
                         get: () => [
                             {
@@ -2688,77 +3381,265 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
                             {
                                 0: {type: "application/pdf", suffixes: "pdf", description: "", filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai"},
                                 description: "",
-                                filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai",
+                                filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai", 
                                 length: 1,
                                 name: "Chrome PDF Viewer"
+                            },
+                            {
+                                description: "Shockwave Flash",
+                                filename: "pepflashplayer.dll",
+                                length: 1,
+                                name: "Shockwave Flash"
+                            },
+                            {
+                                description: "Native Client",
+                                filename: "internal-nacl-plugin",
+                                length: 2,
+                                name: "Native Client"
                             }
                         ],
                     });
                     
-                    // Fake languages
+                    // ENHANCED: Fake languages with regional variations
+                    const languages = [
+                        ['en-US', 'en'], ['en-GB', 'en'], ['en-CA', 'en'],
+                        ['en-AU', 'en'], ['en-NZ', 'en']
+                    ];
+                    const selectedLanguages = languages[Math.floor(Math.random() * languages.length)];
                     Object.defineProperty(navigator, 'languages', {
-                        get: () => ['en-US', 'en'],
+                        get: () => selectedLanguages,
                     });
                     
-                    // Fake permissions
-                    const originalQuery = window.navigator.permissions.query;
-                    window.navigator.permissions.query = (parameters) => (
-                        parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                    );
+                    Object.defineProperty(navigator, 'language', {
+                        get: () => selectedLanguages[0],
+                    });
                     
-                    // Hide chrome runtime
-                    if (window.chrome && window.chrome.runtime) {
-                        delete window.chrome.runtime.onConnect;
-                        delete window.chrome.runtime.onMessage;
+                    // ENHANCED: Fake permissions with more comprehensive coverage
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.query = (parameters) => {
+                        const deniedPermissions = ['geolocation', 'camera', 'microphone', 'background-sync'];
+                        const grantedPermissions = ['notifications'];
+                        
+                        if (deniedPermissions.includes(parameters.name)) {
+                            return Promise.resolve({ state: 'denied' });
+                        } else if (grantedPermissions.includes(parameters.name)) {
+                            return Promise.resolve({ state: 'granted' });
+                        } else if (parameters.name === 'notifications') {
+                            return Promise.resolve({ state: Notification.permission });
+                        }
+                        return originalQuery(parameters);
+                    };
+                    
+                    // ENHANCED: Hide chrome runtime traces more thoroughly
+                    if (window.chrome) {
+                        if (window.chrome.runtime) {
+                            delete window.chrome.runtime.onConnect;
+                            delete window.chrome.runtime.onMessage;
+                            delete window.chrome.runtime.connect;
+                            delete window.chrome.runtime.sendMessage;
+                        }
+                        // Hide additional chrome APIs
+                        delete window.chrome.csi;
+                        delete window.chrome.loadTimes;
+                        delete window.chrome.app;
                     }
                     
-                    // Randomize screen properties slightly
+                    // ENHANCED: Randomize screen properties with realistic variations
+                    const screenVarX = Math.floor(Math.random() * 50) - 25;
+                    const screenVarY = Math.floor(Math.random() * 50) - 25;
+                    
                     Object.defineProperty(screen, 'availHeight', {
-                        get: () => screen.height - Math.floor(Math.random() * 10),
+                        get: () => screen.height - 40 + screenVarY,
                     });
                     
-                    // Override image loading to appear more human
+                    Object.defineProperty(screen, 'availWidth', {
+                        get: () => screen.width + screenVarX,
+                    });
+                    
+                    Object.defineProperty(screen, 'colorDepth', {
+                        get: () => 24,
+                    });
+                    
+                    Object.defineProperty(screen, 'pixelDepth', {
+                        get: () => 24,
+                    });
+                    
+                    // ENHANCED: Override image loading with more sophisticated patterns
                     const originalCreateElement = document.createElement;
                     document.createElement = function(tagName) {
                         const element = originalCreateElement.call(document, tagName);
                         if (tagName.toLowerCase() === 'img') {
                             setTimeout(() => {
-                                if (Math.random() > 0.1) {
+                                if (Math.random() > 0.05) {  // 95% success rate
                                     element.src = element.src;
                                 }
-                            }, Math.random() * 100);
+                            }, Math.random() * 200 + 50);  // 50-250ms delay
                         }
                         return element;
                     };
+                    
+                    // NEW: Hide WebGL fingerprinting
+                    const getContext = HTMLCanvasElement.prototype.getContext;
+                    HTMLCanvasElement.prototype.getContext = function(contextType, ...args) {
+                        if (contextType === 'webgl' || contextType === 'webgl2') {
+                            return null;  // Disable WebGL to prevent fingerprinting
+                        }
+                        if (contextType === '2d') {
+                            const context = getContext.call(this, contextType, ...args);
+                            if (context) {
+                                // Introduce slight randomization to canvas fingerprinting
+                                const originalFillText = context.fillText;
+                                context.fillText = function(text, x, y, ...rest) {
+                                    const noiseX = (Math.random() - 0.5) * 0.01;
+                                    const noiseY = (Math.random() - 0.5) * 0.01;
+                                    return originalFillText.call(this, text, x + noiseX, y + noiseY, ...rest);
+                                };
+                            }
+                            return context;
+                        }
+                        return getContext.call(this, contextType, ...args);
+                    };
+                    
+                    // NEW: Fake hardware concurrency
+                    Object.defineProperty(navigator, 'hardwareConcurrency', {
+                        get: () => Math.floor(Math.random() * 8) + 4,  // 4-12 cores
+                    });
+                    
+                    // NEW: Fake device memory
+                    Object.defineProperty(navigator, 'deviceMemory', {
+                        get: () => [4, 8, 16][Math.floor(Math.random() * 3)],  // 4GB, 8GB, or 16GB
+                    });
+                    
+                    // NEW: Fake connection type
+                    if (navigator.connection) {
+                        Object.defineProperty(navigator.connection, 'effectiveType', {
+                            get: () => ['4g', '3g', 'wifi'][Math.floor(Math.random() * 3)],
+                        });
+                    }
+                    
+                    // NEW: Override timing APIs to prevent timing-based fingerprinting
+                    const originalNow = performance.now;
+                    performance.now = function() {
+                        return originalNow.call(this) + (Math.random() - 0.5) * 2;  // Add ±1ms noise
+                    };
+                    
+                    // NEW: Hide automation-specific errors
+                    const originalError = window.Error;
+                    window.Error = function(...args) {
+                        const error = new originalError(...args);
+                        if (error.stack && error.stack.includes('webdriver')) {
+                            error.stack = error.stack.replace(/webdriver/g, 'browser');
+                        }
+                        return error;
+                    };
+                    
+                    // NEW: Randomize User-Agent Client Hints
+                    if (navigator.userAgentData) {
+                        Object.defineProperty(navigator.userAgentData, 'brands', {
+                            get: () => [
+                                { brand: 'Google Chrome', version: '121' },
+                                { brand: 'Not A(Brand', version: '99' },
+                                { brand: 'Chromium', version: '121' }
+                            ],
+                        });
+                        
+                        Object.defineProperty(navigator.userAgentData, 'mobile', {
+                            get: () => false,
+                        });
+                        
+                        Object.defineProperty(navigator.userAgentData, 'platform', {
+                            get: () => ['Windows', 'macOS', 'Linux'][Math.floor(Math.random() * 3)],
+                        });
+                    }
                 """
                 
-                # Execute stealth script
-                driver.execute_script(stealth_js)
-                debug_log("STEALTH: JavaScript anti-detection measures applied")
+                # Execute ultra-stealth script
+                driver.execute_script(ultra_stealth_js)
+                debug_log("ULTRA-STEALTH: JavaScript anti-detection measures applied")
                 
-                # 8. Set realistic page load timeout and test responsiveness
-                driver.set_page_load_timeout(45)  # More realistic timeout
-                driver.implicitly_wait(10)  # Reasonable implicit wait
+                # 8. ENHANCED page load timeout and test responsiveness
+                driver.set_page_load_timeout(60)  # More generous timeout
+                driver.implicitly_wait(12)  # Slightly longer implicit wait
                 
-                # 9. Navigate to a neutral page first (appears more human)
-                debug_log("STEALTH: Initial navigation to neutral page...")
-                driver.get("https://www.google.com")
-                time.sleep(random.uniform(2, 4))  # Random delay
+                # 9. ENHANCED neutral page navigation with behavioral patterns
+                debug_log("ULTRA-STEALTH: Enhanced initial navigation sequence...")
                 
-                # 10. Add realistic mouse movement simulation
+                # Start with a search engine (most natural)
+                search_engines = [
+                    "https://www.google.com",
+                    "https://www.bing.com", 
+                    "https://duckduckgo.com"
+                ]
+                initial_page = random.choice(search_engines)
+                driver.get(initial_page)
+                time.sleep(random.uniform(3, 6))
+                
+                # Simulate brief search behavior
                 try:
-                    # Simulate human-like mouse movement
-                    ActionChains(driver).move_by_offset(
-                        random.randint(50, 200), 
-                        random.randint(50, 200)
-                    ).perform()
-                    time.sleep(random.uniform(0.5, 1.5))
+                    # Try to find search box and simulate typing (without actual search)
+                    search_selectors = ['input[name="q"]', 'input[type="search"]', '#search']
+                    for selector in search_selectors:
+                        try:
+                            search_box = driver.find_element(By.CSS_SELECTOR, selector)
+                            if search_box.is_displayed():
+                                # Simulate typing a generic query
+                                search_box.click()
+                                time.sleep(random.uniform(0.5, 1.5))
+                                
+                                # Type slowly like a human
+                                query_parts = ["linkedin", " professional", " network"]
+                                for part in query_parts:
+                                    for char in part:
+                                        search_box.send_keys(char)
+                                        time.sleep(random.uniform(0.1, 0.3))
+                                
+                                time.sleep(random.uniform(1, 3))
+                                search_box.clear()  # Clear without searching
+                                break
+                        except:
+                            continue
+                except:
+                    pass  # Search simulation not critical
+                
+                # 10. ENHANCED realistic mouse movement simulation with curves
+                try:
+                    # Create curved mouse movement patterns
+                    start_x, start_y = random.randint(100, 300), random.randint(100, 300)
+                    
+                    # Generate Bezier curve points for natural mouse movement
+                    for i in range(5):  # 5 movement points
+                        control_x = start_x + random.randint(-100, 200)
+                        control_y = start_y + random.randint(-50, 150)
+                        
+                        end_x = control_x + random.randint(-50, 100)
+                        end_y = control_y + random.randint(-30, 80)
+                        
+                        # Move in small increments to create smooth curve
+                        steps = random.randint(3, 7)
+                        for step in range(steps):
+                            progress = (step + 1) / steps
+                            # Quadratic Bezier curve calculation
+                            current_x = int((1 - progress)**2 * start_x + 
+                                          2 * (1 - progress) * progress * control_x + 
+                                          progress**2 * end_x)
+                            current_y = int((1 - progress)**2 * start_y + 
+                                          2 * (1 - progress) * progress * control_y + 
+                                          progress**2 * end_y)
+                            
+                            try:
+                                ActionChains(driver).move_by_offset(
+                                    current_x - start_x, current_y - start_y
+                                ).perform()
+                                time.sleep(random.uniform(0.1, 0.4))
+                                start_x, start_y = current_x, current_y
+                            except:
+                                break
+                        
+                        time.sleep(random.uniform(0.5, 1.5))
                 except:
                     pass  # Mouse simulation not critical
                 
-                debug_log("STEALTH Chrome WebDriver initialized successfully with advanced anti-bot measures")
+                debug_log("ULTRA-STEALTH Chrome WebDriver initialized successfully with advanced anti-bot measures")
                 return driver
                 
             except Exception as e:

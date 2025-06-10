@@ -854,6 +854,46 @@ def construct_linkedin_search_url(keywords, time_filter="past_month"):
         debug_log(f"Error constructing search URL: {e}", "ERROR")
         return None
 
+def find_posts(driver):
+    """
+    Finds all the post container elements on the current page.
+    Uses multiple selectors for robustness against UI changes.
+    """
+    debug_log("Searching for post containers on the page...", "SEARCH")
+    posts = []
+    
+    # This selector is common for lists of items in LinkedIn's search results.
+    primary_selector = ".reusable-search__entity-result-list > li"
+    
+    try:
+        posts = driver.find_elements(By.CSS_SELECTOR, primary_selector)
+        if posts:
+            debug_log(f"Found {len(posts)} posts using primary selector '{primary_selector}'", "SEARCH")
+            return posts
+
+        # Fallback selectors for different page layouts or feed updates.
+        fallback_selectors = [
+            "//div[contains(@class, 'feed-shared-update-v2')]", 
+            "//li[contains(@class, 'occludable-update')]"
+        ]
+        
+        for selector in fallback_selectors:
+            try:
+                posts = driver.find_elements(By.XPATH, selector)
+                if posts:
+                    debug_log(f"Found {len(posts)} posts using fallback selector '{selector}'", "SEARCH")
+                    return posts
+            except NoSuchElementException:
+                continue
+
+        if not posts:
+            debug_log("No posts found on the page with any of the known selectors.", "WARNING")
+            
+    except Exception as e:
+        debug_log(f"An error occurred while trying to find posts: {e}", "ERROR")
+
+    return posts
+
 def process_posts(driver):
     """Process visible posts on the current page."""
     debug_log("Starting post processing", "PROCESS")

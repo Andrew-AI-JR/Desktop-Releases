@@ -149,9 +149,14 @@ function buildExecutable() {
       '--distpath', outputDir,  // Output directory
       '--workpath', BUILD_DIR,  // Work directory
       '--name', executableName.replace('.exe', ''), // Executable name
-      '--add-data', '.env:.', // Add .env file from project root to bundle root
       SCRIPT_SOURCE             // Script to build
     ];
+    
+    // Add .env file if it exists
+    const envPath = path.join(__dirname, '..', '.env');
+    if (fs.existsSync(envPath)) {
+      args.push('--add-data', `${envPath}${path.delimiter}.`);
+    }
 
     console.log(`Running: ${pythonCmd} ${args.join(' ')}`);
 

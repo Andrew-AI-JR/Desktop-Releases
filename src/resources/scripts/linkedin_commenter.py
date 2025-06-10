@@ -1943,14 +1943,24 @@ def sleep_until_midnight_edt():
 def get_default_log_path():
     """Get a default log path that will work on any system."""
     try:
+        # For PyInstaller bundled apps, use a simple approach
+        if hasattr(sys, '_MEIPASS'):
+            # Running as PyInstaller bundle - use current directory
+            return os.path.join(os.getcwd(), "linkedin_commenter.log")
+        
         # Try to use the user's home directory
         home_dir = os.path.expanduser("~")
-        log_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        return os.path.join(log_dir, "linkedin_commenter.log")
+        if home_dir and home_dir != "~":  # Make sure expansion worked
+            log_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            return os.path.join(log_dir, "linkedin_commenter.log")
+        else:
+            # Home directory expansion failed, use current directory
+            return os.path.join(os.getcwd(), "linkedin_commenter.log")
+            
     except Exception as e:
-        # Fallback to current directory
-        print(f"Warning: Could not create log directory in Documents: {e}")
+        # Absolute fallback to current directory
+        print(f"Warning: Could not create log directory, using current directory: {e}")
         return "linkedin_commenter.log"
 
 def load_log():
@@ -1972,51 +1982,68 @@ def debug_log(message, level="INFO"):
     Enhanced debug logging with timestamps and levels.
     Also sends logs to Electron GUI when level is INFO or higher.
     """
-    # Get log level from config or use default
-    log_level = CONFIG.get('log_level', 'info').upper() if CONFIG else 'INFO'
-    level = level.upper()
-    
-    # Map of log levels to numeric values
-    level_map = {
-        'DEBUG': 0,
-        'INFO': 1,
-        'WARNING': 2,
-        'ERROR': 3,
-        'FATAL': 4
-    }
-    
-    # Only log if message level is >= configured level
-    if level_map.get(level, 0) < level_map.get(log_level, 1):
-        return
-        
-    timestamp = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
-    log_message = f"{timestamp} [{level}] {message}"
-    
-    # Send to Electron GUI if level is INFO or higher, as the app will parse this output.
-    if level_map.get(level, 0) >= level_map.get('INFO', 1):
-        print(f"[APP_OUT]{log_message}", flush=True)
-    
-    # Get log file path from config or use default
-    log_file = CONFIG.get('log_file_path') if CONFIG else None
-    if not log_file:
-        log_file = get_default_log_path()
-    
     try:
-        # Ensure log directory exists
-        log_dir = os.path.dirname(log_file)
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
+        # Get log level from config or use default
+        log_level = CONFIG.get('log_level', 'info').upper() if CONFIG else 'INFO'
+        level = level.upper()
+        
+        # Map of log levels to numeric values
+        level_map = {
+            'DEBUG': 0,
+            'INFO': 1,
+            'WARNING': 2,
+            'ERROR': 3,
+            'FATAL': 4
+        }
+        
+        # Only log if message level is >= configured level
+        if level_map.get(level, 0) < level_map.get(log_level, 1):
+            return
             
-        # Write to log file
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(log_message + "\n")
-            
-        # Also print to console in debug mode
-        if DEBUG_MODE or level in ['WARNING', 'ERROR', 'FATAL']:
+        # Clean message to prevent invalid characters
+        cleaned_message = str(message).encode('utf-8', errors='replace').decode('utf-8')
+        timestamp = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
+        log_message = f"{timestamp} [{level}] {cleaned_message}"
+        
+        # Send to Electron GUI if level is INFO or higher, as the app will parse this output.
+        if level_map.get(level, 0) >= level_map.get('INFO', 1):
+            print(f"[APP_OUT]{log_message}", flush=True)
+        
+        # Always print critical errors to console
+        if level in ['WARNING', 'ERROR', 'FATAL']:
             print(log_message)
-    except Exception as e:
-        print(f"Error writing to log file: {e}")
-        print(log_message)  # Fallback to console
+            
+        # Try to write to log file (with robust error handling)
+        try:
+            # Get log file path from config or use default
+            log_file = CONFIG.get('log_file_path') if CONFIG else None
+            if not log_file:
+                log_file = get_default_log_path()
+            
+            # Ensure log directory exists
+            log_dir = os.path.dirname(log_file)
+            if log_dir and log_dir != '':
+                os.makedirs(log_dir, exist_ok=True)
+                
+            # Write to log file with safe error handling
+            with open(log_file, "a", encoding="utf-8", errors='replace') as f:
+                f.write(log_message + "\n")
+                f.flush()  # Force write
+                
+        except (OSError, IOError, PermissionError) as file_error:
+            # File logging failed, but don't crash - just use console
+            print(f"Log file write failed: {file_error}")
+            if DEBUG_MODE:
+                print(log_message)
+            
+    except Exception as fallback_error:
+        # If everything fails, use basic print as absolute fallback
+        try:
+            print(f"[FALLBACK LOG] {datetime.now()} [{level}] {message}")
+            print(f"[FALLBACK LOG] Debug_log error: {fallback_error}")
+        except:
+            # Even the fallback failed, use the most basic output possible
+            print("CRITICAL: Logging system completely failed")
 
 def setup_chrome_driver(max_retries=3, retry_delay=5):
     """

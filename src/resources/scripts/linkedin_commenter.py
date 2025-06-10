@@ -433,9 +433,12 @@ class CommentGenerator:
             return None
             
         try:
+            # Clean the post text before processing
+            cleaned_post_text = self.clean_post_text(post_text)
+            
             # Prepare the request payload according to the expected API format
             payload = {
-                'post_text': post_text,
+                'post_text': cleaned_post_text,
                 'source_linkedin_url': post_url or '',
                 'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             }
@@ -523,10 +526,15 @@ def get_time_based_score(time_filter):
     return time_weights.get(time_filter, 1.0)  # Default to 1.0 if unknown filter
 
 # === CRITICAL MISSING FUNCTIONS FOR POST EVALUATION ===
-def calculate_post_score(post_text, author_name=None):
+def calculate_post_score(post_text, author_name=None, time_filter=None):
     """
     Calculate a score for a post based on various factors to prioritize posts from hiring managers.
     Uses FIXED scoring method without problematic normalization.
+    
+    Args:
+        post_text (str): The text content of the post
+        author_name (str, optional): The name of the post author
+        time_filter (str, optional): The time filter from URL ('past-24h', 'past-week', 'past-month')
     
     Returns:
         float: A score between 0 and 100, with higher scores indicating higher priority
@@ -534,15 +542,19 @@ def calculate_post_score(post_text, author_name=None):
     if not post_text:
         return 0
     
+    # Clean the post text for consistent processing
+    cleaned_post_text = ' '.join(post_text.strip().split())
+    
     total_score = 0
-    post_text_lower = post_text.lower()
+    post_text_lower = cleaned_post_text.lower()
     
     # Log scoring details for debugging
     score_breakdown = {
         'metadata': {
-            'text_length': len(post_text),
-            'word_count': len(post_text.split()),
-            'has_author': bool(author_name)
+            'text_length': len(cleaned_post_text),
+            'word_count': len(cleaned_post_text.split()),
+            'has_author': bool(author_name),
+            'time_filter': time_filter
         }
     }
     
@@ -581,7 +593,7 @@ def calculate_post_score(post_text, author_name=None):
         }
     
     # Add length bonus (not penalty)
-    words = len(post_text.split())
+    words = len(cleaned_post_text.split())
     if words >= 50:
         total_score += 5  # Bonus for substantial posts
     
@@ -589,6 +601,17 @@ def calculate_post_score(post_text, author_name=None):
         'words': words,
         'score': 5 if words >= 50 else 0
     }
+    
+    # Apply time-based scoring multiplier
+    time_multiplier = 1.0
+    if time_filter:
+        time_multiplier = get_time_based_score(time_filter)
+        total_score *= time_multiplier
+        score_breakdown['time_bonus'] = {
+            'filter': time_filter,
+            'multiplier': time_multiplier,
+            'boost_percentage': round((time_multiplier - 1.0) * 100, 1)
+        }
     
     # FIXED: Direct scoring - no normalization to avoid the problem
     final_score = min(100, total_score)  # Cap at 100
@@ -606,9 +629,9 @@ def calculate_post_score(post_text, author_name=None):
     
     return final_score
 
-def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=60):
+def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=60, time_filter=None):
     """Determine if a post is worth commenting on based on score."""
-    score = calculate_post_score(post_text, author_name)
+    score = calculate_post_score(post_text, author_name, time_filter)
     print(f"[APP_OUT]⚖️ Post scored: {score}/100 (min required: {min_score})")
     debug_log(f"Post score: {score} (min required: {min_score})", "SCORE")
     return score >= min_score, score
@@ -651,7 +674,7 @@ def extract_time_posted(post):
         debug_log(f"Error extracting time: {e}", "TIME")
         return 999
 
-def sort_posts_by_priority(driver, posts):
+def sort_posts_by_priority(driver, posts, time_filter=None):
     """Sort posts by priority based on score."""
     posts_with_data = []
     
@@ -666,8 +689,8 @@ def sort_posts_by_priority(driver, posts):
             # Try to get post text for scoring (without expanding yet)
             post_text = post.text[:500] if post.text else ""  # Preview for scoring
             
-            # Calculate score
-            score = calculate_post_score(post_text, author_name)
+            # Calculate score with time-based multiplier
+            score = calculate_post_score(post_text, author_name, time_filter)
             
             posts_with_data.append({
                 'element': post,
@@ -1435,7 +1458,7 @@ def process_posts(driver):
             # CRITICAL: Sort posts by priority using our scoring system
             if current_post_count > 0:
                 print(f"[APP_OUT]📊 Sorting {current_post_count} posts by priority...")
-                sorted_posts_data = sort_posts_by_priority(driver, posts)
+                sorted_posts_data = sort_posts_by_priority(driver, posts, time_filter)
                 print(f"[APP_OUT]✅ Posts sorted - processing in priority order")
             else:
                 sorted_posts_data = []
@@ -1482,7 +1505,7 @@ def process_posts(driver):
                         continue
                     
                     # Use the standalone should_comment_on_post function
-                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=50)
+                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=50, time_filter=time_filter)
                     
                     if not should_comment:
                         print(f"[APP_OUT]⏭️ Skipping post - score {final_score:.1f} below threshold")
@@ -1793,7 +1816,10 @@ def get_post_text(driver, post):
         text = post.text
         if text and len(text) > 50:  # Reasonable post length
             debug_log(f"Got post text (direct): {len(text)} chars", "TEXT")
-            return text
+            # Clean the text before returning
+            cleaned_text = ' '.join(text.strip().split())
+            debug_log(f"Cleaned post text: {len(cleaned_text)} chars", "TEXT")
+            return cleaned_text
         # Try specific content elements
         selectors = [
             ".//div[contains(@class, 'feed-shared-update-v2__description')]",
@@ -1808,7 +1834,10 @@ def get_post_text(driver, post):
                     content = element.text
                     if content and len(content) > 0:
                         debug_log(f"Got post text ({selector}): {len(content)} chars", "TEXT")
-                        return content
+                        # Clean the text before returning
+                        cleaned_content = ' '.join(content.strip().split())
+                        debug_log(f"Cleaned post text: {len(cleaned_content)} chars", "TEXT")
+                        return cleaned_content
             except Exception:
                 continue
         # JavaScript fallback
@@ -1831,7 +1860,10 @@ def get_post_text(driver, post):
         ''', post)
         if js_text and len(js_text) > 0:
             debug_log(f"Got post text (JS): {len(js_text)} chars", "TEXT")
-            return js_text
+            # Clean the text before returning
+            cleaned_js_text = ' '.join(js_text.strip().split())
+            debug_log(f"Cleaned post text: {len(cleaned_js_text)} chars", "TEXT")
+            return cleaned_js_text
         debug_log("Could not extract meaningful text from post", "TEXT")
         return ""
     except Exception as e:

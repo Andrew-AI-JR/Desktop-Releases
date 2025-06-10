@@ -745,11 +745,22 @@ def main():
                     try:
                         print("[APP_OUT]🚀 Loading search results...")
                         driver.get(url)
+                        print(f"[APP_OUT]🌐 Navigated to: {url}")
                         # Dynamically wait for the search results container to be visible
                         WebDriverWait(driver, 30).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, ".reusable-search__entity-result-list"))
                         )
-                        print("[APP_OUT]✅ Search results loaded")
+                        print("[APP_OUT]✅ Search results container loaded")
+                        
+                        # Additional verification - check if we actually have content
+                        try:
+                            result_list = driver.find_element(By.CSS_SELECTOR, ".reusable-search__entity-result-list")
+                            all_results = result_list.find_elements(By.CSS_SELECTOR, "*")
+                            print(f"[APP_OUT]📊 Found {len(all_results)} elements in search results container")
+                            debug_log(f"Search results container has {len(all_results)} child elements", "NAVIGATION")
+                        except Exception as check_e:
+                            print(f"[APP_OUT]⚠️ Could not verify search results content: {check_e}")
+                        
                         debug_log("Search results page loaded and is visible.", "NAVIGATION")
                     except TimeoutException:
                         print("[APP_OUT]⚠️ No search results found or page timeout")
@@ -908,6 +919,7 @@ def find_posts(driver):
         list: List of WebElement objects representing posts
     """
     debug_log("Starting post search on current page...", "SEARCH")
+    print("[APP_OUT]🔍 Searching for posts on page...")
     posts = []
     
     # Wait for the page to load and any spinners to disappear
@@ -920,11 +932,32 @@ def find_posts(driver):
     
     # List of selectors to try, in order of preference
     selectors = [
-        # Primary selectors for search results
+        # PRIMARY SELECTOR - This should match what we wait for in main()
+        {
+            'type': 'css',
+            'value': '.reusable-search__entity-result-list .reusable-search__result-container',
+            'name': 'search results within entity list'
+        },
         {
             'type': 'css',
             'value': '.reusable-search__result-container',
             'name': 'search results container'
+        },
+        {
+            'type': 'css',
+            'value': '.reusable-search__entity-result-list',
+            'name': 'entity result list (same as main wait)'
+        },
+        # Updated LinkedIn content search selectors
+        {
+            'type': 'css',
+            'value': '.feed-shared-update-v2',
+            'name': 'feed shared updates v2'
+        },
+        {
+            'type': 'css',
+            'value': '.scaffold-finite-scroll__content .feed-shared-update-v2',
+            'name': 'scrollable feed updates'
         },
         {
             'type': 'css',
@@ -962,16 +995,30 @@ def find_posts(driver):
             'type': 'css',
             'value': '.ember-view.occludable-update',
             'name': 'ember view updates'
+        },
+        # Content search specific selectors
+        {
+            'type': 'css',
+            'value': '.search-content__result',
+            'name': 'content search results'
+        },
+        {
+            'type': 'css',
+            'value': '.content-search-result',
+            'name': 'content search result items'
         }
     ]
     
+    print(f"[APP_OUT]🧪 Trying {len(selectors)} different post selectors...")
+    
     # Try each selector in sequence
-    for selector in selectors:
+    for selector_index, selector in enumerate(selectors, 1):
         try:
             selector_type = selector['type']
             selector_value = selector['value']
             selector_name = selector['name']
             
+            print(f"[APP_OUT]🔍 Attempt {selector_index}/{len(selectors)}: {selector_name}")
             debug_log(f"Trying selector: {selector_name} ({selector_value})", "SEARCH")
             
             # Wait briefly for elements to be present
@@ -981,7 +1028,9 @@ def find_posts(driver):
                         (By.CSS_SELECTOR if selector_type == 'css' else By.XPATH, selector_value)
                     )
                 )
+                print(f"[APP_OUT]✅ Selector found elements")
             except TimeoutException:
+                print(f"[APP_OUT]⏰ Timeout waiting for {selector_name}")
                 debug_log(f"Timeout waiting for {selector_name}", "DEBUG")
                 continue
                 
@@ -992,32 +1041,40 @@ def find_posts(driver):
             )
             
             if posts:
+                print(f"[APP_OUT]📋 Found {len(posts)} elements with {selector_name}")
                 debug_log(f"Found {len(posts)} posts using {selector_name}", "SEARCH")
                 # Verify posts are actually visible and interactive
                 visible_posts = [post for post in posts if is_element_visible(driver, post)]
                 if visible_posts:
+                    print(f"[APP_OUT]✅ {len(visible_posts)} posts are visible and interactive")
                     debug_log(f"{len(visible_posts)} posts are visible and interactive", "SEARCH")
                     return visible_posts
                 else:
+                    print(f"[APP_OUT]⚠️ Found posts are not visible/interactive, trying next selector")
                     debug_log("Found posts are not visible/interactive, trying next selector", "DEBUG")
+            else:
+                print(f"[APP_OUT]❌ No posts found with {selector_name}")
             
         except StaleElementReferenceException:
+            print(f"[APP_OUT]🔄 Stale elements with {selector_name}, trying next")
             debug_log(f"Stale elements found with {selector_name}, trying next selector", "WARNING")
             continue
         except Exception as e:
+            print(f"[APP_OUT]❌ Error with {selector_name}: {str(e)}")
             debug_log(f"Error with {selector_name}: {str(e)}", "WARNING")
             continue
     
     # If no posts found, try scrolling and searching again
     if not posts:
+        print("[APP_OUT]📜 No posts found with any selector, trying scroll and retry...")
         debug_log("No posts found, attempting scroll and retry", "SEARCH")
         try:
             # Scroll down a bit
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)  # Wait for potential lazy-loaded content
             
-            # Try the selectors again after scrolling
-            for selector in selectors:
+            # Try the first few selectors again after scrolling
+            for selector in selectors[:5]:  # Only try top 5 after scroll
                 try:
                     selector_type = selector['type']
                     selector_value = selector['value']
@@ -1028,43 +1085,37 @@ def find_posts(driver):
                     if posts:
                         visible_posts = [post for post in posts if is_element_visible(driver, post)]
                         if visible_posts:
+                            print(f"[APP_OUT]✅ Found {len(visible_posts)} posts after scrolling")
                             debug_log(f"Found {len(visible_posts)} posts after scrolling", "SEARCH")
                             return visible_posts
                 except Exception:
                     continue
         except Exception as e:
+            print(f"[APP_OUT]❌ Error during scroll retry: {str(e)}")
             debug_log(f"Error during scroll retry: {str(e)}", "ERROR")
     
-    # NLP/Regex-based fallback mechanism
+    # If still no posts, try taking a screenshot and check page source
     if not posts:
-        debug_log("No posts found with selectors, attempting NLP/Regex fallback", "SEARCH")
-        try:
-            # Define regex pattern for 'like' and 'reply' text
-            pattern = re.compile(r"\b(like|reply)\b", re.IGNORECASE)
-            
-            # Find all div elements and check for 'like' or 'reply' text
-            all_divs = driver.find_elements(By.TAG_NAME, "div")
-            for div in all_divs:
-                if pattern.search(div.text):
-                    debug_log("Found potential post container using NLP/Regex fallback", "SEARCH")
-                    posts.append(div)
-            
-            if posts:
-                visible_posts = [post for post in posts if is_element_visible(driver, post)]
-                if visible_posts:
-                    debug_log(f"{len(visible_posts)} posts found using NLP/Regex fallback", "SEARCH")
-                    return visible_posts
-        except Exception as e:
-            debug_log(f"Error during NLP/Regex fallback: {str(e)}", "ERROR")
-    
-    if not posts:
+        print("[APP_OUT]📷 No posts found with any method, taking diagnostic screenshot...")
         debug_log("No posts found with any method", "WARNING")
         # Take a screenshot for debugging
         try:
             take_screenshot(driver, "no_posts_found")
-        except:
-            pass
-        
+            # Log some page info for debugging
+            current_url = driver.current_url
+            page_title = driver.title
+            print(f"[APP_OUT]🔍 Current URL: {current_url}")
+            print(f"[APP_OUT]📄 Page title: {page_title}")
+            debug_log(f"Diagnostic - URL: {current_url}, Title: {page_title}", "DEBUG")
+            
+            # Check if there's any content at all
+            all_divs = driver.find_elements(By.TAG_NAME, "div")
+            print(f"[APP_OUT]📊 Total divs on page: {len(all_divs)}")
+            
+        except Exception as e:
+            print(f"[APP_OUT]❌ Error during diagnostics: {e}")
+    
+    print(f"[APP_OUT]📝 Returning {len(posts)} posts")
     return posts
 
 def is_element_visible(driver, element):
@@ -1136,11 +1187,14 @@ def process_posts(driver):
             if current_post_count == 0:
                 print("[APP_OUT]⚠️ No posts found, attempting scroll to load content...")
                 debug_log("No posts found, attempting scroll to load content", "SEARCH")
-                scroll_page(driver)
+                scroll_success = scroll_page(driver)
+                print(f"[APP_OUT]📜 Scroll {'successful' if scroll_success else 'failed'}")
                 time.sleep(3)
                 posts = find_posts(driver)
                 current_post_count = len(posts)
+                print(f"[APP_OUT]📋 After scroll: found {current_post_count} posts")
                 if current_post_count == 0:
+                    print("[APP_OUT]⚠️ Still no posts found after scroll, may be end of content")
                     debug_log("Still no posts found after scroll, may be end of content", "SEARCH")
                     scroll_attempts += 1
                     continue
@@ -1314,9 +1368,11 @@ def process_posts(driver):
 def scroll_page(driver):
     """Scroll down the page incrementally to load more content with human-like behavior."""
     debug_log("Performing human-like scroll", "SCROLL")
+    print("[APP_OUT]📜 Executing scroll command...")
     try:
         # Get current position
         old_position = driver.execute_script("return window.pageYOffset;")
+        print(f"[APP_OUT]📍 Current scroll position: {old_position}px")
         
         # Try different scroll methods
         scroll_methods = [
@@ -1330,6 +1386,7 @@ def scroll_page(driver):
         
         # Pick a random scroll method
         scroll_command = random.choice(scroll_methods)
+        print(f"[APP_OUT]⚙️ Using scroll method: {scroll_command}")
         driver.execute_script(scroll_command)
         
         # Random delay to mimic human behavior
@@ -1337,13 +1394,18 @@ def scroll_page(driver):
         
         # Get new position
         new_position = driver.execute_script("return window.pageYOffset;")
+        scroll_delta = new_position - old_position
         
-        debug_log(f"Scrolled from {old_position} to {new_position} (+{new_position - old_position}px)", "SCROLL")
+        print(f"[APP_OUT]📊 Scroll result: {old_position}px → {new_position}px (Δ{scroll_delta}px)")
+        debug_log(f"Scrolled from {old_position} to {new_position} (+{scroll_delta}px)", "SCROLL")
         
         # Return True if we actually scrolled
-        return new_position > old_position
+        success = new_position > old_position
+        print(f"[APP_OUT]{'✅' if success else '❌'} Scroll {'successful' if success else 'failed'}")
+        return success
         
     except Exception as e:
+        print(f"[APP_OUT]❌ Error during scroll: {e}")
         debug_log(f"Error during scroll: {e}", "ERROR")
         return False
 

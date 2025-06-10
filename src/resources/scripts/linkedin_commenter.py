@@ -2573,6 +2573,85 @@ def get_post_text(driver, post):
         debug_log(f"Error getting post text: {e}", "TEXT")
         return ""
 
+def human_type_text(element, text):
+    """Simulate realistic human typing with variable speeds, pauses, and occasional corrections."""
+    
+    # Get behavioral typing speed multiplier
+    try:
+        speed_multiplier = behavioral_manager.get_typing_speed_multiplier()
+        behavioral_manager.log_behavior('typing_start', {'text_length': len(text), 'speed_multiplier': speed_multiplier})
+    except:
+        speed_multiplier = 1.0  # Fallback if behavioral manager not available
+    
+    # Human typing characteristics (adjusted by behavioral patterns)
+    base_typing_speed = random.uniform(0.08, 0.15) * speed_multiplier
+    typing_rhythm_variation = 0.5  # How much typing speed varies
+    word_pause_chance = 0.15  # Chance of pausing between words
+    sentence_pause_chance = 0.8  # Chance of pausing at sentence end
+    typo_chance = 0.02  # 2% chance of making a typo
+    correction_delay = random.uniform(0.3, 0.8) * speed_multiplier  # Delay before correcting typos
+    
+    debug_log(f"ULTRA-STEALTH: Starting human typing simulation for {len(text)} characters", "TYPING")
+    
+    words = text.split(' ')
+    
+    for word_idx, word in enumerate(words):
+        # Add space before word (except first word)
+        if word_idx > 0:
+            element.send_keys(' ')
+            time.sleep(random.uniform(0.05, 0.12))
+            
+            # Random pause between words
+            if random.random() < word_pause_chance:
+                pause_duration = random.uniform(0.2, 0.6)
+                debug_log(f"TYPING: Word pause ({pause_duration:.2f}s)", "TYPING")
+                time.sleep(pause_duration)
+        
+        # Type each character in the word
+        for char_idx, char in enumerate(word):
+            # Simulate typos occasionally
+            if random.random() < typo_chance and char.isalpha():
+                # Make a typo
+                typo_chars = 'qwertyuiopasdfghjklzxcvbnm'
+                typo_char = random.choice(typo_chars)
+                element.send_keys(typo_char)
+                
+                # Typing speed for typo
+                typing_delay = base_typing_speed * random.uniform(0.8, 1.2)
+                time.sleep(typing_delay)
+                
+                # Realize mistake and correct it
+                time.sleep(correction_delay)
+                element.send_keys(Keys.BACKSPACE)
+                time.sleep(random.uniform(0.1, 0.3))
+                
+                debug_log(f"TYPING: Simulated typo '{typo_char}' -> corrected to '{char}'", "TYPING")
+            
+            # Type the correct character
+            element.send_keys(char)
+            
+            # Variable typing speed (humans don't type at constant speed)
+            speed_variation = random.uniform(1 - typing_rhythm_variation, 1 + typing_rhythm_variation)
+            typing_delay = base_typing_speed * speed_variation
+            
+            # Longer pauses for certain characters
+            if char in '.,!?;:':
+                typing_delay *= random.uniform(1.5, 2.5)
+            elif char in '"\'()[]{}':
+                typing_delay *= random.uniform(1.2, 2.0)
+            elif char.isupper():
+                typing_delay *= random.uniform(1.1, 1.6)
+            
+            time.sleep(typing_delay)
+        
+        # Pause at end of sentences
+        if word.endswith(('.', '!', '?')) and random.random() < sentence_pause_chance:
+            sentence_pause = random.uniform(0.5, 1.2)
+            debug_log(f"TYPING: Sentence pause ({sentence_pause:.2f}s)", "TYPING")
+            time.sleep(sentence_pause)
+    
+    debug_log("ULTRA-STEALTH: Human typing simulation completed", "TYPING")
+
 def post_comment(driver, post, message):
     """Post a comment on a post with extremely granular debug logging and robust error handling."""
     debug_log("[post_comment] Starting ULTRA-STEALTH comment posting process...", "COMMENT")
@@ -2698,87 +2777,7 @@ def post_comment(driver, post, message):
             except Exception:
                 pass
             
-                         # ULTRA-ENHANCED: Realistic human typing simulation with behavioral patterns
-             def human_type_text(element, text):
-                 """Simulate realistic human typing with variable speeds, pauses, and occasional corrections."""
-                 
-                 # Get behavioral typing speed multiplier
-                 try:
-                     speed_multiplier = behavioral_manager.get_typing_speed_multiplier()
-                     behavioral_manager.log_behavior('typing_start', {'text_length': len(text), 'speed_multiplier': speed_multiplier})
-                 except:
-                     speed_multiplier = 1.0  # Fallback if behavioral manager not available
-                 
-                 # Human typing characteristics (adjusted by behavioral patterns)
-                 base_typing_speed = random.uniform(0.08, 0.15) * speed_multiplier
-                 typing_rhythm_variation = 0.5  # How much typing speed varies
-                 word_pause_chance = 0.15  # Chance of pausing between words
-                 sentence_pause_chance = 0.8  # Chance of pausing at sentence end
-                 typo_chance = 0.02  # 2% chance of making a typo
-                 correction_delay = random.uniform(0.3, 0.8) * speed_multiplier  # Delay before correcting typos
-                
-                debug_log(f"ULTRA-STEALTH: Starting human typing simulation for {len(text)} characters", "TYPING")
-                
-                words = text.split(' ')
-                
-                for word_idx, word in enumerate(words):
-                    # Add space before word (except first word)
-                    if word_idx > 0:
-                        element.send_keys(' ')
-                        time.sleep(random.uniform(0.05, 0.12))
-                        
-                        # Random pause between words
-                        if random.random() < word_pause_chance:
-                            pause_duration = random.uniform(0.2, 0.6)
-                            debug_log(f"TYPING: Word pause ({pause_duration:.2f}s)", "TYPING")
-                            time.sleep(pause_duration)
-                    
-                    # Type each character in the word
-                    for char_idx, char in enumerate(word):
-                        # Simulate typos occasionally
-                        if random.random() < typo_chance and char.isalpha():
-                            # Make a typo
-                            typo_chars = 'qwertyuiopasdfghjklzxcvbnm'
-                            typo_char = random.choice(typo_chars)
-                            element.send_keys(typo_char)
-                            
-                            # Typing speed for typo
-                            typing_delay = base_typing_speed * random.uniform(0.8, 1.2)
-                            time.sleep(typing_delay)
-                            
-                            # Realize mistake and correct it
-                            time.sleep(correction_delay)
-                            element.send_keys(Keys.BACKSPACE)
-                            time.sleep(random.uniform(0.1, 0.3))
-                            
-                            debug_log(f"TYPING: Simulated typo '{typo_char}' -> corrected to '{char}'", "TYPING")
-                        
-                        # Type the correct character
-                        element.send_keys(char)
-                        
-                        # Variable typing speed (humans don't type at constant speed)
-                        speed_variation = random.uniform(1 - typing_rhythm_variation, 1 + typing_rhythm_variation)
-                        typing_delay = base_typing_speed * speed_variation
-                        
-                        # Longer pauses for certain characters
-                        if char in '.,!?;:':
-                            typing_delay *= random.uniform(1.5, 2.5)
-                        elif char in '"\'()[]{}':
-                            typing_delay *= random.uniform(1.2, 2.0)
-                        elif char.isupper():
-                            typing_delay *= random.uniform(1.1, 1.6)
-                        
-                        time.sleep(typing_delay)
-                    
-                    # Pause at end of sentences
-                    if word.endswith(('.', '!', '?')) and random.random() < sentence_pause_chance:
-                        sentence_pause = random.uniform(0.5, 1.2)
-                        debug_log(f"TYPING: Sentence pause ({sentence_pause:.2f}s)", "TYPING")
-                        time.sleep(sentence_pause)
-                
-                debug_log("ULTRA-STEALTH: Human typing simulation completed", "TYPING")
-            
-            # Use the human typing function
+            # ULTRA-ENHANCED: Realistic human typing simulation with behavioral patterns
             human_type_text(comment_input, message)
             
             # ENHANCED: Verify text entry with multiple methods
@@ -3136,15 +3135,71 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             ]
             selected_ua = random.choice(user_agents)
             
-            # Configure headless mode with stealth
-            if not debug_mode:
-                chrome_options.add_argument('--headless=new')
-                chrome_options.add_argument('--disable-gpu')
-                chrome_options.add_argument('--disable-software-rasterizer')
-                debug_log("Running Chrome in ULTRA-STEALTH headless mode")
-            else:
-                debug_log("Debug mode enabled: running Chrome in headed ULTRA-STEALTH mode")
-
+            # Configure headless mode with stealth - ALWAYS HEADLESS FOR PRODUCTION
+            # Force headless mode regardless of debug_mode to prevent manual intervention
+            chrome_options.add_argument('--headless=new')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-software-rasterizer')
+            chrome_options.add_argument('--virtual-time-budget=1000')
+            debug_log("Running Chrome in ULTRA-STEALTH headless mode (production mode)")
+            
+            # CRITICAL: Disable ALL Google sign-in and sync prompts
+            chrome_options.add_argument('--disable-signin-promo')
+            chrome_options.add_argument('--disable-signin-frame-client-certs')
+            chrome_options.add_argument('--disable-first-run-ui')
+            chrome_options.add_argument('--no-first-run')
+            chrome_options.add_argument('--disable-default-browser-check')
+            chrome_options.add_argument('--disable-sync')
+            chrome_options.add_argument('--disable-account-consistency')
+            chrome_options.add_argument('--disable-signin-scoped-device-id')
+            chrome_options.add_argument('--disable-features=ChromeSigninInterceptor')
+            chrome_options.add_argument('--disable-features=AccountConsistency')
+            chrome_options.add_argument('--disable-features=Sync')
+            
+            # CRITICAL: Prevent Google account prompts and suggestions
+            chrome_options.add_argument('--disable-features=GooglePasswordManager')
+            chrome_options.add_argument('--disable-features=PasswordManager')
+            chrome_options.add_argument('--disable-features=AutofillCreditCard')
+            chrome_options.add_argument('--disable-features=AutofillAddresses')
+            chrome_options.add_argument('--disable-password-generation')
+            chrome_options.add_argument('--disable-save-password-bubble')
+            
+            # Enhanced privacy to prevent ANY user prompts
+            chrome_options.add_argument('--disable-infobars')
+            chrome_options.add_argument('--disable-web-resources')
+            chrome_options.add_argument('--disable-client-side-phishing-detection')
+            chrome_options.add_argument('--disable-component-update')
+            chrome_options.add_argument('--disable-default-apps')
+            chrome_options.add_argument('--disable-domain-reliability')
+            chrome_options.add_argument('--disable-background-networking')
+            chrome_options.add_argument('--disable-features=MediaRouter')
+            chrome_options.add_argument('--disable-features=VoiceInteraction')
+            chrome_options.add_argument('--incognito')
+            
+            # ULTIMATE: Additional protection against manual intervention
+            chrome_options.add_argument('--disable-features=TranslateUI')
+            chrome_options.add_argument('--disable-features=TabHover')
+            chrome_options.add_argument('--disable-features=ChromeLabs')
+            chrome_options.add_argument('--disable-features=DownloadBubble')
+            chrome_options.add_argument('--disable-features=DownloadBubbleV2')
+            chrome_options.add_argument('--disable-desktop-notifications')
+            chrome_options.add_argument('--disable-extensions-file-access-check')
+            chrome_options.add_argument('--disable-extensions-http-throttling')
+            chrome_options.add_argument('--disable-file-system')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--disable-print-preview')
+            chrome_options.add_argument('--disable-prompt-on-repost')
+            chrome_options.add_argument('--disable-renderer-accessibility')
+            chrome_options.add_argument('--disable-search-engine-choice-screen')
+            chrome_options.add_argument('--disable-shared-workers')
+            chrome_options.add_argument('--disable-speech-api')
+            chrome_options.add_argument('--disable-translate')
+            chrome_options.add_argument('--disable-voice-input')
+            chrome_options.add_argument('--disable-wake-on-wifi')
+            chrome_options.add_argument('--no-pings')
+            chrome_options.add_argument('--no-referrers')
+            chrome_options.add_argument('--silent')
+            
             # 3. ULTRA-ENHANCED Anti-Detection Arguments
             chrome_options.add_argument(f"--window-size={width},{height}")
             chrome_options.add_argument(f"--user-agent={selected_ua}")
@@ -3265,6 +3320,36 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
                 "credentials_enable_service": False,
                 "profile.managed_default_content_settings.geolocation": 2,
                 
+                # CRITICAL: Disable ALL Google account and sync features
+                "browser.enable_spellchecking": False,
+                "browser.enable_autospell_correct": False,
+                "profile.default_content_setting_values.auto_select_certificate": 2,
+                "profile.content_settings.exceptions.auto_select_certificate": {},
+                "profile.managed_default_content_settings.auto_select_certificate": 2,
+                "signin.allowed": False,
+                "sync.disabled": True,
+                "sync_promo.user_skipped": True,
+                "sync_promo.show_on_first_run_allowed": False,
+                "profile.first_run_tabs": [],
+                "profile.managed_bookmarks": [],
+                "profile.bookmark_bar_enabled": False,
+                "profile.show_home_button": False,
+                "homepage_is_newtabpage": True,
+                "homepage": "about:blank",
+                "session.restore_on_startup": 1,
+                "profile.managed_default_content_settings.cookies": 1,
+                
+                # CRITICAL: Account and sign-in prevention
+                "account_consistency": False,
+                "account_id_migration_state": 2,
+                "enable_supervised_users": False,
+                "supervised_user_id": "",
+                "profile.avatar_index": 0,
+                "profile.name": "Default",
+                "profile.managed_user_id": "",
+                "profile.is_supervised": False,
+                "profile.force_ephemeral_profiles": False,
+                
                 # DNS and network settings
                 "dns_prefetching.enabled": False,
                 "profile.network_prediction_options": 2,
@@ -3275,11 +3360,22 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
                 "alternate_error_pages.enabled": False,
                 "safebrowsing.enabled": False,
                 "profile.safebrowsing.enabled": False,
+                "safebrowsing.disable_download_protection": True,
                 
                 # WebRTC and media
                 "webrtc.ip_handling_policy": "disable_non_proxied_udp",
                 "webrtc.multiple_routes_enabled": False,
                 "webrtc.nonproxied_udp_enabled": False,
+                
+                # CRITICAL: Privacy settings to prevent prompts
+                "profile.default_content_setting_values.protocol_handlers": 2,
+                "profile.default_content_setting_values.ppapi_broker": 2,
+                "profile.default_content_setting_values.ssl_cert_decisions": 1,
+                "profile.block_third_party_cookies": True,
+                "profile.clear_site_data_on_exit": False,
+                "profile.cookies_session_only": False,
+                "profile.default_content_setting_values.mixed_script": 2,
+                "profile.managed_default_content_settings.javascript": 1,
                 
                 # ULTRA-ENHANCED: Randomize timezone
                 "profile.managed_default_content_settings.timezone": random.choice([

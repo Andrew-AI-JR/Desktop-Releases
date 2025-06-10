@@ -1544,50 +1544,46 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
 
-            # Try to find Chrome/Chromium binary
-            chrome_path = os.getenv('CHROME_PATH') or config.get('chrome_path')
+            # Determine which Chrome and ChromeDriver to use
+            service = None
             
-            # Common Chrome/Chromium paths to check
-            possible_chrome_paths = [
-                chrome_path,
+            # 1. Prioritize system-installed Chrome
+            system_chrome_paths = [
                 r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
                 r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-                os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../dist/win-unpacked/resources/chrome-win/chrome.exe')),
                 "/usr/bin/google-chrome",
                 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
             ]
-            
-            # Remove None and non-existent paths
-            possible_chrome_paths = [p for p in possible_chrome_paths if p and os.path.exists(p)]
-            
-            if not possible_chrome_paths:
-                debug_log("No Chrome/Chromium binary found. Using webdriver_manager default.", "WARNING")
-                chrome_options.binary_location = None
+            found_system_chrome = next((p for p in system_chrome_paths if p and os.path.exists(p)), None)
+
+            if found_system_chrome:
+                debug_log(f"Found system Chrome at: {found_system_chrome}. Using webdriver-manager.")
+                chrome_options.binary_location = found_system_chrome
+                service = Service(ChromeDriverManager().install())
             else:
-                # Use the first valid path
-                chrome_options.binary_location = possible_chrome_paths[0]
-                debug_log(f"Using Chrome/Chromium at: {chrome_options.binary_location}")
-            
-            # Set up ChromeDriver service
-            service = None
-            chromedriver_path = None
-            
-            # If using bundled Chromium, try to use its chromedriver
-            if chrome_options.binary_location and 'chrome-win' in chrome_options.binary_location.replace('\\', '/'):
-                chromedriver_path = os.path.join(os.path.dirname(chrome_options.binary_location), 'chromedriver.exe')
-                if os.path.exists(chromedriver_path):
-                    debug_log(f"Using bundled chromedriver: {chromedriver_path}")
-                    service = Service(executable_path=chromedriver_path)
-            
+                # 2. Fallback to bundled Chromium
+                debug_log("System Chrome not found. Attempting to use bundled Chromium.", "INFO")
+                # Path relative to the script's location when packaged
+                bundled_chrome_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'dist', 'win-unpacked', 'resources', 'chrome-win'))
+                bundled_chrome_exe = os.path.join(bundled_chrome_dir, 'chrome.exe')
+                bundled_driver_exe = os.path.join(bundled_chrome_dir, 'chromedriver.exe')
+
+                if os.path.exists(bundled_chrome_exe) and os.path.exists(bundled_driver_exe):
+                    debug_log(f"Found bundled Chromium: {bundled_chrome_exe}")
+                    debug_log(f"Using bundled ChromeDriver: {bundled_driver_exe}")
+                    chrome_options.binary_location = bundled_chrome_exe
+                    service = Service(executable_path=bundled_driver_exe)
+                else:
+                    # 3. If neither is found, fail
+                    error_msg = "Could not find system Chrome or a fully bundled Chromium with its driver. Please install Google Chrome or ensure the application is correctly packaged."
+                    debug_log(error_msg, "FATAL")
+                    raise Exception(error_msg)
+
             # Initialize WebDriver
             debug_log("Initializing Chrome WebDriver...")
             
             try:
-                if service:
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                else:
-                    # Use webdriver_manager to handle ChromeDriver
-                    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+                driver = webdriver.Chrome(service=service, options=chrome_options)
                 
                 # Test Chrome is responsive
                 driver.set_page_load_timeout(30)

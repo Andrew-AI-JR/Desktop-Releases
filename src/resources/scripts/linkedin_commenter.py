@@ -538,28 +538,36 @@ def main():
     # ... rest of the code remains the same ...
     global comment_generator, MAX_SCROLL_CYCLES, MAX_COMMENT_WORDS, MIN_COMMENT_DELAY, SHORT_SLEEP_SECONDS
     
+    print("[APP_OUT]🚀 Starting LinkedIn Commenter...")
+    print("[APP_OUT]Loading configuration...")
+    
     # Initialize global CONFIG by calling get_config() which calls load_config_from_args()
     try:
         get_config() # This populates the global CONFIG variable
         if CONFIG is None:
             err_msg = "[FATAL] Global CONFIG is None after get_config(). Critical configuration error. Exiting."
+            print(f"[APP_OUT]❌ {err_msg}")
             print(err_msg)
             try: debug_log(err_msg, "ERROR") # Attempt to log if debug_log is available
             except NameError: pass
             sys.exit(1)
         
         DEBUG_MODE = CONFIG.get('debug_mode', False) # Default to False if not in config
+        print("[APP_OUT]✅ Configuration loaded successfully")
         debug_log(f"Starting main function. Loaded CONFIG keys: {list(CONFIG.keys()) if CONFIG else 'None'}", "DEBUG")
 
     except SystemExit: # Catch sys.exit calls from within get_config/load_config_from_args
         raise # Re-raise to ensure script terminates
     except Exception as config_error:
         err_msg = f"[FATAL] Unhandled error during configuration loading: {config_error}. Exiting."
+        print(f"[APP_OUT]❌ {err_msg}")
         print(err_msg)
         try: debug_log(f"{err_msg} Traceback: {traceback.format_exc() if 'traceback' in globals() else ''}", "ERROR")
         except NameError: pass 
         sys.exit(1)
 
+    print("[APP_OUT]🔧 Validating configuration...")
+    
     # Populate essential global variables from CONFIG
     # Credentials are now expected under 'linkedin_credentials'
     linkedin_creds_from_config = CONFIG.get('linkedin_credentials', {})
@@ -575,9 +583,15 @@ def main():
     # Critical: Validate essential configuration
     if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
         error_msg = "LinkedIn email or password not found in the configuration (expected under 'linkedin_credentials'). Script cannot proceed."
+        print(f"[APP_OUT]❌ {error_msg}")
         debug_log(f"[FATAL] {error_msg} Please check your configuration. Exiting.", "ERROR")
         print(f"[FATAL] {error_msg} Please check your configuration. Exiting.")
         sys.exit(1)
+    
+    print(f"[APP_OUT]📧 LinkedIn credentials: {'✅ Valid' if LINKEDIN_EMAIL else '❌ Missing'}")
+    print(f"[APP_OUT]👤 User bio: {'✅ Set (' + str(len(USER_BIO)) + ' chars)' if USER_BIO else '⚠️ Not set'}")
+    print(f"[APP_OUT]🔍 Job keywords: {len(JOB_SEARCH_KEYWORDS)} configured")
+    print(f"[APP_OUT]📅 Calendly link: {'✅ Set' if CALENDLY_LINK else '⚠️ Not set'}")
     
     debug_log(f"LinkedIn Email: {'Set' if LINKEDIN_EMAIL else 'Not Set'}", "DEBUG")
     debug_log(f"User Bio length: {len(USER_BIO) if USER_BIO else 'Not Set'}", "DEBUG")
@@ -587,17 +601,21 @@ def main():
 
     # If specific search URLs are not provided directly in config, try to generate them from keywords
     if not SEARCH_URLS and JOB_SEARCH_KEYWORDS:
+        print("[APP_OUT]🔗 Generating search URLs from job keywords...")
         debug_log(f"No direct 'search_urls' in config. Generating from 'job_keywords': {JOB_SEARCH_KEYWORDS}", "INFO")
         SEARCH_URLS = get_search_urls_for_keywords(JOB_SEARCH_KEYWORDS)
+        print(f"[APP_OUT]✅ Generated {len(SEARCH_URLS)} search URLs")
         debug_log(f"Generated SEARCH_URLS: {SEARCH_URLS}", "DEBUG")
     
     # Critical check: If no SEARCH_URLS are available now (neither direct nor generated), script cannot proceed.
     if not SEARCH_URLS:
         error_msg = "No 'search_urls' found in config and no 'job_keywords' provided/effective to generate them. Script cannot proceed."
+        print(f"[APP_OUT]❌ {error_msg}")
         debug_log(f"[FATAL] {error_msg} Please check your configuration file. Exiting.", "ERROR")
         print(f"[FATAL] {error_msg} Please check your configuration file. Exiting.")
         sys.exit(1)
     
+    print(f"[APP_OUT]🎯 Ready with {len(SEARCH_URLS)} search URLs")
     debug_log(f"Final SEARCH_URLS to be used (before optimization): {SEARCH_URLS}", "INFO")
     
     # Add restart counter to prevent infinite restart loops
@@ -609,6 +627,7 @@ def main():
     
     while restart_count < max_restarts:  # Outer loop for automatic restarts with limit
         restart_count += 1
+        print(f"[APP_OUT]🔄 Session {restart_count}/{max_restarts}")
         debug_log(f"Restart attempt {restart_count}/{max_restarts}", "INFO")
         driver = None
         try:
@@ -618,41 +637,52 @@ def main():
             session_comments = 0
             daily_comments = 0
             
+            print("[APP_OUT]⚙️ Initializing components...")
+            
             # Initialize search performance tracker
             try:
                 search_tracker = SearchPerformanceTracker()
                 debug_log("[INIT] Initialized search performance tracker", "INFO")
             except Exception as tracker_error:
+                print(f"[APP_OUT]❌ Failed to initialize search tracker: {tracker_error}")
                 debug_log(f"[ERROR] Failed to initialize search tracker: {tracker_error}", "ERROR")
                 raise
             
             # Initialize comment generator with job keywords
             try:
+                print("[APP_OUT]🤖 Initializing AI comment generator...")
                 debug_log("[INIT] Initializing comment generator", "DEBUG")
                 comment_generator = CommentGenerator(
                     user_bio=USER_BIO,
                     job_keywords=JOB_SEARCH_KEYWORDS
                 )
+                print("[APP_OUT]✅ Comment generator ready")
                 debug_log("[INIT] Comment generator initialized with job keywords", "DEBUG")
             except Exception as gen_error:
+                print(f"[APP_OUT]❌ Failed to initialize comment generator: {gen_error}")
                 debug_log(f"[ERROR] Failed to initialize comment generator: {gen_error}", "ERROR")
                 raise
             
             # Initialize browser driver
             try:
+                print("[APP_OUT]🌐 Starting Chrome browser...")
                 debug_log("[INIT] Initializing browser driver", "DEBUG")
                 driver = setup_chrome_driver()
+                print("[APP_OUT]✅ Browser ready")
                 debug_log("[INIT] Browser driver initialized successfully", "DEBUG")
             except Exception as driver_error:
+                print(f"[APP_OUT]❌ Failed to initialize browser: {driver_error}")
                 debug_log(f"[ERROR] Failed to initialize browser driver: {driver_error}", "ERROR")
                 debug_log(f"[ERROR] Driver error details: {traceback.format_exc()}", "ERROR")
                 raise
             
             # Verify login
+            print("[APP_OUT]🔐 Verifying LinkedIn login...")
             debug_log("[LOGIN] Verifying LinkedIn login status...", "INFO")
             print("Verifying LinkedIn login status...")
             
             if not ensure_logged_in(driver):
+                print("[APP_OUT]❌ Login failed - unable to establish session")
                 debug_log("Could not establish a logged-in session. Exiting cycle.", "FATAL")
                 # Break the inner while loop to allow the outer restart loop to take over
                 break
@@ -662,6 +692,7 @@ def main():
                     # Check if browser is still responsive before each cycle
                     _ = driver.current_url
                 except Exception:
+                    print("[APP_OUT]⚠️ Browser connection lost, reinitializing...")
                     debug_log("Browser connection lost, reinitializing...", "WARN")
                     if driver:
                         try:
@@ -671,34 +702,40 @@ def main():
                     # Re-initialize driver and re-verify login
                     driver = setup_chrome_driver()
                     if not ensure_logged_in(driver):
+                        print("[APP_OUT]❌ Re-login failed after browser crash")
                         debug_log("Re-login failed after browser crash. Breaking inner loop.", "FATAL")
                         break # Exit the inner while loop to trigger a full restart
                     else:
+                        print("[APP_OUT]✅ Re-login successful")
                         debug_log("Re-login successful.", "INFO")
                         
                 debug_log("Login verified successfully", "LOGIN")
-                print("[APP_OUT]Login successful, proceeding to search results...")
+                print("[APP_OUT]✅ Login successful, proceeding to search results...")
 
                 # Get active URLs from the tracker
                 current_hour = datetime.now().hour
                 active_urls = search_tracker.optimize_search_urls(SEARCH_URLS, current_hour)
                         
                 if not active_urls:
+                    print("[APP_OUT]⚠️ No active URLs, using default search URLs")
                     debug_log("No active URLs to process, using default search URLs", "WARNING")
                     active_urls = SEARCH_URLS
                             
                 debug_log(f"Active URLs to process: {active_urls}", "DEBUG")
-                print(f"[APP_OUT]Processing {len(active_urls)} search URLs...")
+                print(f"[APP_OUT]🔍 Processing {len(active_urls)} search URLs...")
 
                 # Process each URL
-                for url in active_urls:
+                for i, url in enumerate(active_urls, 1):
+                    print(f"[APP_OUT]📍 Processing URL {i}/{len(active_urls)}")
                     debug_log(f"Navigating to search URL: {url}", "NAVIGATION")
-                    print(f"[APP_OUT]Navigating to: {url}")
+                    print(f"[APP_OUT]🔗 Navigating to: {url}")
                     if session_comments >= MAX_SESSION_COMMENTS:
+                        print(f"[APP_OUT]🛑 Session limit reached ({MAX_SESSION_COMMENTS} comments)")
                         debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
                         break
 
                     if daily_comments >= MAX_DAILY_COMMENTS:
+                        print(f"[APP_OUT]🛑 Daily limit reached ({MAX_DAILY_COMMENTS} comments) - waiting until midnight")
                         debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
                         sleep_until_midnight_edt()
                         daily_comments = 0  # Reset counter at midnight
@@ -706,13 +743,16 @@ def main():
 
                     # Navigate to the URL and wait for results to load
                     try:
+                        print("[APP_OUT]🚀 Loading search results...")
                         driver.get(url)
                         # Dynamically wait for the search results container to be visible
                         WebDriverWait(driver, 30).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, ".reusable-search__entity-result-list"))
                         )
+                        print("[APP_OUT]✅ Search results loaded")
                         debug_log("Search results page loaded and is visible.", "NAVIGATION")
                     except TimeoutException:
+                        print("[APP_OUT]⚠️ No search results found or page timeout")
                         debug_log(f"TimeoutException: No search results found or page did not load for URL: {url}", "WARNING")
                         # Check for "No results found" message
                         try:
@@ -723,11 +763,13 @@ def main():
                         search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
                         continue # Move to the next URL
                     except Exception as nav_e:
+                        print(f"[APP_OUT]❌ Error loading page: {nav_e}")
                         debug_log(f"Error navigating to {url} or waiting for results: {nav_e}", "ERROR")
                         search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
                         continue # Move to the next URL
 
                     try:
+                        print("[APP_OUT]🔍 Starting post analysis and commenting...")
                         # Process posts on the current page
                         posts_processed, hiring_posts_found = process_posts(driver)
                         if posts_processed > 0:
@@ -1048,7 +1090,7 @@ def is_element_visible(driver, element):
 def process_posts(driver):
     """Process visible posts on the current page with continuous scrolling."""
     debug_log("Starting post processing with continuous scrolling", "PROCESS")
-    print("[APP_OUT]Processing LinkedIn posts...")
+    print("[APP_OUT]🔍 Processing LinkedIn posts...")
     posts_processed = 0
     hiring_posts_found = 0
     posts_commented = 0
@@ -1056,8 +1098,10 @@ def process_posts(driver):
     try:
         debug_log("[COMMENT] Beginning comment posting loop", "COMMENT")
         debug_log("Loading processed post IDs", "DATA")
+        print("[APP_OUT]📊 Loading post history...")
         processed_log = load_log()
         comment_history = load_comment_history()
+        print(f"[APP_OUT]📝 Loaded {len(processed_log)} processed posts and {len(comment_history)} comment records")
         debug_log(f"Loaded {len(processed_log)} processed posts and {len(comment_history)} comments", "DATA")
         
         # Get current URL and extract time filter
@@ -1069,6 +1113,8 @@ def process_posts(driver):
                 debug_log(f"Extracted time filter from URL: {time_filter}", "DEBUG")
             except Exception as e:
                 debug_log(f"Error extracting time filter from URL: {e}", "WARNING")
+        
+        print("[APP_OUT]🔄 Starting continuous scroll and post discovery...")
         
         # Continuous scrolling and post processing with better logic
         processed_posts_this_session = set()
@@ -1083,10 +1129,12 @@ def process_posts(driver):
             posts = find_posts(driver)
             current_post_count = len(posts)
             
+            print(f"[APP_OUT]📋 Found {current_post_count} posts on current page (scroll {scroll_attempts + 1}/{max_scroll_attempts})")
             debug_log(f"Found {current_post_count} posts on page", "SEARCH")
             
             # If no posts found at all, try scrolling and searching again
             if current_post_count == 0:
+                print("[APP_OUT]⚠️ No posts found, attempting scroll to load content...")
                 debug_log("No posts found, attempting scroll to load content", "SEARCH")
                 scroll_page(driver)
                 time.sleep(3)
@@ -1099,7 +1147,7 @@ def process_posts(driver):
             
             # Process each post found
             new_posts_processed = 0
-            for post in posts:
+            for post_index, post in enumerate(posts, 1):
                 try:
                     post_id, _ = compute_post_id(post)
                     
@@ -1108,6 +1156,8 @@ def process_posts(driver):
                         post_id in processed_log or 
                         post_id in comment_history):
                         continue
+                    
+                    print(f"[APP_OUT]📝 Analyzing post {post_index}/{current_post_count}...")
                     
                     # Add to processed set for this session
                     processed_posts_this_session.add(post_id)
@@ -1133,12 +1183,15 @@ def process_posts(driver):
                     
                     # Calculate post score
                     score = comment_generator.calculate_post_score(post_text, author_name, time_filter)
+                    print(f"[APP_OUT]⚖️ Post scored: {score}/100 (threshold: 50)")
                     debug_log(f"Post {post_id} scored: {score}", "SCORE")
                     
                     if score < 50:  # Score threshold
+                        print(f"[APP_OUT]⏭️ Skipping low-scoring post ({score} < 50)")
                         debug_log(f"Skipping post (score: {score} < 50)", "SKIP")
                         continue
                     
+                    print(f"[APP_OUT]✨ High-scoring post found! Processing...")
                     debug_log(f"Processing high-scoring post (score: {score})", "PROCESS")
                     posts_processed += 1
                     new_posts_processed += 1
@@ -1146,10 +1199,12 @@ def process_posts(driver):
                     
                     # Check if we already commented
                     if has_already_commented(driver, post):
+                        print("[APP_OUT]⚠️ Already commented on this post, skipping...")
                         debug_log("Already commented on this post, skipping", "SKIP")
                         continue
                     
                     # Generate comment with retries
+                    print("[APP_OUT]🤖 Generating personalized comment...")
                     debug_log("Generating comment", "GENERATE")
                     custom_message = None
                     for retry in range(3):
@@ -1164,16 +1219,20 @@ def process_posts(driver):
                             time.sleep(2)
                     
                     if not custom_message:
+                        print("[APP_OUT]❌ Failed to generate comment after retries")
                         debug_log("Failed to generate comment after retries, skipping", "SKIP")
                         continue
                     
+                    print(f"[APP_OUT]✍️ Comment generated: {custom_message[:50]}...")
                     debug_log(f"Generated comment: {custom_message[:100]}...", "DATA")
                     
                     # Post comment
+                    print("[APP_OUT]📤 Posting comment...")
                     debug_log("Attempting to post comment", "COMMENT")
                     try:
                         success = post_comment(driver, post, custom_message)
                         if success:
+                            print("[APP_OUT]✅ Comment posted successfully!")
                             debug_log("Successfully posted comment", "SUCCESS")
                             posts_commented += 1
                             # Save to comment history
@@ -1183,25 +1242,31 @@ def process_posts(driver):
                                 "score": score
                             }
                             save_comment_history(comment_history)
+                            print(f"[APP_OUT]⏱️ Taking break between comments...")
                             time.sleep(random.uniform(3, 7))  # Random delay between comments
                         else:
+                            print("[APP_OUT]❌ Failed to post comment")
                             debug_log("Failed to post comment", "ERROR")
                     except Exception as e:
+                        print(f"[APP_OUT]❌ Exception during comment posting: {e}")
                         debug_log(f"Exception during comment posting: {e}", "ERROR")
                     
                     # Check comment limits
                     if posts_commented >= MAX_COMMENTS:
+                        print(f"[APP_OUT]🛑 Reached maximum comments limit ({MAX_COMMENTS})")
                         debug_log(f"Reached max comments limit ({MAX_COMMENTS})", "LIMIT")
                         save_log(processed_log)
                         return posts_commented, hiring_posts_found
                     
                 except Exception as e:
+                    print(f"[APP_OUT]❌ Error processing post: {str(e)}")
                     debug_log(f"Error processing individual post: {str(e)}", "ERROR")
                     debug_log(traceback.format_exc(), "ERROR")
                     continue
             
             # Check if we processed new posts this cycle
             if new_posts_processed > 0:
+                print(f"[APP_OUT]✅ Processed {new_posts_processed} new posts this cycle")
                 debug_log(f"Processed {new_posts_processed} new posts this cycle", "PROGRESS")
                 posts_found_last_cycle = current_post_count
             else:
@@ -1210,11 +1275,13 @@ def process_posts(driver):
                     debug_log("No new posts found, may have reached end of content", "SCROLL")
                     # Try a few more scrolls before giving up
                     if scroll_attempts > max_scroll_attempts - 5:
+                        print("[APP_OUT]📄 Reached end of content, finishing...")
                         debug_log("Reached end of content, stopping", "COMPLETE")
                         break
                 posts_found_last_cycle = current_post_count
             
             # Scroll down to load more posts with human-like behavior
+            print("[APP_OUT]📜 Scrolling to load more posts...")
             debug_log("Scrolling to load more posts", "SCROLL")
             scroll_success = scroll_page(driver)
             if not scroll_success:
@@ -1224,13 +1291,16 @@ def process_posts(driver):
             time.sleep(random.uniform(2, 5))
             scroll_attempts += 1
         
+        print("[APP_OUT]💾 Saving progress logs...")
         debug_log("Saving final logs", "DATA")
         save_log(processed_log)
         save_comment_history(comment_history)
+        print(f"[APP_OUT]📊 Session complete: {posts_processed} posts analyzed, {posts_commented} comments posted")
         debug_log(f"Processed {posts_processed} posts, commented on {posts_commented}", "SUMMARY")
         return posts_commented, hiring_posts_found
         
     except Exception as e:
+        print(f"[APP_OUT]❌ Error in post processing: {str(e)}")
         debug_log(f"Error in process_posts: {str(e)}", "ERROR")
         debug_log(traceback.format_exc(), "ERROR")
         # Save what we have so far
@@ -1283,9 +1353,11 @@ def ensure_logged_in(driver, max_attempts=2):
     and if not found, performs a login and verifies its success.
     """
     for attempt in range(1, max_attempts + 1):
+        print(f"[APP_OUT]🔐 Login attempt {attempt}/{max_attempts}...")
         debug_log(f"Login attempt {attempt}/{max_attempts}", "LOGIN")
         try:
             # First, go to the feed page, which requires login.
+            print("[APP_OUT]🌐 Navigating to LinkedIn feed...")
             driver.get("https://www.linkedin.com/feed/")
             # Wait for a short, random time to let the page redirect if necessary
             time.sleep(random.uniform(2, 4))
@@ -1294,11 +1366,13 @@ def ensure_logged_in(driver, max_attempts=2):
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
             )
+            print("[APP_OUT]✅ Already logged in - session active!")
             debug_log("Login confirmed: Already on logged-in page.", "LOGIN")
             return True
 
         except TimeoutException:
             # The search bar wasn't found, so we are likely on the login page.
+            print("[APP_OUT]🔑 Not logged in, entering credentials...")
             debug_log("Not logged in. Proceeding with login form.", "LOGIN")
             try:
                 # Explicitly go to login page to be safe
@@ -1306,6 +1380,7 @@ def ensure_logged_in(driver, max_attempts=2):
                     driver.get("https://www.linkedin.com/login")
 
                 # Wait for the username field to be present and enter email
+                print("[APP_OUT]📧 Entering email...")
                 user_field = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "username"))
                 )
@@ -1313,24 +1388,30 @@ def ensure_logged_in(driver, max_attempts=2):
                 time.sleep(random.uniform(0.5, 1.0))
 
                 # Find password field, enter password, and submit
+                print("[APP_OUT]🔒 Entering password...")
                 password_field = driver.find_element(By.ID, "password")
                 password_field.send_keys(LINKEDIN_PASSWORD)
                 time.sleep(random.uniform(0.5, 1.0))
+                print("[APP_OUT]📝 Submitting login form...")
                 password_field.send_keys(Keys.RETURN)
                 
                 debug_log("Submitted login credentials.", "LOGIN")
 
                 # After submitting, verify success by waiting for the search bar again
+                print("[APP_OUT]⏳ Verifying login success...")
                 WebDriverWait(driver, 15).until(
                     EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
                 )
+                print("[APP_OUT]✅ Login successful!")
                 debug_log("Login successful: Found navigation bar after submitting credentials.", "LOGIN")
                 return True
 
             except Exception as e:
+                print(f"[APP_OUT]❌ Login attempt {attempt} failed: {e}")
                 debug_log(f"Error during login attempt {attempt}: {e}", "ERROR")
                 take_screenshot(driver, f"login_attempt_{attempt}_failed")
                 if attempt >= max_attempts:
+                    print("[APP_OUT]🚫 All login attempts failed!")
                     debug_log("All login attempts have failed.", "FATAL")
                     return False
     

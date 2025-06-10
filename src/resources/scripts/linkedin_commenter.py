@@ -1488,9 +1488,9 @@ def debug_log(message, level="INFO"):
     timestamp = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
     log_message = f"{timestamp} [{level}] {message}"
     
-    # Send to Electron GUI if level is INFO or higher
-    if level in ['INFO', 'WARNING', 'ERROR', 'FATAL']:
-        print(f"[APP_OUT]{level}: {message}", flush=True)
+    # Send to Electron GUI if level is INFO or higher, as the app will parse this output.
+    if level_map.get(level, 0) >= level_map.get('INFO', 1):
+        print(f"[APP_OUT]{log_message}", flush=True)
     
     # Get log file path from config or use default
     log_file = CONFIG.get('log_file_path') if CONFIG else None

@@ -777,36 +777,47 @@ def main():
             time.sleep(10)  # Wait before restarting
 
 def get_search_urls_for_keywords(keywords):
-    """Generate search URLs from keywords."""
+    """
+    Generate a list of LinkedIn search URLs for each keyword provided.
+    Handles keywords as a list of strings or a single comma-separated string.
+    """
     if not keywords:
         return []
-        
-    # Convert keywords to proper format
-    if isinstance(keywords, list):
-        # Use the first keyword for the main search
-        keyword_query = keywords[0]
-    else:
-        keyword_query = keywords
-        
-    # Generate URLs for different time filters
+
+    keyword_list = []
+    if isinstance(keywords, str):
+        # Split a comma-separated string into a list of keywords
+        keyword_list = [kw.strip() for kw in keywords.split(',') if kw.strip()]
+    elif isinstance(keywords, list):
+        # It's already a list
+        keyword_list = keywords
+    
+    if not keyword_list:
+        debug_log("Keyword list is empty after processing.", "WARNING")
+        return []
+
     urls = []
     time_filters = ["past-24h", "past-month"]
-    for time_filter in time_filters:
-        # Add hiring-focused URL
-        hiring_url = construct_linkedin_search_url(
-            f"{keyword_query} hiring",
-            time_filter
-        )
-        if hiring_url:
-            urls.append(hiring_url)
+    
+    # Iterate over each individual keyword
+    for keyword in keyword_list:
+        debug_log(f"Generating URLs for keyword: '{keyword}'", "DEBUG")
+        for time_filter in time_filters:
+            # Add hiring-focused URL
+            hiring_url = construct_linkedin_search_url(
+                f'"{keyword}" hiring', # Use quotes for exact phrase matching
+                time_filter
+            )
+            if hiring_url:
+                urls.append(hiring_url)
             
-        # Add recruiting-focused URL
-        recruiting_url = construct_linkedin_search_url(
-            f"{keyword_query} recruiting",
-            time_filter
-        )
-        if recruiting_url:
-            urls.append(recruiting_url)
+            # Add recruiting-focused URL
+            recruiting_url = construct_linkedin_search_url(
+                f'"{keyword}" recruiting', # Use quotes for exact phrase matching
+                time_filter
+            )
+            if recruiting_url:
+                urls.append(recruiting_url)
             
     return urls
 

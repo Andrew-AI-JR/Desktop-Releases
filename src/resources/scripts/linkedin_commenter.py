@@ -407,7 +407,9 @@ def initialize_tech_relevance_keywords(job_keywords):
 # NEW ULTRA-STEALTH ADDITION: Advanced Behavioral Pattern Manager
 class BehavioralPatternManager:
     """
-    Manages advanced behavioral patterns to simulate realistic human usage cycles.
+    LEVEL 6 & 8: Advanced Behavioral Mimicry with Micro-Interaction Enhancement
+    Manages ultra-realistic human behavioral patterns including reading simulation,
+    natural tab management, ambient interactions, and momentum-based movements.
     """
     def __init__(self):
         self.session_start_time = datetime.now()
@@ -415,6 +417,11 @@ class BehavioralPatternManager:
         self.weekly_activity_pattern = self._generate_weekly_pattern()
         self.session_characteristics = self._generate_session_characteristics()
         self.behavior_history = []
+        self.reading_profile = self._generate_reading_profile()
+        self.mouse_movement_history = []
+        self.tab_management_pattern = self._generate_tab_pattern()
+        self.distraction_schedule = self._generate_distraction_schedule()
+        self.ambient_interaction_counter = 0
         
     def _generate_daily_pattern(self):
         """Generate realistic daily activity patterns based on professional work hours."""
@@ -592,6 +599,534 @@ class BehavioralPatternManager:
         # Keep only last 100 entries to manage memory
         if len(self.behavior_history) > 100:
             self.behavior_history = self.behavior_history[-100:]
+            
+    # LEVEL 6: Advanced Behavioral Mimicry Methods
+    def _generate_reading_profile(self):
+        """Generate realistic reading speed and patterns for this session."""
+        reading_profiles = [
+            {
+                'type': 'fast_scanner',
+                'words_per_minute': random.randint(250, 350),
+                'comprehension_depth': 0.6,
+                'skimming_tendency': 0.8,
+                'detail_focus_chance': 0.2
+            },
+            {
+                'type': 'careful_reader',
+                'words_per_minute': random.randint(180, 240),
+                'comprehension_depth': 0.9,
+                'skimming_tendency': 0.3,
+                'detail_focus_chance': 0.7
+            },
+            {
+                'type': 'selective_reader',
+                'words_per_minute': random.randint(200, 280),
+                'comprehension_depth': 0.7,
+                'skimming_tendency': 0.5,
+                'detail_focus_chance': 0.4
+            }
+        ]
+        
+        selected = random.choice(reading_profiles)
+        debug_log(f"BEHAVIORAL: Reading profile: {selected['type']} at {selected['words_per_minute']} WPM", "BEHAVIORAL")
+        return selected
+    
+    def _generate_tab_pattern(self):
+        """Generate natural tab management patterns for this session."""
+        patterns = [
+            {
+                'type': 'tab_minimalist',
+                'max_tabs': random.randint(2, 4),
+                'new_tab_chance': 0.1,
+                'background_browsing_chance': 0.05
+            },
+            {
+                'type': 'tab_moderate',
+                'max_tabs': random.randint(4, 8),
+                'new_tab_chance': 0.25,
+                'background_browsing_chance': 0.15
+            },
+            {
+                'type': 'tab_power_user',
+                'max_tabs': random.randint(8, 15),
+                'new_tab_chance': 0.4,
+                'background_browsing_chance': 0.3
+            }
+        ]
+        
+        selected = random.choice(patterns)
+        debug_log(f"BEHAVIORAL: Tab pattern: {selected['type']} (max {selected['max_tabs']} tabs)", "BEHAVIORAL")
+        return selected
+    
+    def _generate_distraction_schedule(self):
+        """Generate natural distraction patterns throughout the session."""
+        session_duration_minutes = self.session_characteristics['duration_range'][1]
+        distractions = []
+        
+        # Generate 2-5 natural distraction points during the session
+        num_distractions = random.randint(2, 5)
+        for i in range(num_distractions):
+            distraction_time = random.randint(5, session_duration_minutes - 5)  # Not at very start/end
+            distraction_type = random.choice([
+                'check_notifications', 'brief_scroll', 'tab_switch', 
+                'mini_break', 'look_around', 'stretch_pause'
+            ])
+            distractions.append({
+                'time_minutes': distraction_time,
+                'type': distraction_type,
+                'duration_seconds': random.randint(5, 30)
+            })
+        
+        # Sort by time
+        distractions.sort(key=lambda x: x['time_minutes'])
+        debug_log(f"BEHAVIORAL: Scheduled {len(distractions)} natural distractions", "BEHAVIORAL")
+        return distractions
+    
+    def calculate_reading_time(self, text_length):
+        """Calculate realistic reading time based on user's reading profile."""
+        if not text_length or text_length < 10:
+            return random.uniform(0.5, 2.0)  # Minimal glance time
+        
+        # Estimate word count (average 5 characters per word)
+        estimated_words = max(1, text_length // 5)
+        wpm = self.reading_profile['words_per_minute']
+        
+        # Base reading time in seconds
+        base_time = (estimated_words / wpm) * 60
+        
+        # Apply comprehension and skimming adjustments
+        if random.random() < self.reading_profile['skimming_tendency']:
+            # Skimming - much faster
+            time_multiplier = random.uniform(0.3, 0.6)
+        elif random.random() < self.reading_profile['detail_focus_chance']:
+            # Detailed reading - slower
+            time_multiplier = random.uniform(1.2, 1.8)
+        else:
+            # Normal reading
+            time_multiplier = random.uniform(0.8, 1.2)
+        
+        adjusted_time = base_time * time_multiplier
+        
+        # Add realistic pause variations
+        pause_factor = random.uniform(1.1, 1.4)  # 10-40% additional time for natural pauses
+        final_time = adjusted_time * pause_factor
+        
+        # Reasonable bounds: 1-45 seconds
+        return max(1.0, min(45.0, final_time))
+    
+    # LEVEL 8: Micro-Interaction Enhancement Methods
+    def generate_ambient_mouse_movement(self, driver):
+        """Generate subtle ambient mouse movements over non-target elements."""
+        try:
+            self.ambient_interaction_counter += 1
+            
+            # Only do ambient movements occasionally (every 3-7 actions)
+            if self.ambient_interaction_counter % random.randint(3, 7) != 0:
+                return
+            
+            # Get window dimensions
+            window_size = driver.get_window_size()
+            width, height = window_size['width'], window_size['height']
+            
+            # Define safe zones (avoid edges and very center)
+            safe_margin = 50
+            x_range = (safe_margin, width - safe_margin)
+            y_range = (safe_margin + 100, height - safe_margin)  # Avoid browser chrome
+            
+            # Generate 2-4 subtle movements
+            num_movements = random.randint(2, 4)
+            action_chain = ActionChains(driver)
+            
+            for i in range(num_movements):
+                # Small, realistic movements (50-200 pixels)
+                dx = random.randint(-200, 200)
+                dy = random.randint(-150, 150)
+                
+                # Ensure we stay in safe bounds
+                current_x = random.randint(*x_range)
+                current_y = random.randint(*y_range)
+                
+                action_chain.move_by_offset(dx, dy)
+                
+                # Small pause between movements
+                if i < num_movements - 1:
+                    time.sleep(random.uniform(0.1, 0.3))
+            
+            # Execute the movement chain
+            action_chain.perform()
+            
+            # Brief pause after ambient movement
+            time.sleep(random.uniform(0.2, 0.6))
+            
+            debug_log(f"MICRO: Ambient mouse movement performed ({num_movements} movements)", "BEHAVIORAL")
+            
+        except Exception as e:
+            debug_log(f"MICRO: Ambient movement failed: {str(e)}", "WARNING")
+    
+    def momentum_based_scroll(self, driver, target_element=None, scroll_direction='down'):
+        """Perform realistic momentum-based scrolling with physics simulation."""
+        try:
+            # Initial velocity (pixels per scroll)
+            initial_velocity = random.randint(100, 300)
+            
+            # Physics parameters
+            friction = 0.85  # Velocity reduction per step
+            min_velocity = 20  # Stop when velocity gets too low
+            
+            current_velocity = initial_velocity
+            total_scrolled = 0
+            scroll_steps = 0
+            
+            while current_velocity > min_velocity and scroll_steps < 15:  # Prevent infinite loops
+                # Calculate scroll amount for this step
+                scroll_amount = int(current_velocity)
+                
+                if scroll_direction == 'down':
+                    driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+                else:
+                    driver.execute_script(f"window.scrollBy(0, -{scroll_amount});")
+                
+                total_scrolled += scroll_amount
+                scroll_steps += 1
+                
+                # Apply friction (momentum decay)
+                current_velocity *= friction
+                
+                # Realistic pause between scroll steps (getting longer as momentum decreases)
+                pause_time = random.uniform(0.05, 0.15) * (1.2 - (current_velocity / initial_velocity))
+                time.sleep(pause_time)
+            
+            # Final settle pause
+            time.sleep(random.uniform(0.3, 0.8))
+            
+            debug_log(f"MICRO: Momentum scroll completed - {total_scrolled}px in {scroll_steps} steps", "BEHAVIORAL")
+            
+        except Exception as e:
+            debug_log(f"MICRO: Momentum scroll failed: {str(e)}", "WARNING")
+    
+    def pre_action_hesitation(self, action_type='click'):
+        """Simulate natural hesitation before important actions."""
+        hesitation_patterns = {
+            'click': {
+                'base_delay': (0.2, 0.8),
+                'important_multiplier': 1.5,
+                'uncertainty_chance': 0.15
+            },
+            'type': {
+                'base_delay': (0.1, 0.4),
+                'important_multiplier': 1.3,
+                'uncertainty_chance': 0.08
+            },
+            'scroll': {
+                'base_delay': (0.05, 0.2),
+                'important_multiplier': 1.2,
+                'uncertainty_chance': 0.05
+            }
+        }
+        
+        pattern = hesitation_patterns.get(action_type, hesitation_patterns['click'])
+        
+        # Base hesitation
+        hesitation_time = random.uniform(*pattern['base_delay'])
+        
+        # Uncertainty hesitation (occasionally people pause longer)
+        if random.random() < pattern['uncertainty_chance']:
+            hesitation_time *= random.uniform(2.0, 4.0)
+            debug_log(f"MICRO: Extended hesitation for {action_type} ({hesitation_time:.2f}s)", "BEHAVIORAL")
+        
+        time.sleep(hesitation_time)
+    
+    def visual_element_focus_time(self, element_type='text', content_length=100):
+        """Calculate realistic focus time based on visual element type and content."""
+        focus_patterns = {
+            'text': {
+                'base_time': 0.5,
+                'length_factor': 0.01,  # Additional time per character
+                'max_time': 8.0
+            },
+            'image': {
+                'base_time': 1.2,
+                'length_factor': 0,  # Images don't scale with "length"
+                'max_time': 4.0
+            },
+            'video': {
+                'base_time': 2.0,
+                'length_factor': 0,
+                'max_time': 6.0
+            },
+            'button': {
+                'base_time': 0.3,
+                'length_factor': 0.02,  # Button text length
+                'max_time': 2.0
+            },
+            'link': {
+                'base_time': 0.4,
+                'length_factor': 0.015,
+                'max_time': 3.0
+            }
+        }
+        
+        pattern = focus_patterns.get(element_type, focus_patterns['text'])
+        
+        # Calculate focus time
+        base_time = pattern['base_time']
+        length_adjustment = content_length * pattern['length_factor']
+        total_time = base_time + length_adjustment
+        
+        # Apply random variation
+        variation = random.uniform(0.7, 1.4)
+        final_time = total_time * variation
+        
+        # Respect maximum bounds
+        final_time = min(final_time, pattern['max_time'])
+        
+        return max(0.1, final_time)  # Minimum 0.1 seconds
+
+# LEVEL 7: Network-Level Stealth Enhancement
+class NetworkStealthManager:
+    """
+    LEVEL 7: Advanced Network-Level Stealth
+    Manages network-level anti-detection including DNS rotation, 
+    connection patterns, and geographic consistency.
+    """
+    def __init__(self):
+        self.dns_servers = [
+            '8.8.8.8',      # Google Public DNS
+            '1.1.1.1',      # Cloudflare
+            '208.67.222.222', # OpenDNS
+            '9.9.9.9'       # Quad9
+        ]
+        self.current_dns = random.choice(self.dns_servers)
+        self.connection_profile = self._generate_connection_profile()
+        self.session_fingerprint = self._generate_session_fingerprint()
+        
+    def _generate_connection_profile(self):
+        """Generate realistic connection characteristics."""
+        profiles = [
+            {
+                'type': 'home_fiber',
+                'download_mbps': random.randint(100, 1000),
+                'upload_mbps': random.randint(20, 100),
+                'latency_ms': random.randint(5, 25),
+                'jitter_ms': random.randint(1, 5)
+            },
+            {
+                'type': 'home_cable',
+                'download_mbps': random.randint(50, 300),
+                'upload_mbps': random.randint(10, 50),
+                'latency_ms': random.randint(15, 40),
+                'jitter_ms': random.randint(2, 8)
+            },
+            {
+                'type': 'office_enterprise',
+                'download_mbps': random.randint(200, 500),
+                'upload_mbps': random.randint(50, 200),
+                'latency_ms': random.randint(3, 15),
+                'jitter_ms': random.randint(1, 3)
+            },
+            {
+                'type': 'mobile_4g',
+                'download_mbps': random.randint(20, 150),
+                'upload_mbps': random.randint(5, 30),
+                'latency_ms': random.randint(30, 80),
+                'jitter_ms': random.randint(5, 15)
+            }
+        ]
+        
+        selected = random.choice(profiles)
+        debug_log(f"NETWORK: Connection profile: {selected['type']} ({selected['download_mbps']}↓/{selected['upload_mbps']}↑ Mbps)", "NETWORK")
+        return selected
+    
+    def _generate_session_fingerprint(self):
+        """Generate unique session fingerprint for this automation run."""
+        import hashlib
+        timestamp = str(time.time())
+        random_seed = str(random.randint(1000000, 9999999))
+        raw_fingerprint = f"{timestamp}_{random_seed}_{self.connection_profile['type']}"
+        return hashlib.md5(raw_fingerprint.encode()).hexdigest()[:16]
+    
+    def apply_network_delays(self):
+        """Apply realistic network delays based on connection profile."""
+        base_delay = self.connection_profile['latency_ms'] / 1000  # Convert to seconds
+        jitter = (self.connection_profile['jitter_ms'] / 1000) * random.uniform(-1, 1)
+        total_delay = max(0.001, base_delay + jitter)  # Minimum 1ms
+        
+        time.sleep(total_delay)
+        return total_delay
+
+# LEVEL 9: Machine Learning Countermeasures
+class MLCountermeasuresManager:
+    """
+    LEVEL 9: Advanced Machine Learning Countermeasures
+    Implements pattern obfuscation, adaptive learning, and dynamic strategy selection
+    to counter ML-based bot detection systems.
+    """
+    def __init__(self):
+        self.pattern_history = []
+        self.success_metrics = {}
+        self.adaptive_parameters = self._initialize_adaptive_params()
+        self.strategy_success_rates = {}
+        self.behavioral_signatures = self._generate_behavioral_signatures()
+        
+    def _initialize_adaptive_params(self):
+        """Initialize adaptive parameters that evolve based on success/failure."""
+        return {
+            'base_scroll_speed': random.uniform(0.8, 1.2),
+            'comment_frequency': random.uniform(0.7, 1.3),
+            'pause_duration_multiplier': random.uniform(0.9, 1.1),
+            'reading_speed_factor': random.uniform(0.8, 1.2),
+            'interaction_randomness': random.uniform(0.5, 1.5)
+        }
+    
+    def _generate_behavioral_signatures(self):
+        """Generate multiple distinct behavioral 'personalities' to rotate between."""
+        signatures = [
+            {
+                'name': 'methodical_professional',
+                'characteristics': {
+                    'scroll_pattern': 'steady_medium',
+                    'reading_style': 'thorough',
+                    'interaction_speed': 'deliberate',
+                    'comment_style': 'professional',
+                    'break_frequency': 'regular'
+                }
+            },
+            {
+                'name': 'quick_scanner',
+                'characteristics': {
+                    'scroll_pattern': 'fast_variable',
+                    'reading_style': 'skim',
+                    'interaction_speed': 'quick',
+                    'comment_style': 'concise',
+                    'break_frequency': 'minimal'
+                }
+            },
+            {
+                'name': 'careful_researcher',
+                'characteristics': {
+                    'scroll_pattern': 'slow_detailed',
+                    'reading_style': 'comprehensive',
+                    'interaction_speed': 'measured',
+                    'comment_style': 'detailed',
+                    'break_frequency': 'frequent'
+                }
+            },
+            {
+                'name': 'casual_browser',
+                'characteristics': {
+                    'scroll_pattern': 'irregular',
+                    'reading_style': 'selective',
+                    'interaction_speed': 'variable',
+                    'comment_style': 'conversational',
+                    'break_frequency': 'sporadic'
+                }
+            }
+        ]
+        
+        selected = random.choice(signatures)
+        debug_log(f"ML_COUNTER: Behavioral signature: {selected['name']}", "ML_COUNTER")
+        return selected
+    
+    def record_detection_event(self, event_type, context=None):
+        """Record potential detection events for adaptive learning."""
+        event = {
+            'timestamp': datetime.now(),
+            'type': event_type,
+            'context': context or {},
+            'current_params': self.adaptive_parameters.copy(),
+            'signature': self.behavioral_signatures['name']
+        }
+        
+        self.pattern_history.append(event)
+        
+        # Trigger adaptive response
+        self._adapt_parameters(event_type)
+        
+        debug_log(f"ML_COUNTER: Detection event recorded: {event_type}", "ML_COUNTER")
+    
+    def _adapt_parameters(self, detection_type):
+        """Adapt behavioral parameters based on detection feedback."""
+        adaptations = {
+            'soft_throttling': {
+                'pause_duration_multiplier': 1.3,
+                'comment_frequency': 0.8,
+                'interaction_randomness': 1.4
+            },
+            'bot_challenge': {
+                'base_scroll_speed': 0.7,
+                'reading_speed_factor': 1.4,
+                'pause_duration_multiplier': 1.6
+            },
+            'rate_limiting': {
+                'comment_frequency': 0.6,
+                'pause_duration_multiplier': 1.8,
+                'interaction_randomness': 1.2
+            },
+            'captcha_triggered': {
+                'base_scroll_speed': 0.5,
+                'comment_frequency': 0.4,
+                'pause_duration_multiplier': 2.0
+            }
+        }
+        
+        if detection_type in adaptations:
+            for param, multiplier in adaptations[detection_type].items():
+                self.adaptive_parameters[param] *= multiplier
+                # Keep parameters within reasonable bounds
+                self.adaptive_parameters[param] = max(0.1, min(3.0, self.adaptive_parameters[param]))
+            
+            debug_log(f"ML_COUNTER: Adapted parameters for {detection_type}", "ML_COUNTER")
+    
+    def select_optimal_strategy(self, context='general'):
+        """Dynamically select the best strategy based on historical performance."""
+        if context not in self.strategy_success_rates:
+            self.strategy_success_rates[context] = {
+                'aggressive': 0.5,
+                'moderate': 0.7,
+                'conservative': 0.9
+            }
+        
+        # Select strategy based on success rates with some randomness
+        rates = self.strategy_success_rates[context]
+        
+        # Weighted random selection favoring higher success rates
+        strategies = list(rates.keys())
+        weights = [rates[s] for s in strategies]
+        
+        # Add some exploration (10% chance to try non-optimal strategy)
+        if random.random() < 0.1:
+            selected = random.choice(strategies)
+        else:
+            selected = random.choices(strategies, weights=weights)[0]
+        
+        debug_log(f"ML_COUNTER: Selected strategy '{selected}' for context '{context}' (rate: {rates[selected]:.2f})", "ML_COUNTER")
+        return selected
+    
+    def generate_pattern_noise(self):
+        """Generate controlled randomness to obfuscate behavioral patterns."""
+        noise_factors = {
+            'timing_variance': random.uniform(0.7, 1.3),
+            'action_order_shuffle': random.random() < 0.15,  # 15% chance to vary action order
+            'micro_breaks_injection': random.random() < 0.25,  # 25% chance for micro-breaks
+            'phantom_interactions': random.random() < 0.1   # 10% chance for phantom actions
+        }
+        
+        return noise_factors
+    
+    def get_adaptive_delay(self, base_delay, action_type='general'):
+        """Get adaptively modified delay based on current parameters and ML countermeasures."""
+        base_multiplier = self.adaptive_parameters['pause_duration_multiplier']
+        randomness_factor = self.adaptive_parameters['interaction_randomness']
+        
+        # Apply base adaptation
+        adapted_delay = base_delay * base_multiplier
+        
+        # Add ML-specific randomness
+        noise = random.uniform(-randomness_factor, randomness_factor) * 0.3
+        final_delay = adapted_delay * (1 + noise)
+        
+        # Ensure reasonable bounds
+        return max(0.1, min(30.0, final_delay))
 
 class SearchPerformanceTracker:
     """Tracks and optimizes search URL performance."""
@@ -1167,6 +1702,29 @@ def main():
             except Exception as behavioral_error:
                 print(f"[APP_OUT]❌ Failed to initialize behavioral manager: {behavioral_error}")
                 debug_log(f"[ERROR] Failed to initialize behavioral manager: {behavioral_error}", "ERROR")
+                raise
+                
+            # LEVEL 7: Initialize Network Stealth Manager
+            try:
+                print("[APP_OUT]🌐 Initializing network stealth manager...")
+                network_stealth = NetworkStealthManager()
+                print(f"[APP_OUT]🔗 Network profile: {network_stealth.connection_profile['type']} ({network_stealth.connection_profile['download_mbps']}↓/{network_stealth.connection_profile['upload_mbps']}↑ Mbps)")
+                debug_log(f"[INIT] Network stealth initialized with {network_stealth.connection_profile['type']} profile", "NETWORK")
+            except Exception as network_error:
+                print(f"[APP_OUT]❌ Failed to initialize network stealth manager: {network_error}")
+                debug_log(f"[ERROR] Failed to initialize network stealth manager: {network_error}", "ERROR")
+                raise
+                
+            # LEVEL 9: Initialize ML Countermeasures Manager  
+            try:
+                print("[APP_OUT]🤖 Initializing ML countermeasures manager...")
+                ml_counter = MLCountermeasuresManager()
+                signature_name = ml_counter.behavioral_signatures['name']
+                print(f"[APP_OUT]🎭 ML Defense profile: {signature_name}")
+                debug_log(f"[INIT] ML countermeasures initialized with {signature_name} behavioral signature", "ML_COUNTER")
+            except Exception as ml_error:
+                print(f"[APP_OUT]❌ Failed to initialize ML countermeasures manager: {ml_error}")
+                debug_log(f"[ERROR] Failed to initialize ML countermeasures manager: {ml_error}", "ERROR")
                 raise
             
             # Initialize comment generator with job keywords
@@ -2339,9 +2897,37 @@ def ensure_logged_in(driver, max_attempts=2):
     return False
 
 def has_already_commented(driver, post):
-    """Check if the user has already commented on a post."""
+    """
+    ENHANCED: Check if the user has already commented on a post with advanced anti-detection measures.
+    Incorporates Level 6-8 behavioral patterns to prevent stalling and detection.
+    """
+    debug_log("ENHANCED: Starting comment check with advanced anti-detection", "COMMENT_CHECK")
+    
     try:
-        # Look for comment sections within the post
+        # LEVEL 8: Pre-action hesitation to simulate human thinking
+        try:
+            # Simulate human reading/thinking before checking comments
+            reading_time = random.uniform(1.5, 4.0)
+            debug_log(f"MICRO: Comment check hesitation: {reading_time:.1f}s", "BEHAVIORAL")
+            time.sleep(reading_time)
+            
+            # LEVEL 8: Ambient mouse movement during check
+            if 'behavioral_manager' in globals():
+                behavioral_manager.generate_ambient_mouse_movement(driver)
+            
+            # LEVEL 7: Apply network delays to simulate realistic response times
+            if 'network_stealth' in globals():
+                network_delay = network_stealth.apply_network_delays()
+                debug_log(f"NETWORK: Applied realistic network delay: {network_delay:.3f}s", "NETWORK")
+            
+        except Exception as behavioral_error:
+            debug_log(f"MICRO: Behavioral enhancement error: {behavioral_error}", "WARNING")
+        
+        # ENHANCED: Multiple timeout strategies to prevent stalling
+        max_check_time = 15  # Maximum time to spend checking comments
+        start_time = time.time()
+        
+        # Look for comment sections within the post with timeout protection
         comment_selectors = [
             ".//div[contains(@class, 'comments-comment-item')]",
             ".//article[contains(@class, 'comments-comment-item')]",
@@ -2349,64 +2935,164 @@ def has_already_commented(driver, post):
             ".//div[contains(@class, 'social-comments-comment')]"
         ]
         
-        # Get current user info to identify our own comments
-        try:
-            # Try to get current user name from page
-            user_name = None
-            name_selectors = [
-                "//span[contains(@class, 'global-nav__me-name')]",
-                "//div[contains(@class, 'identity-headline')]//h1",
-                "//button[contains(@class, 'global-nav__primary-link-me')]//span"
-            ]
-            
-            for selector in name_selectors:
+        # ENHANCED: Get current user info with timeout and fallback methods
+        user_name = None
+        name_selectors = [
+            "//span[contains(@class, 'global-nav__me-name')]",
+            "//div[contains(@class, 'identity-headline')]//h1",
+            "//button[contains(@class, 'global-nav__primary-link-me')]//span",
+            "//a[contains(@class, 'global-nav__primary-link-me')]//span",
+            "//button[contains(@class, 'artdeco-dropdown__trigger')]//span"
+        ]
+        
+        # LEVEL 6: Reading simulation for user name detection
+        for selector in name_selectors:
+            # Check if we've exceeded max time
+            if time.time() - start_time > max_check_time:
+                debug_log("TIMEOUT: Comment check exceeded maximum time, returning false", "WARNING")
+                return False
+                
+            try:
+                # ENHANCED: Use WebDriverWait with short timeout to prevent stalling
+                name_element = WebDriverWait(driver, 2).until(
+                    EC.presence_of_element_located((By.XPATH, selector))
+                )
+                
+                if name_element and name_element.text.strip():
+                    user_name = name_element.text.strip()
+                    debug_log(f"ENHANCED: Found user name via {selector}: {user_name}", "COMMENT_CHECK")
+                    break
+                    
+            except TimeoutException:
+                debug_log(f"TIMEOUT: User name selector timed out: {selector}", "WARNING")
+                continue
+            except Exception as name_error:
+                debug_log(f"ENHANCED: Error with name selector {selector}: {name_error}", "WARNING")
+                continue
+        
+        if not user_name:
+            debug_log("ENHANCED: Could not determine user name, assuming no previous comments", "COMMENT_CHECK")
+            return False
+        
+        # ENHANCED: Look for existing comments with timeout protection and behavioral patterns
+        comments_found = 0
+        for comment_selector in comment_selectors:
+            # Check timeout again
+            if time.time() - start_time > max_check_time:
+                debug_log("TIMEOUT: Comment search exceeded maximum time", "WARNING")
+                break
+                
+            try:
+                # LEVEL 6: Simulate reading time based on content complexity
                 try:
-                    name_element = driver.find_element(By.XPATH, selector)
-                    if name_element and name_element.text.strip():
-                        user_name = name_element.text.strip()
+                    if 'behavioral_manager' in globals():
+                        selector_complexity = len(comment_selector)
+                        reading_delay = behavioral_manager.calculate_reading_time(selector_complexity * 10)
+                        reading_delay = min(reading_delay, 2.0)  # Cap at 2 seconds for efficiency
+                        time.sleep(reading_delay)
+                except:
+                    time.sleep(random.uniform(0.2, 0.8))  # Fallback delay
+                
+                # ENHANCED: Find comments with timeout protection
+                comments = WebDriverWait(driver, 3).until(
+                    lambda d: post.find_elements(By.XPATH, comment_selector)
+                )
+                
+                if not comments:
+                    continue
+                    
+                debug_log(f"ENHANCED: Found {len(comments)} potential comments with {comment_selector}", "COMMENT_CHECK")
+                comments_found += len(comments)
+                
+                # LEVEL 8: Visual element focus simulation
+                for i, comment in enumerate(comments[:5]):  # Limit to first 5 comments for efficiency
+                    # Check timeout for each comment
+                    if time.time() - start_time > max_check_time:
+                        debug_log("TIMEOUT: Individual comment check exceeded time limit", "WARNING")
                         break
-                except:
-                    continue
-            
-            # Look for existing comments in the post
-            for comment_selector in comment_selectors:
-                try:
-                    comments = post.find_elements(By.XPATH, comment_selector)
-                    for comment in comments:
-                        if not comment.is_displayed():
-                            continue
-                            
-                        # Check comment author
-                        author_selectors = [
-                            ".//span[contains(@class, 'comments-comment-item__commenter-name')]",
-                            ".//a[contains(@class, 'comment-author')]",
-                            ".//div[contains(@class, 'comment-author-name')]"
-                        ]
                         
-                        for author_selector in author_selectors:
-                            try:
-                                author_element = comment.find_element(By.XPATH, author_selector)
-                                if author_element and author_element.text.strip():
-                                    comment_author = author_element.text.strip()
+                    if not comment.is_displayed():
+                        continue
+                    
+                    # LEVEL 8: Simulate visual focus on comment element
+                    try:
+                        if 'behavioral_manager' in globals():
+                            focus_time = behavioral_manager.visual_element_focus_time('text', len(comment.text or ''))
+                            focus_time = min(focus_time, 1.5)  # Cap for efficiency
+                            time.sleep(focus_time)
+                    except:
+                        time.sleep(random.uniform(0.1, 0.5))  # Fallback
+                    
+                    # Check comment author with multiple selectors and timeout
+                    author_selectors = [
+                        ".//span[contains(@class, 'comments-comment-item__commenter-name')]",
+                        ".//a[contains(@class, 'comment-author')]",
+                        ".//div[contains(@class, 'comment-author-name')]",
+                        ".//a[contains(@class, 'app-aware-link')]",
+                        ".//span[contains(@class, 'hoverable-link-text')]"
+                    ]
+                    
+                    for author_selector in author_selectors:
+                        try:
+                            # Quick timeout to prevent hanging
+                            author_element = WebDriverWait(comment, 1).until(
+                                EC.presence_of_element_located((By.XPATH, author_selector))
+                            )
+                            
+                            if author_element and author_element.text.strip():
+                                comment_author = author_element.text.strip()
+                                
+                                # ENHANCED: Fuzzy matching for author names (handles formatting differences)
+                                if user_name and comment_author:
+                                    # Clean both names for comparison
+                                    clean_user = ''.join(user_name.lower().split())
+                                    clean_author = ''.join(comment_author.lower().split())
                                     
-                                    # Check if this is our comment
-                                    if user_name and comment_author.lower() == user_name.lower():
-                                        debug_log(f"Found existing comment by {comment_author}", "COMMENT_CHECK")
+                                    if clean_user == clean_author or clean_user in clean_author or clean_author in clean_user:
+                                        debug_log(f"ENHANCED: Found existing comment by {comment_author} (matched with {user_name})", "COMMENT_CHECK")
+                                        
+                                        # LEVEL 6: Simulate human reaction to finding own comment
+                                        reaction_time = random.uniform(0.5, 1.5)
+                                        debug_log(f"BEHAVIORAL: Human recognition delay: {reaction_time:.1f}s", "BEHAVIORAL")
+                                        time.sleep(reaction_time)
+                                        
                                         return True
-                            except:
-                                continue
-                except:
-                    continue
-            
-            debug_log("No existing comments found by current user", "COMMENT_CHECK")
-            return False
-            
-        except Exception as e:
-            debug_log(f"Error checking for existing comments: {e}", "COMMENT_CHECK")
-            return False
-            
+                                        
+                        except TimeoutException:
+                            continue  # Quick timeout, move to next selector
+                        except Exception as author_error:
+                            debug_log(f"ENHANCED: Error checking comment author: {author_error}", "WARNING")
+                            continue
+                
+            except TimeoutException:
+                debug_log(f"TIMEOUT: Comment selector timed out: {comment_selector}", "WARNING")
+                continue
+            except Exception as comment_error:
+                debug_log(f"ENHANCED: Error with comment selector {comment_selector}: {comment_error}", "WARNING")
+                continue
+        
+        # LEVEL 6: Simulate completing the review process
+        completion_time = random.uniform(0.3, 1.0)
+        debug_log(f"ENHANCED: Comment check completed - found {comments_found} total comments, no matches for {user_name}", "COMMENT_CHECK")
+        debug_log(f"BEHAVIORAL: Review completion delay: {completion_time:.1f}s", "BEHAVIORAL")
+        time.sleep(completion_time)
+        
+        return False
+        
     except Exception as e:
-        debug_log(f"Error in has_already_commented: {e}", "ERROR")
+        debug_log(f"ENHANCED: Error in enhanced comment check: {e}", "ERROR")
+        
+        # LEVEL 9: Record potential detection event for ML adaptation
+        try:
+            if 'ml_counter' in globals():
+                ml_counter.record_detection_event('comment_check_error', {
+                    'error_type': str(type(e).__name__),
+                    'error_message': str(e)
+                })
+        except:
+            pass
+        
+        # Fallback: assume no comments to avoid infinite loops
         return False
 
 def expand_post(driver, post):

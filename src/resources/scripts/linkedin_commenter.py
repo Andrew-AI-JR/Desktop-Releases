@@ -652,11 +652,10 @@ def main():
             debug_log("[LOGIN] Verifying LinkedIn login status...", "INFO")
             print("Verifying LinkedIn login status...")
             
-            login_successful = verify_active_login(driver)
-            if not login_successful:
-                debug_log("Login verification failed, will attempt to log in within the main loop if necessary.", "ERROR")
-                # We can choose to continue and let the main loop handle it, or exit.
-                # For now, let's allow it to continue.
+            if not ensure_logged_in(driver):
+                debug_log("Could not establish a logged-in session. Exiting cycle.", "FATAL")
+                # Break the inner while loop to allow the outer restart loop to take over
+                break
 
             while True:  # Inner loop for normal operation
                 try:
@@ -671,7 +670,7 @@ def main():
                             pass
                     # Re-initialize driver and re-verify login
                     driver = setup_chrome_driver()
-                    if not verify_active_login(driver):
+                    if not ensure_logged_in(driver):
                         debug_log("Re-login failed after browser crash. Breaking inner loop.", "FATAL")
                         break # Exit the inner while loop to trigger a full restart
                     else:
@@ -1000,50 +999,63 @@ def process_posts(driver):
         debug_log(traceback.format_exc(), "ERROR")
         return 0, 0  # Return tuple of zeros on error
 
-def verify_active_login(driver, max_attempts=3):
+def ensure_logged_in(driver, max_attempts=2):
     """
-    Automatically verify and perform LinkedIn login without manual intervention.
-    Args:
-        driver: Selenium WebDriver instance
-        max_attempts: Maximum number of login attempts
-    Returns:
-        bool: True if login was successful, False otherwise
+    Ensures the user is logged into LinkedIn. Checks for an active session,
+    and if not found, performs a login and verifies its success.
     """
-    debug_log("Verifying LinkedIn login status...", "LOGIN")
-    print("[APP_OUT]Verifying LinkedIn login status...")
-
     for attempt in range(1, max_attempts + 1):
-        debug_log(f"Login verification attempt {attempt}/{max_attempts}", "LOGIN")
+        debug_log(f"Login attempt {attempt}/{max_attempts}", "LOGIN")
         try:
-            # Go to the LinkedIn feed, a reliable page to check login status
+            # First, go to the feed page, which requires login.
             driver.get("https://www.linkedin.com/feed/")
-            time.sleep(random.uniform(3, 5))
+            # Wait for a short, random time to let the page redirect if necessary
+            time.sleep(random.uniform(2, 4))
+            
+            # If we're on the feed, the search bar will be present.
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
+            )
+            debug_log("Login confirmed: Already on logged-in page.", "LOGIN")
+            return True
 
-            # Check for an element that reliably indicates a logged-in state.
-            # The global navigation search bar is a good candidate.
+        except TimeoutException:
+            # The search bar wasn't found, so we are likely on the login page.
+            debug_log("Not logged in. Proceeding with login form.", "LOGIN")
             try:
-                WebDriverWait(driver, 10).until(
+                # Explicitly go to login page to be safe
+                if "login" not in driver.current_url:
+                    driver.get("https://www.linkedin.com/login")
+
+                # Wait for the username field to be present and enter email
+                user_field = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "username"))
+                )
+                user_field.send_keys(LINKEDIN_EMAIL)
+                time.sleep(random.uniform(0.5, 1.0))
+
+                # Find password field, enter password, and submit
+                password_field = driver.find_element(By.ID, "password")
+                password_field.send_keys(LINKEDIN_PASSWORD)
+                time.sleep(random.uniform(0.5, 1.0))
+                password_field.send_keys(Keys.RETURN)
+                
+                debug_log("Submitted login credentials.", "LOGIN")
+
+                # After submitting, verify success by waiting for the search bar again
+                WebDriverWait(driver, 15).until(
                     EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
                 )
-                debug_log("Login confirmed: Found main navigation search bar.", "LOGIN")
-                return True  # Success, exit the function
-            except TimeoutException:
-                debug_log("Login check failed. Could not find a key element indicating a logged-in state.", "LOGIN")
-                # If it fails, it could be a page load issue or we are logged out.
-                # Let the loop retry.
-                if attempt < max_attempts:
-                    debug_log("Retrying login verification...", "LOGIN")
-                    continue
-                else:
-                    debug_log("Final login verification attempt failed.", "ERROR")
-                    return False
+                debug_log("Login successful: Found navigation bar after submitting credentials.", "LOGIN")
+                return True
 
-        except Exception as e:
-            debug_log(f"An unexpected error occurred during login verification (attempt {attempt}): {e}", "ERROR")
-            if attempt < max_attempts:
-                time.sleep(5)  # Wait before the next attempt
+            except Exception as e:
+                debug_log(f"Error during login attempt {attempt}: {e}", "ERROR")
+                take_screenshot(driver, f"login_attempt_{attempt}_failed")
+                if attempt >= max_attempts:
+                    debug_log("All login attempts have failed.", "FATAL")
+                    return False
     
-    debug_log("Failed to verify active login after all attempts.", "ERROR")
     return False
 
 def has_already_commented(driver, post):

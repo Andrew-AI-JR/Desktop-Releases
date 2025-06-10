@@ -161,3 +161,13 @@ pip-delete-this-directory.txt
 
 # Application logs
 *.log
+
+# Large binary files and chromium downloads
+chrome-win.zip
+chrome-win64*.zip
+chromium-win64.7z
+chromium-win64/
+chromium-stable-win64/
+mini_installer.exe
+7z*.exe
+chromedriver-win64*.zip

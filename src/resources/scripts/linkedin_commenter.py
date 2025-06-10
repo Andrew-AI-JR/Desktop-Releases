@@ -1186,6 +1186,10 @@ def main():
                         
                         # Random delay between URLs
                         time.sleep(random.uniform(MIN_COMMENT_DELAY, MIN_COMMENT_DELAY * 2))
+                        
+                        # Perform a human-like distraction with a certain probability
+                        if random.random() < 0.25:  # 25% chance of distraction
+                            human_like_distraction(driver)
 
                     except Exception as e_url_processing:
                         debug_log(f"Error processing URL {url}: {e_url_processing}", "ERROR")
@@ -1958,71 +1962,82 @@ def scroll_page(driver):
 
 def ensure_logged_in(driver, max_attempts=2):
     """
-    Ensures the user is logged into LinkedIn. Checks for an active session,
-    and if not found, performs a login and verifies its success.
+    Ensures the user is logged into LinkedIn using persistent cookies for stealth.
+    - Tries to load cookies to restore a session.
+    - If session restore fails, performs a full login.
+    - Saves cookies after a successful login for future runs.
     """
-    for attempt in range(1, max_attempts + 1):
-        print(f"[APP_OUT]🔐 Login attempt {attempt}/{max_attempts}...")
-        debug_log(f"Login attempt {attempt}/{max_attempts}", "LOGIN")
+    print("[APP_OUT]🔐 Verifying LinkedIn session...")
+    debug_log("STEALTH: Verifying login status with cookie persistence.", "LOGIN")
+
+    # 1. Try to load cookies and verify session
+    if load_cookies(driver):
+        debug_log("STEALTH: Cookies loaded. Refreshing to verify session.", "LOGIN")
+        driver.get("https://www.linkedin.com/feed/")
+        time.sleep(random.uniform(4, 7))
+        
         try:
-            # First, go to the feed page, which requires login.
-            print("[APP_OUT]🌐 Navigating to LinkedIn feed...")
-            driver.get("https://www.linkedin.com/feed/")
-            # Wait for a short, random time to let the page redirect if necessary
-            time.sleep(random.uniform(2, 4))
-            
-            # If we're on the feed, the search bar will be present.
-            WebDriverWait(driver, 5).until(
+            # Check for a reliable element that confirms login
+            WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
             )
-            print("[APP_OUT]✅ Already logged in - session active!")
-            debug_log("Login confirmed: Already on logged-in page.", "LOGIN")
+            print("[APP_OUT]✅ Session restored successfully via cookies!")
+            debug_log("STEALTH: Session restored successfully from cookies.", "LOGIN")
+            return True
+        except TimeoutException:
+            print("[APP_OUT]⚠️ Cookie session invalid or expired. Proceeding with full login.")
+            debug_log("STEALTH: Cookie session invalid. Proceeding with full login.", "LOGIN")
+
+    # 2. If cookie login fails, proceed with normal login
+    for attempt in range(1, max_attempts + 1):
+        print(f"[APP_OUT]🔑 Login attempt {attempt}/{max_attempts}...")
+        debug_log(f"Login attempt {attempt}/{max_attempts}", "LOGIN")
+        try:
+            # Explicitly go to login page to be safe
+            if "login" not in driver.current_url:
+                driver.get("https://www.linkedin.com/login")
+                time.sleep(random.uniform(2, 4))
+
+            # Wait for the username field to be present and enter email
+            print("[APP_OUT]📧 Entering email...")
+            user_field = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "username"))
+            )
+            user_field.send_keys(LINKEDIN_EMAIL)
+            time.sleep(random.uniform(0.8, 1.5))
+
+            # Find password field, enter password, and submit
+            print("[APP_OUT]🔒 Entering password...")
+            password_field = driver.find_element(By.ID, "password")
+            password_field.send_keys(LINKEDIN_PASSWORD)
+            time.sleep(random.uniform(0.8, 1.5))
+            
+            print("[APP_OUT]📝 Submitting login form...")
+            password_field.send_keys(Keys.RETURN)
+            
+            debug_log("Submitted login credentials.", "LOGIN")
+
+            # After submitting, verify success and SAVE cookies
+            print("[APP_OUT]⏳ Verifying login success...")
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
+            )
+            print("[APP_OUT]✅ Login successful!")
+            debug_log("Login successful, saving session cookies.", "LOGIN")
+            
+            # 3. Save cookies for next time
+            save_cookies(driver)
+            
             return True
 
-        except TimeoutException:
-            # The search bar wasn't found, so we are likely on the login page.
-            print("[APP_OUT]🔑 Not logged in, entering credentials...")
-            debug_log("Not logged in. Proceeding with login form.", "LOGIN")
-            try:
-                # Explicitly go to login page to be safe
-                if "login" not in driver.current_url:
-                    driver.get("https://www.linkedin.com/login")
-
-                # Wait for the username field to be present and enter email
-                print("[APP_OUT]📧 Entering email...")
-                user_field = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "username"))
-                )
-                user_field.send_keys(LINKEDIN_EMAIL)
-                time.sleep(random.uniform(0.5, 1.0))
-
-                # Find password field, enter password, and submit
-                print("[APP_OUT]🔒 Entering password...")
-                password_field = driver.find_element(By.ID, "password")
-                password_field.send_keys(LINKEDIN_PASSWORD)
-                time.sleep(random.uniform(0.5, 1.0))
-                print("[APP_OUT]📝 Submitting login form...")
-                password_field.send_keys(Keys.RETURN)
-                
-                debug_log("Submitted login credentials.", "LOGIN")
-
-                # After submitting, verify success by waiting for the search bar again
-                print("[APP_OUT]⏳ Verifying login success...")
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.ID, "global-nav-typeahead"))
-                )
-                print("[APP_OUT]✅ Login successful!")
-                debug_log("Login successful: Found navigation bar after submitting credentials.", "LOGIN")
-                return True
-
-            except Exception as e:
-                print(f"[APP_OUT]❌ Login attempt {attempt} failed: {e}")
-                debug_log(f"Error during login attempt {attempt}: {e}", "ERROR")
-                take_screenshot(driver, f"login_attempt_{attempt}_failed")
-                if attempt >= max_attempts:
-                    print("[APP_OUT]🚫 All login attempts failed!")
-                    debug_log("All login attempts have failed.", "FATAL")
-                    return False
+        except Exception as e:
+            print(f"[APP_OUT]❌ Login attempt {attempt} failed: {e}")
+            debug_log(f"Error during login attempt {attempt}: {e}", "ERROR")
+            take_screenshot(driver, f"login_attempt_{attempt}_failed")
+            if attempt >= max_attempts:
+                print("[APP_OUT]🚫 All login attempts failed!")
+                debug_log("All login attempts have failed.", "FATAL")
+                return False
     
     return False
 
@@ -2882,6 +2897,95 @@ def save_comment_history(history):
         debug_log(f"Saved {len(history)} comments to history", "DATA")
     except Exception as e:
         debug_log(f"Error saving comment history: {e}", "ERROR")
+
+def save_cookies(driver, path="linkedin_cookies.json"):
+    """Save browser cookies to a file."""
+    try:
+        cookies = driver.get_cookies()
+        with open(path, 'w') as f:
+            json.dump(cookies, f)
+        debug_log(f"STEALTH: Saved {len(cookies)} cookies to {path}", "STEALTH")
+        print(f"[APP_OUT]🍪 Saved session cookies to {path}")
+    except Exception as e:
+        debug_log(f"STEALTH: Error saving cookies: {e}", "STEALTH")
+
+def load_cookies(driver, path="linkedin_cookies.json"):
+    """Load browser cookies from a file and add them to the session."""
+    try:
+        if not os.path.exists(path):
+            debug_log("STEALTH: Cookie file not found, skipping load.", "STEALTH")
+            return False
+        
+        with open(path, 'r') as f:
+            cookies = json.load(f)
+        
+        if not cookies:
+            debug_log("STEALTH: Cookie file is empty.", "STEALTH")
+            return False
+
+        # Navigate to the domain before adding cookies
+        driver.get("https://www.linkedin.com")
+        time.sleep(2)
+        
+        for cookie in cookies:
+            # Ensure cookie has a domain that is valid for the current page
+            if 'domain' in cookie and "linkedin.com" in cookie['domain']:
+                driver.add_cookie(cookie)
+        
+        debug_log(f"STEALTH: Loaded {len(cookies)} cookies from {path}", "STEALTH")
+        print(f"[APP_OUT]🍪 Loaded {len(cookies)} session cookies")
+        return True
+    except Exception as e:
+        debug_log(f"STEALTH: Error loading cookies: {e}", "STEALTH")
+        return False
+
+def human_like_distraction(driver):
+    """Perform a random, human-like distraction activity to break patterns."""
+    activities = [
+        "check_notifications",
+        "view_profile",
+        "scroll_feed",
+        "view_network"
+    ]
+    
+    chosen_activity = random.choice(activities)
+    debug_log(f"STEALTH: Performing distraction activity: {chosen_activity}", "STEALTH")
+    print(f"[APP_OUT]🎭 Performing human-like distraction: {chosen_activity}...")
+    
+    try:
+        if chosen_activity == "check_notifications":
+            driver.get("https://www.linkedin.com/notifications/")
+            time.sleep(random.uniform(8, 15))
+            # Simulate scrolling through notifications
+            for _ in range(random.randint(1, 4)):
+                driver.execute_script(f"window.scrollBy(0, {random.randint(200, 500)});")
+                time.sleep(random.uniform(2, 5))
+        
+        elif chosen_activity == "view_profile":
+            driver.get("https://www.linkedin.com/in/me/")
+            time.sleep(random.uniform(10, 20))
+            driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)});")
+            time.sleep(random.uniform(3, 6))
+
+        elif chosen_activity == "scroll_feed":
+            driver.get("https://www.linkedin.com/feed/")
+            time.sleep(random.uniform(5, 10))
+            for _ in range(random.randint(2, 5)):
+                driver.execute_script(f"window.scrollBy(0, {random.randint(400, 800)});")
+                time.sleep(random.uniform(3, 7))
+
+        elif chosen_activity == "view_network":
+            driver.get("https://www.linkedin.com/mynetwork/")
+            time.sleep(random.uniform(8, 15))
+            
+        # End distraction with a return to the feed
+        driver.get("https://www.linkedin.com/feed/")
+        time.sleep(random.uniform(4, 8))
+        debug_log(f"STEALTH: Completed distraction activity: {chosen_activity}", "STEALTH")
+        return True
+    except Exception as e:
+        debug_log(f"STEALTH: Error during distraction activity '{chosen_activity}': {e}", "STEALTH")
+        return False
 
 if __name__ == "__main__":
     driver = None

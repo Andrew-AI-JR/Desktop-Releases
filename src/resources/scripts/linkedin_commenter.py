@@ -35,6 +35,16 @@ import shutil
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 
+# Load environment variables from .env file (for production builds)
+try:
+    from dotenv import load_dotenv
+    # For PyInstaller bundled apps, the .env file will be in the executable's directory
+    # load_dotenv() automatically looks for .env in the current working directory
+    load_dotenv()
+except ImportError:
+    # dotenv not available, continue without it
+    pass
+
 # === CONFIGURATION ===
 # Load configuration from config.json
 def load_config_from_file(config_path):
@@ -102,16 +112,11 @@ def load_config_from_args():
         config['log_level'] = env_log_level
     if env_chrome_path and not config.get('chrome_path'):
         config['chrome_path'] = env_chrome_path
-    # Try to load backend URL from .env file if not in config
+    # Try to load backend URL from environment if not in config (dotenv already loaded at top)
     if not config.get('backend_url'):
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-            backend_url = os.getenv('BACKEND_URL')
-            if backend_url:
-                config['backend_url'] = backend_url
-        except ImportError:
-            pass  # dotenv not available, continue without it
+        backend_url = os.getenv('BACKEND_URL')
+        if backend_url:
+            config['backend_url'] = backend_url
     # Backend URL is only loaded from config file
     
     # CLI overrides (highest priority)
@@ -372,6 +377,7 @@ class CommentGenerator:
             self.backend_url = backend_base
         
         # Log the backend URL being used for transparency
+        print(f"[APP_OUT]🔗 Backend API configured: {self.backend_url}")
         self.debug_log(f"Comment generation backend URL: {self.backend_url}", "INFO")
         
         # Update tech_relevance keywords with job_keywords if provided

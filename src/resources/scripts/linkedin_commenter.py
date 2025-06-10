@@ -1072,7 +1072,17 @@ def main():
     
     # Other keys are top-level
     USER_BIO = CONFIG.get('user_bio', USER_BIO)
-    JOB_SEARCH_KEYWORDS = CONFIG.get('job_keywords', []) 
+    
+    # CRITICAL FIX: Ensure job_keywords is always a list
+    job_keywords_raw = CONFIG.get('job_keywords', [])
+    if isinstance(job_keywords_raw, str):
+        # Convert comma-separated string to list
+        JOB_SEARCH_KEYWORDS = [kw.strip() for kw in job_keywords_raw.split(',') if kw.strip()]
+    elif isinstance(job_keywords_raw, list):
+        JOB_SEARCH_KEYWORDS = job_keywords_raw
+    else:
+        JOB_SEARCH_KEYWORDS = []
+    
     CALENDLY_LINK = CONFIG.get('calendly_link', CALENDLY_LINK)
     SEARCH_URLS = CONFIG.get('search_urls', [])
 
@@ -1238,7 +1248,19 @@ def main():
                 print("[APP_OUT]🔍 Beginning natural job search strategy...")
                 
                 # Instead of using direct URLs, perform natural searches based on job keywords
-                search_keywords = JOB_SEARCH_KEYWORDS if JOB_SEARCH_KEYWORDS else ["technology", "software", "business"]
+                # CRITICAL FIX: Ensure search_keywords is always a list, never a string
+                if isinstance(JOB_SEARCH_KEYWORDS, list) and len(JOB_SEARCH_KEYWORDS) > 0:
+                    search_keywords = JOB_SEARCH_KEYWORDS
+                elif isinstance(JOB_SEARCH_KEYWORDS, str) and JOB_SEARCH_KEYWORDS.strip():
+                    # Fallback conversion for string input
+                    search_keywords = [kw.strip() for kw in JOB_SEARCH_KEYWORDS.split(',') if kw.strip()]
+                else:
+                    search_keywords = ["technology", "software", "business"]
+                
+                # Anti-detection: Randomize keyword order
+                import random
+                search_keywords = search_keywords.copy()  # Don't modify original
+                random.shuffle(search_keywords)
                 
                 print(f"[APP_OUT]🎯 Processing {len(search_keywords)} job keywords...")
                 debug_log(f"Natural search strategy with keywords: {search_keywords}", "SEARCH")
@@ -1297,29 +1319,38 @@ def main():
                         else:
                             print(f"[APP_OUT]✅ Natural search successful for: {keyword}")
                         
-                        # Enhanced waiting after search
-                        search_wait = random.uniform(5, 10)
+                        # ENHANCED: Longer waits to avoid detection
+                        search_wait = random.uniform(15, 30)  # Increased from 5-10 to 15-30
                         debug_log(f"STEALTH: Post-search stabilization wait: {search_wait:.1f}s", "STEALTH")
                         time.sleep(search_wait)
                         
-                        # Simplified bot detection check for natural search
+                        # IMPROVED: Less aggressive bot detection check
                         current_url_check = driver.current_url.lower()
-                        page_source_check = driver.page_source.lower()
+                        page_title_check = driver.title.lower()
                         
-                        bot_detection_indicators = [
-                            "challenge", "blocked", "captcha", "security", "verify", 
-                            "unusual activity", "rate limit", "temporarily unavailable",
-                            "access denied", "forbidden", "bot", "automation detected",
-                            "suspicious activity", "please try again later"
+                        # More specific bot detection indicators
+                        critical_indicators = [
+                            "challenge", "blocked", "captcha", "security check", "verify",
+                            "unusual activity", "rate limit", "access denied", "forbidden"
                         ]
                         
-                        is_bot_detected = any(indicator in current_url_check or indicator in page_source_check 
-                                            for indicator in bot_detection_indicators)
+                        # Only trigger on critical indicators, not soft ones
+                        is_bot_detected = any(indicator in current_url_check or indicator in page_title_check 
+                                            for indicator in critical_indicators)
                         
-                        if is_bot_detected:
+                        # Additional check: look for actual LinkedIn pages vs error pages
+                        is_linkedin_page = "linkedin.com" in current_url_check and ("search" in current_url_check or "feed" in current_url_check)
+                        
+                        if is_bot_detected and not is_linkedin_page:
                             debug_log("STEALTH: Bot detection triggered - skipping this keyword", "WARNING")
                             print(f"[APP_OUT]🛡️ Bot detection triggered for '{keyword}' - moving to next keyword")
+                            # Add longer cooldown when detection is triggered
+                            cooldown_time = random.uniform(60, 120)  # 1-2 minute cooldown
+                            debug_log(f"STEALTH: Bot detection cooldown: {cooldown_time:.1f}s", "STEALTH")
+                            time.sleep(cooldown_time)
                             continue
+                        else:
+                            print(f"[APP_OUT]✅ No bot detection for '{keyword}' - proceeding with post analysis")
                         
                         # Post-search human behavior simulation
                         debug_log("STEALTH: Post-search human simulation", "STEALTH")
@@ -1458,6 +1489,11 @@ def main():
                         search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
                         continue  # to next URL in the for loop
 
+                    # ENHANCED: Longer sleep between keywords to avoid detection
+                    keyword_break = random.uniform(30, 90)  # 30-90 seconds between keywords
+                    debug_log(f"STEALTH: Inter-keyword break: {keyword_break:.1f}s", "STEALTH")
+                    time.sleep(keyword_break)
+                    
                     # Sleep between cycles
                     cycle_sleep = random.uniform(cycle_break * 60, cycle_break * 120)
                     debug_log(f"Sleeping for {int(cycle_sleep/60)} minutes between cycles", "SLEEP")

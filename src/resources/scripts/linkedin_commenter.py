@@ -557,6 +557,175 @@ def get_time_based_score(time_filter):
     }
     return time_weights.get(time_filter, 1.0)  # Default to 1.0 if unknown filter
 
+# === CRITICAL MISSING FUNCTIONS FOR POST EVALUATION ===
+def calculate_post_score(post_text, author_name=None):
+    """
+    Calculate a score for a post based on various factors to prioritize posts from hiring managers.
+    Uses FIXED scoring method without problematic normalization.
+    
+    Returns:
+        float: A score between 0 and 100, with higher scores indicating higher priority
+    """
+    if not post_text:
+        return 0
+    
+    total_score = 0
+    post_text_lower = post_text.lower()
+    
+    # Log scoring details for debugging
+    score_breakdown = {
+        'metadata': {
+            'text_length': len(post_text),
+            'word_count': len(post_text.split()),
+            'has_author': bool(author_name)
+        }
+    }
+    
+    # Calculate scores for each category - FIXED scoring method
+    for category, config_data in POST_SCORING_CONFIG.items():
+        weight = config_data['weight']
+        keywords = config_data.get('keywords', [])
+        
+        # Skip author check if no author name provided
+        if 'author' in category and not author_name:
+            continue
+            
+        # Determine text to search in based on category
+        search_text = author_name.lower() if 'author' in category and author_name else post_text_lower
+        
+        # Count keyword matches
+        matches = sum(1 for kw in keywords if kw.lower() in search_text)
+        
+        # Calculate score - give full weight for ANY match, bonus for multiple
+        if matches > 0:
+            # Base score for having ANY match in this category
+            category_score = weight * 5  # Base multiplier
+            # Small bonus for multiple matches (diminishing returns)
+            if matches > 1:
+                category_score += weight * min(matches - 1, 2)  # Max 2 bonus matches
+        else:
+            category_score = 0
+        
+        total_score += category_score
+        
+        # Store breakdown for logging
+        score_breakdown[category] = {
+            'matches': matches,
+            'score': category_score,
+            'weight': weight
+        }
+    
+    # Add length bonus (not penalty)
+    words = len(post_text.split())
+    if words >= 50:
+        total_score += 5  # Bonus for substantial posts
+    
+    score_breakdown['length'] = {
+        'words': words,
+        'score': 5 if words >= 50 else 0
+    }
+    
+    # FIXED: Direct scoring - no normalization to avoid the problem
+    final_score = min(100, total_score)  # Cap at 100
+    
+    # Log scoring breakdown with analysis
+    score_analysis = {
+        'breakdown': score_breakdown,
+        'final_score': final_score,
+        'categories_hit': sum(1 for cat in score_breakdown.values() if isinstance(cat, dict) and cat.get('matches', 0) > 0),
+        'total_matches': sum(cat.get('matches', 0) for cat in score_breakdown.values() if isinstance(cat, dict))
+    }
+    
+    if DEBUG_MODE:
+        debug_log(f"Post scoring analysis: {json.dumps(score_analysis, indent=2)}", "SCORE")
+    
+    return final_score
+
+def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=60):
+    """Determine if a post is worth commenting on based on score."""
+    score = calculate_post_score(post_text, author_name)
+    print(f"[APP_OUT]⚖️ Post scored: {score}/100 (min required: {min_score})")
+    debug_log(f"Post score: {score} (min required: {min_score})", "SCORE")
+    return score >= min_score, score
+
+def extract_time_posted(post):
+    """Extract when the post was made and convert to hours ago."""
+    try:
+        time_selectors = [
+            ".//span[contains(@class, 'feed-shared-actor__sub-description')]//span",
+            ".//time",
+            ".//span[contains(text(), 'ago')]",
+            ".//span[contains(@class, 'visually-hidden') and contains(text(), 'ago')]"
+        ]
+        
+        for selector in time_selectors:
+            try:
+                time_elements = post.find_elements(By.XPATH, selector)
+                for elem in time_elements:
+                    time_text = elem.text.strip().lower()
+                    if 'ago' in time_text:
+                        # Parse time text like "2 hours ago", "1 day ago", "3 weeks ago"
+                        if 'minute' in time_text or 'min' in time_text:
+                            return 0.5  # Less than an hour
+                        elif 'hour' in time_text:
+                            hours = int(re.search(r'(\d+)', time_text).group(1)) if re.search(r'(\d+)', time_text) else 1
+                            return hours
+                        elif 'day' in time_text:
+                            days = int(re.search(r'(\d+)', time_text).group(1)) if re.search(r'(\d+)', time_text) else 1
+                            return days * 24
+                        elif 'week' in time_text:
+                            weeks = int(re.search(r'(\d+)', time_text).group(1)) if re.search(r'(\d+)', time_text) else 1
+                            return weeks * 24 * 7
+                        elif 'month' in time_text:
+                            return 30 * 24  # Approximate
+            except Exception:
+                continue
+        
+        return 999  # Default to very old if can't determine
+    except Exception as e:
+        debug_log(f"Error extracting time: {e}", "TIME")
+        return 999
+
+def sort_posts_by_priority(driver, posts):
+    """Sort posts by priority based on score."""
+    posts_with_data = []
+    
+    print(f"[APP_OUT]📊 Analyzing {len(posts)} posts for priority scoring...")
+    
+    for i, post in enumerate(posts):
+        try:
+            # Extract post data
+            hours_ago = extract_time_posted(post)
+            author_name = extract_author_name(post)
+            
+            # Try to get post text for scoring (without expanding yet)
+            post_text = post.text[:500] if post.text else ""  # Preview for scoring
+            
+            # Calculate score
+            score = calculate_post_score(post_text, author_name)
+            
+            posts_with_data.append({
+                'element': post,
+                'hours_ago': hours_ago,
+                'score': score,
+                'author': author_name,
+                'preview_text': post_text[:100]
+            })
+            
+            print(f"[APP_OUT]📋 Post {i+1}: Score {score:.1f}, Author: {author_name or 'Unknown'}")
+            
+        except Exception as e:
+            debug_log(f"Error processing post for sorting: {e}", "SORT")
+            continue
+    
+    # Sort by score (descending)
+    posts_with_data.sort(key=lambda x: -x['score'])
+    
+    if posts_with_data:
+        print(f"[APP_OUT]✨ Sorted {len(posts_with_data)} posts by priority - Top score: {posts_with_data[0]['score']:.1f}")
+    debug_log(f"Sorted {len(posts_with_data)} posts by priority", "SORT")
+    return posts_with_data
+
 def main():
     """Main execution function that continuously cycles through URLs while respecting limits."""
     global MAX_DAILY_COMMENTS, MAX_SESSION_COMMENTS, SCROLL_PAUSE_TIME, JOB_SEARCH_KEYWORDS
@@ -1298,19 +1467,33 @@ def process_posts(driver):
                     scroll_attempts += 1
                     continue
             
-            # Process each post found
+            # CRITICAL: Sort posts by priority using our scoring system
+            if current_post_count > 0:
+                print(f"[APP_OUT]📊 Sorting {current_post_count} posts by priority...")
+                sorted_posts_data = sort_posts_by_priority(driver, posts)
+                print(f"[APP_OUT]✅ Posts sorted - processing in priority order")
+            else:
+                sorted_posts_data = []
+            
+            # Process each post in priority order (highest scores first)
             new_posts_processed = 0
-            for post_index, post in enumerate(posts, 1):
+            for post_index, post_data in enumerate(sorted_posts_data, 1):
                 try:
+                    post = post_data['element']
+                    post_score = post_data['score']
+                    author_name = post_data['author']
+                    hours_ago = post_data['hours_ago']
+                    
                     post_id, _ = compute_post_id(post)
                     
                     # Skip if already processed in this session or historically
                     if (post_id in processed_posts_this_session or 
                         post_id in processed_log or 
                         post_id in comment_history):
+                        print(f"[APP_OUT]⏭️ Skipping already processed post {post_index}/{len(sorted_posts_data)}")
                         continue
                     
-                    print(f"[APP_OUT]📝 Analyzing post {post_index}/{current_post_count}...")
+                    print(f"[APP_OUT]📝 Processing post {post_index}/{len(sorted_posts_data)} (Score: {post_score:.1f})...")
                     
                     # Add to processed set for this session
                     processed_posts_this_session.add(post_id)
@@ -1323,29 +1506,26 @@ def process_posts(driver):
                         debug_log(f"Error scrolling post into view: {e}", "WARNING")
                         continue
                     
-                    # Expand post content
+                    # Expand post content to get full text
                     expand_post(driver, post)
                     
-                    # Extract post data
+                    # Extract full post data after expansion
                     post_text = get_post_text(driver, post)
-                    author_name = extract_author_name(post)
                     
                     if not post_text or len(post_text.strip()) < 10:
                         debug_log(f"Post text too short or empty, skipping post {post_id}", "SKIP")
                         continue
                     
-                    # Calculate post score
-                    score = comment_generator.calculate_post_score(post_text, author_name, time_filter)
-                    print(f"[APP_OUT]⚖️ Post scored: {score}/100 (threshold: 50)")
-                    debug_log(f"Post {post_id} scored: {score}", "SCORE")
+                    # Use the standalone should_comment_on_post function
+                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=50)
                     
-                    if score < 50:  # Score threshold
-                        print(f"[APP_OUT]⏭️ Skipping low-scoring post ({score} < 50)")
-                        debug_log(f"Skipping post (score: {score} < 50)", "SKIP")
+                    if not should_comment:
+                        print(f"[APP_OUT]⏭️ Skipping post - score {final_score:.1f} below threshold")
+                        debug_log(f"Skipping post (score: {final_score} < 50)", "SKIP")
                         continue
                     
-                    print(f"[APP_OUT]✨ High-scoring post found! Processing...")
-                    debug_log(f"Processing high-scoring post (score: {score})", "PROCESS")
+                    print(f"[APP_OUT]✨ High-priority post selected for commenting! (Score: {final_score:.1f})")
+                    debug_log(f"Processing high-scoring post (score: {final_score})", "PROCESS")
                     posts_processed += 1
                     new_posts_processed += 1
                     processed_log.append(post_id)
@@ -1392,7 +1572,7 @@ def process_posts(driver):
                             comment_history[post_id] = {
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "message": custom_message,
-                                "score": score
+                                "score": final_score
                             }
                             save_comment_history(comment_history)
                             print(f"[APP_OUT]⏱️ Taking break between comments...")

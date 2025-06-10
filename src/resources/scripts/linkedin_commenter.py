@@ -214,6 +214,7 @@ POST_SCORING_CONFIG = {
     },
     'decision_maker_titles': {
         'weight': 5.0,  # High weight for titles that indicate hiring authority
+        'search_author': True,  # Search author name/title, not post content
         'keywords': [
             'ceo', 'cto', 'cfo', 'vp', 'vice president', 'director',
             'head of', 'chief', 'founder', 'co-founder', 'president',
@@ -262,6 +263,7 @@ POST_SCORING_CONFIG = {
     },
     'external_recruiter': {
         'weight': 1.0,  # LOWEST weight - external recruiters less likely to lead to direct hires
+        'search_author': True,  # Search author name/title, not post content
         'keywords': [
             'recruitment consultant', 'talent acquisition specialist', 'technical recruiter',
             'staffing specialist', 'recruiting agency', 'talent partner',
@@ -562,13 +564,20 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
     for category, config_data in POST_SCORING_CONFIG.items():
         weight = config_data['weight']
         keywords = config_data.get('keywords', [])
+        search_author = config_data.get('search_author', False)
         
-        # Skip author check if no author name provided
-        if 'author' in category and not author_name:
+        # Skip author-based categories if no author name provided
+        if search_author and not author_name:
+            score_breakdown[category] = {
+                'matches': 0,
+                'score': 0,
+                'weight': weight,
+                'skipped': 'no_author_name'
+            }
             continue
             
-        # Determine text to search in based on category
-        search_text = author_name.lower() if 'author' in category and author_name else post_text_lower
+        # Determine text to search in based on category configuration
+        search_text = author_name.lower() if search_author and author_name else post_text_lower
         
         # Count keyword matches
         matches = sum(1 for kw in keywords if kw.lower() in search_text)
@@ -589,7 +598,8 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
         score_breakdown[category] = {
             'matches': matches,
             'score': category_score,
-            'weight': weight
+            'weight': weight,
+            'search_target': 'author_name' if search_author else 'post_content'
         }
     
     # Add length bonus (not penalty)

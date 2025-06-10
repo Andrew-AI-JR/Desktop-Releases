@@ -64,7 +64,11 @@ export class AutomationController {
       // Get other configuration values
       const calendlyLink = this.calendlyUrlInput.value.trim();
       const userBio = this.userBioInput.value.trim();
-      const jobKeywords = this.keywordsInput.value.trim();
+      const jobKeywordsRaw = this.keywordsInput.value.trim();
+      // Convert comma-separated string to array for Python script
+      const jobKeywords = jobKeywordsRaw 
+        ? jobKeywordsRaw.split(',').map(keyword => keyword.trim()).filter(keyword => keyword.length > 0)
+        : [];
       const rememberCredentials = this.rememberCredentialsInput.checked;
 
       // Update UI state

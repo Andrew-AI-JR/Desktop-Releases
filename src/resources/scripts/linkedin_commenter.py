@@ -857,42 +857,121 @@ def construct_linkedin_search_url(keywords, time_filter="past_month"):
 def find_posts(driver):
     """
     Finds all the post container elements on the current page.
-    Uses multiple selectors for robustness against UI changes.
+    Uses multiple selectors for robustness against UI changes and different page layouts.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        
+    Returns:
+        list: List of WebElement objects representing posts
     """
-    debug_log("Searching for post containers on the page...", "SEARCH")
+    debug_log("Starting post search on current page...", "SEARCH")
     posts = []
     
-    # This selector is common for lists of items in LinkedIn's search results.
-    primary_selector = ".reusable-search__entity-result-list > li"
+    # List of selectors to try, in order of preference
+    selectors = [
+        # Primary selectors for search results
+        {
+            'type': 'css',
+            'value': '.reusable-search__entity-result-list > li',
+            'name': 'search results list items'
+        },
+        {
+            'type': 'css',
+            'value': '.update-components-actor__container',
+            'name': 'post containers'
+        },
+        # Feed-specific selectors
+        {
+            'type': 'xpath',
+            'value': "//div[contains(@class, 'feed-shared-update-v2')]",
+            'name': 'feed shared updates'
+        },
+        {
+            'type': 'xpath',
+            'value': "//li[contains(@class, 'occludable-update')]",
+            'name': 'occludable updates'
+        },
+        # Additional fallback selectors
+        {
+            'type': 'css',
+            'value': '[data-urn]',
+            'name': 'data-urn elements'
+        },
+        {
+            'type': 'xpath',
+            'value': "//div[contains(@class, 'feed-shared-update-v2') or contains(@class, 'update-components-actor')]",
+            'name': 'combined feed elements'
+        }
+    ]
     
-    try:
-        posts = driver.find_elements(By.CSS_SELECTOR, primary_selector)
-        if posts:
-            debug_log(f"Found {len(posts)} posts using primary selector '{primary_selector}'", "SEARCH")
-            return posts
-
-        # Fallback selectors for different page layouts or feed updates.
-        fallback_selectors = [
-            "//div[contains(@class, 'feed-shared-update-v2')]", 
-            "//li[contains(@class, 'occludable-update')]"
-        ]
-        
-        for selector in fallback_selectors:
-            try:
-                posts = driver.find_elements(By.XPATH, selector)
-                if posts:
-                    debug_log(f"Found {len(posts)} posts using fallback selector '{selector}'", "SEARCH")
-                    return posts
-            except NoSuchElementException:
-                continue
-
-        if not posts:
-            debug_log("No posts found on the page with any of the known selectors.", "WARNING")
+    # Try each selector in sequence
+    for selector in selectors:
+        try:
+            selector_type = selector['type']
+            selector_value = selector['value']
+            selector_name = selector['name']
             
-    except Exception as e:
-        debug_log(f"An error occurred while trying to find posts: {e}", "ERROR")
-
+            debug_log(f"Trying selector: {selector_name} ({selector_value})", "SEARCH")
+            
+            # Wait briefly for elements to be present
+            try:
+                WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR if selector_type == 'css' else By.XPATH, selector_value)
+                    )
+                )
+            except TimeoutException:
+                debug_log(f"Timeout waiting for {selector_name}", "DEBUG")
+                continue
+                
+            # Find elements using the current selector
+            posts = driver.find_elements(
+                By.CSS_SELECTOR if selector_type == 'css' else By.XPATH,
+                selector_value
+            )
+            
+            if posts:
+                debug_log(f"Found {len(posts)} posts using {selector_name}", "SEARCH")
+                # Verify posts are actually visible and interactive
+                visible_posts = [post for post in posts if is_element_visible(driver, post)]
+                if visible_posts:
+                    debug_log(f"{len(visible_posts)} posts are visible and interactive", "SEARCH")
+                    return visible_posts
+                else:
+                    debug_log("Found posts are not visible/interactive, trying next selector", "DEBUG")
+            
+        except StaleElementReferenceException:
+            debug_log(f"Stale elements found with {selector_name}, trying next selector", "WARNING")
+            continue
+        except Exception as e:
+            debug_log(f"Error with {selector_name}: {str(e)}", "WARNING")
+            continue
+    
+    if not posts:
+        debug_log("No posts found with any selector", "WARNING")
+        
     return posts
+
+def is_element_visible(driver, element):
+    """
+    Check if an element is visible and interactive.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        element: WebElement to check
+        
+    Returns:
+        bool: True if element is visible and interactive
+    """
+    try:
+        return (element.is_displayed() and 
+                element.is_enabled() and
+                element.location['y'] >= 0 and
+                element.size['height'] > 0 and
+                element.size['width'] > 0)
+    except:
+        return False
 
 def process_posts(driver):
     """Process visible posts on the current page."""

@@ -2053,33 +2053,6 @@ def safe_click(driver, element):
             debug_log(f"JS click also failed: {e2}", "DEBUG")
             return False
 
-def clear_recent_logs(hours=3):
-    """Clear recent entries from logs."""
-    try:
-        cutoff_time = datetime.now() - timedelta(hours=hours)
-        
-        # Clear comment log
-        log = load_log()
-        original_count = len(log)
-        filtered_log = []
-        
-        for entry in log:
-            if isinstance(entry, dict) and 'timestamp' in entry:
-                try:
-                    entry_time = datetime.strptime(entry['timestamp'], "%Y-%m-%d %H:%M:%S")
-                    if entry_time < cutoff_time:
-                        filtered_log.append(entry)
-                except (ValueError, TypeError):
-                    filtered_log.append(entry)
-            else:
-                filtered_log.append(entry)
-        
-        save_log(filtered_log)
-        return original_count - len(filtered_log)
-    except Exception as e:
-        debug_log(f"Error clearing logs: {e}")
-        return 0
-
 def sleep_until_midnight_edt():
     """Sleep until midnight in EDT timezone."""
     try:

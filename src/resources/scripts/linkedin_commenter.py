@@ -404,8 +404,29 @@ class CommentGenerator:
         return ' '.join(post_text.strip().split())
 
     def classify_post(self, post_text):
-        # ... existing code ...
-        return super().classify_post(post_text)
+        """Classify post type for targeted commenting."""
+        if not post_text:
+            return "unknown"
+        
+        text_lower = post_text.lower()
+        
+        # Check for hiring posts
+        hiring_indicators = [
+            "hiring", "recruiting", "job opening", "position available",
+            "we're looking for", "join our team", "now hiring"
+        ]
+        if any(indicator in text_lower for indicator in hiring_indicators):
+            return "hiring"
+        
+        # Check for tech/industry posts
+        tech_indicators = [
+            "ai", "machine learning", "data science", "python", "software",
+            "engineering", "developer", "programming"
+        ]
+        if any(indicator in text_lower for indicator in tech_indicators):
+            return "tech"
+        
+        return "general"
 
     def generate_comment(self, post_text, post_url=None):
         if not post_text or len(post_text) < 10:
@@ -482,63 +503,7 @@ class CommentGenerator:
             fallback_comment = f"{fallback_comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
         return fallback_comment
 
-    def calculate_post_score(self, post_text, author_name=None, time_filter=None):
-        if not post_text:
-            return 0
-            
-        post_text_lower = post_text.lower()
-        total_score = 0
-        score_breakdown = {}
-        
-        # Apply time-based scoring based on the URL's time filter
-        time_multiplier = get_time_based_score(time_filter) if time_filter else 1.0
-        if time_filter:
-            score_breakdown['time_relevance'] = {
-                'time_filter': time_filter,
-                'multiplier': time_multiplier,
-                'score': 0  # Will be calculated in the multiplier
-            }
-        
-        # Calculate base score from all categories
-        for category, config in self.config.items():
-            if config.get('time_based', False):
-                # Skip time-based categories as they're handled separately
-                continue
-                
-            weight = config['weight']
-            keywords = config.get('keywords', [])
-            matches = sum(1 for kw in keywords if kw.lower() in post_text_lower)
-            
-            if matches > 0:
-                category_score = weight * matches
-                total_score += category_score
-                score_breakdown[category] = {
-                    'matches': matches,
-                    'score': category_score,
-                    'weight': weight
-                }
-        
-        # Add length bonus
-        words = len(post_text.split())
-        length_bonus = 5 if words >= 50 else 0
-        total_score += length_bonus
-        score_breakdown['length'] = {'words': words, 'score': length_bonus}
-        
-        # Apply time multiplier to the total score
-        final_score = total_score * time_multiplier
-        
-        # Update time_relevance score in breakdown to show its impact
-        if 'time_relevance' in score_breakdown:
-            score_breakdown['time_relevance']['score'] = final_score - total_score
-            
-        score_breakdown['final_score'] = {
-            'base_score': total_score,
-            'time_multiplier': time_multiplier,
-            'final_score': final_score
-        }
-        
-        self.debug_log(f"Post scoring breakdown: {json.dumps(score_breakdown, indent=2, default=str)}", "SCORE")
-        return final_score
+
 
 def get_time_based_score(time_filter):
     """

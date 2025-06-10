@@ -871,8 +871,12 @@ def main():
 
                     try:
                         print("[APP_OUT]🔍 Starting post analysis and commenting...")
+                        print("[APP_OUT]🚀 CALLING process_posts() function...")
+                        debug_log("About to call process_posts() function", "DEBUG")
                         # Process posts on the current page
                         posts_processed, hiring_posts_found = process_posts(driver)
+                        print(f"[APP_OUT]✅ process_posts() returned: {posts_processed} posts processed, {hiring_posts_found} hiring posts found")
+                        debug_log(f"process_posts() completed: {posts_processed} processed, {hiring_posts_found} hiring posts", "DEBUG")
                         if posts_processed > 0:
                             session_comments += posts_processed
                             daily_comments += posts_processed
@@ -1008,6 +1012,7 @@ def find_posts(driver):
     Returns:
         list: List of WebElement objects representing posts
     """
+    print("[APP_OUT]🔥 FIND_POSTS FUNCTION CALLED - STARTING SEARCH...")
     debug_log("Starting post search on current page...", "SEARCH")
     print("[APP_OUT]🔍 Searching for posts on page...")
     posts = []
@@ -1230,6 +1235,7 @@ def is_element_visible(driver, element):
 
 def process_posts(driver):
     """Process visible posts on the current page with continuous scrolling."""
+    print("[APP_OUT]🔥 PROCESS_POSTS FUNCTION CALLED - STARTING...")
     debug_log("Starting post processing with continuous scrolling", "PROCESS")
     print("[APP_OUT]🔍 Processing LinkedIn posts...")
     posts_processed = 0
@@ -1264,10 +1270,13 @@ def process_posts(driver):
         posts_found_last_cycle = 0
         
         while scroll_attempts < max_scroll_attempts:
+            print(f"[APP_OUT]🔄 SCROLL LOOP ITERATION {scroll_attempts + 1}/{max_scroll_attempts}")
             debug_log(f"Scroll attempt {scroll_attempts + 1}/{max_scroll_attempts}", "SCROLL")
             
             # Find posts with retry logic
+            print(f"[APP_OUT]🔍 Calling find_posts() in scroll loop...")
             posts = find_posts(driver)
+            print(f"[APP_OUT]📊 find_posts() returned {len(posts)} posts")
             current_post_count = len(posts)
             
             print(f"[APP_OUT]📋 Found {current_post_count} posts on current page (scroll {scroll_attempts + 1}/{max_scroll_attempts})")

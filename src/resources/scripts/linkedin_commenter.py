@@ -360,8 +360,19 @@ class CommentGenerator:
     def __init__(self, user_bio, config=None, job_keywords=None):
         self.user_bio = user_bio
         self.config = config or {}
-        # First try to get from config, then from environment, then use default
-        self.backend_url = self.config.get('backend_url') or os.getenv('BACKEND_URL') or 'http://localhost:3000/api/comments/generate'
+        # First try to get from config, then from environment, then use production default
+        backend_base = self.config.get('backend_url') or os.getenv('BACKEND_URL') or 'https://junior-api-915940312680.us-west1.run.app'
+        # Ensure the URL includes the comment generation endpoint
+        if not backend_base.endswith('/api/comments/generate'):
+            if backend_base.endswith('/'):
+                self.backend_url = f"{backend_base}api/comments/generate"
+            else:
+                self.backend_url = f"{backend_base}/api/comments/generate"
+        else:
+            self.backend_url = backend_base
+        
+        # Log the backend URL being used for transparency
+        self.debug_log(f"Comment generation backend URL: {self.backend_url}", "INFO")
         
         # Update tech_relevance keywords with job_keywords if provided
         if job_keywords and isinstance(job_keywords, list) and len(job_keywords) > 0:
@@ -403,6 +414,8 @@ class CommentGenerator:
             }
             
             self.debug_log(f"Sending request to comment API: {json.dumps(payload, indent=2)}", "DEBUG")
+            print(f"[APP_OUT]🌐 Calling backend API: {self.backend_url}")
+            print(f"[APP_OUT]📤 Request payload: {json.dumps(payload, indent=2)}")
             
             # Make the API request
             response = requests.post(
@@ -411,6 +424,8 @@ class CommentGenerator:
                 headers={'Content-Type': 'application/json'},
                 timeout=30
             )
+            
+            print(f"[APP_OUT]📨 API Response: Status {response.status_code}")
             
             # Get Calendly link from config with fallback
             calendly_link = self.config.get('calendly_link', '')
@@ -421,6 +436,7 @@ class CommentGenerator:
                     data = response.json()
                     if isinstance(data, dict) and 'comment' in data:
                         comment = data['comment']
+                        print(f"[APP_OUT]✅ Generated comment: {comment[:100]}...")
                         # Append Calendly link if available and not already in comment
                         if calendly_link and calendly_link not in comment:
                             comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
@@ -439,14 +455,18 @@ class CommentGenerator:
                     return comment
             
             # Log error if API call failed
+            print(f"[APP_OUT]❌ API call failed: Status {response.status_code}")
+            print(f"[APP_OUT]📄 Response: {response.text}")
             self.debug_log(
                 f"Failed to generate comment. Status: {response.status_code}, Response: {response.text}",
                 "ERROR"
             )
             
         except requests.exceptions.RequestException as e:
+            print(f"[APP_OUT]🌐 Network error calling backend: {str(e)}")
             self.debug_log(f"Network error while generating comment: {str(e)}", "ERROR")
         except Exception as e:
+            print(f"[APP_OUT]❌ Error generating comment: {str(e)}")
             self.debug_log(f"Unexpected error generating comment: {str(e)}", "ERROR")
         
         # Fallback to simple comment if API call fails, with Calendly link if available

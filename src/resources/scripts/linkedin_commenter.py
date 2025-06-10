@@ -868,13 +868,26 @@ def find_posts(driver):
     debug_log("Starting post search on current page...", "SEARCH")
     posts = []
     
+    # Wait for the page to load and any spinners to disappear
+    try:
+        WebDriverWait(driver, 10).until_not(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".artdeco-loader"))
+        )
+    except TimeoutException:
+        debug_log("Loader spinner still present or not found", "DEBUG")
+    
     # List of selectors to try, in order of preference
     selectors = [
         # Primary selectors for search results
         {
             'type': 'css',
-            'value': '.reusable-search__entity-result-list > li',
-            'name': 'search results list items'
+            'value': '.reusable-search__result-container',
+            'name': 'search results container'
+        },
+        {
+            'type': 'css',
+            'value': '.search-results-container',
+            'name': 'legacy search container'
         },
         {
             'type': 'css',
@@ -902,6 +915,11 @@ def find_posts(driver):
             'type': 'xpath',
             'value': "//div[contains(@class, 'feed-shared-update-v2') or contains(@class, 'update-components-actor')]",
             'name': 'combined feed elements'
+        },
+        {
+            'type': 'css',
+            'value': '.ember-view.occludable-update',
+            'name': 'ember view updates'
         }
     ]
     
@@ -948,8 +966,40 @@ def find_posts(driver):
             debug_log(f"Error with {selector_name}: {str(e)}", "WARNING")
             continue
     
+    # If no posts found, try scrolling and searching again
+    if not posts:
+        debug_log("No posts found, attempting scroll and retry", "SEARCH")
+        try:
+            # Scroll down a bit
+            driver.execute_script("window.scrollTo(0, 500);")
+            time.sleep(2)  # Wait for potential lazy-loaded content
+            
+            # Try the selectors again after scrolling
+            for selector in selectors:
+                try:
+                    selector_type = selector['type']
+                    selector_value = selector['value']
+                    posts = driver.find_elements(
+                        By.CSS_SELECTOR if selector_type == 'css' else By.XPATH,
+                        selector_value
+                    )
+                    if posts:
+                        visible_posts = [post for post in posts if is_element_visible(driver, post)]
+                        if visible_posts:
+                            debug_log(f"Found {len(visible_posts)} posts after scrolling", "SEARCH")
+                            return visible_posts
+                except Exception:
+                    continue
+        except Exception as e:
+            debug_log(f"Error during scroll retry: {str(e)}", "ERROR")
+    
     if not posts:
         debug_log("No posts found with any selector", "WARNING")
+        # Take a screenshot for debugging
+        try:
+            take_screenshot(driver, "no_posts_found")
+        except:
+            pass
         
     return posts
 
@@ -1772,6 +1822,110 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
     
     # This should never be reached due to the raise in the else clause above
     raise Exception("Failed to initialize Chrome WebDriver")
+
+def extract_author_name(post):
+    """Extract the author name from a post."""
+    try:
+        # Try different selectors for author name
+        selectors = [
+            ".//span[contains(@class, 'feed-shared-actor__name')]",
+            ".//span[contains(@class, 'update-components-actor__name')]",
+            ".//a[contains(@class, 'feed-shared-actor__container-link')]//span",
+            ".//a[contains(@class, 'update-components-actor__container-link')]//span"
+        ]
+        
+        for selector in selectors:
+            try:
+                element = post.find_element(By.XPATH, selector)
+                if element:
+                    name = element.text.strip()
+                    if name:
+                        debug_log(f"Found author name: {name}", "DATA")
+                        return name
+            except Exception:
+                continue
+                
+        debug_log("Could not find author name", "WARNING")
+        return ""
+    except Exception as e:
+        debug_log(f"Error extracting author name: {e}", "ERROR")
+        return ""
+
+def compute_post_id(post):
+    """
+    Compute a unique identifier for a post using multiple methods.
+    Returns tuple of (id_string, method_used)
+    """
+    try:
+        # Method 1: Try to get data-urn attribute
+        try:
+            urn = post.get_attribute('data-urn')
+            if urn:
+                return hashlib.md5(urn.encode()).hexdigest(), 'urn'
+        except:
+            pass
+            
+        # Method 2: Try to get permalink
+        try:
+            permalink = post.find_element(By.XPATH, ".//a[contains(@class, 'post-permalink') or contains(@class, 'feed-shared-permalink')]")
+            if permalink:
+                href = permalink.get_attribute('href')
+                if href:
+                    return hashlib.md5(href.encode()).hexdigest(), 'permalink'
+        except:
+            pass
+            
+        # Method 3: Use post content + timestamp if available
+        try:
+            content = post.text[:200]  # First 200 chars should be enough for uniqueness
+            timestamp_element = post.find_element(By.XPATH, ".//time")
+            if timestamp_element:
+                timestamp = timestamp_element.get_attribute('datetime')
+                content = f"{content}{timestamp}"
+            return hashlib.md5(content.encode()).hexdigest(), 'content'
+        except:
+            pass
+            
+        # Method 4: Last resort - use entire HTML content
+        html_content = post.get_attribute('outerHTML')
+        return hashlib.md5(html_content.encode()).hexdigest(), 'html'
+        
+    except Exception as e:
+        debug_log(f"Error computing post ID: {e}", "ERROR")
+        # Fallback to random ID if all methods fail
+        return hashlib.md5(str(random.random()).encode()).hexdigest(), 'random'
+
+def save_log(processed_posts):
+    """Save the list of processed post IDs to a file."""
+    try:
+        log_path = get_default_log_path()
+        with open(log_path, 'w') as f:
+            json.dump(processed_posts, f)
+        debug_log(f"Saved {len(processed_posts)} processed posts to log", "DATA")
+    except Exception as e:
+        debug_log(f"Error saving processed posts log: {e}", "ERROR")
+
+def load_comment_history():
+    """Load the comment history from file."""
+    try:
+        history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'comment_history.json')
+        if os.path.exists(history_path):
+            with open(history_path, 'r') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        debug_log(f"Error loading comment history: {e}", "ERROR")
+        return {}
+
+def save_comment_history(history):
+    """Save the comment history to file."""
+    try:
+        history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'comment_history.json')
+        with open(history_path, 'w') as f:
+            json.dump(history, f)
+        debug_log(f"Saved {len(history)} comments to history", "DATA")
+    except Exception as e:
+        debug_log(f"Error saving comment history: {e}", "ERROR")
 
 if __name__ == "__main__":
     driver = None

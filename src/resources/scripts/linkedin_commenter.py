@@ -704,21 +704,28 @@ def main():
                         daily_comments = 0  # Reset counter at midnight
                         continue
 
-                    # Navigate to the URL with retry logic
-                    retry_count = 0
-                    while retry_count < 3:
+                    # Navigate to the URL and wait for results to load
+                    try:
+                        driver.get(url)
+                        # Dynamically wait for the search results container to be visible
+                        WebDriverWait(driver, 30).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, ".reusable-search__entity-result-list"))
+                        )
+                        debug_log("Search results page loaded and is visible.", "NAVIGATION")
+                    except TimeoutException:
+                        debug_log(f"TimeoutException: No search results found or page did not load for URL: {url}", "WARNING")
+                        # Check for "No results found" message
                         try:
-                            driver.get(url)
-                            time.sleep(SHORT_SLEEP_SECONDS)  # Wait for page load
-                            break  # Successful navigation, exit retry loop
-                        except Exception as nav_e:
-                            retry_count += 1
-                            debug_log(f"Error navigating to {url} (attempt {retry_count}): {nav_e}", "ERROR")
-                            if retry_count >= 3:
-                                debug_log(f"Failed to navigate to {url} after 3 attempts.", "ERROR")
-                                search_tracker.record_url_performance(url, success=False, comments_made=0)
-                                break
-                            time.sleep(5 * retry_count)  # Exponential backoff
+                            if "No results found" in driver.page_source:
+                                debug_log("Confirmed 'No results found' on page.", "NAVIGATION")
+                        except:
+                            pass
+                        search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
+                        continue # Move to the next URL
+                    except Exception as nav_e:
+                        debug_log(f"Error navigating to {url} or waiting for results: {nav_e}", "ERROR")
+                        search_tracker.record_url_performance(url, success=False, comments_made=0, error=True)
+                        continue # Move to the next URL
 
                     try:
                         # Process posts on the current page

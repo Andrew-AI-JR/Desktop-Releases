@@ -3586,110 +3586,33 @@ def ensure_logged_in(driver, max_attempts=2):
 
 def has_already_commented(driver, post):
     """
-    BULLETPROOF: Ultra-simple comment check with hard timeout and no complex logic.
-    Designed to NEVER hang or cause infinite loops.
+    LIGHTNING FAST: Check comment history file instead of scraping DOM.
+    Completely avoids infinite loops and DOM hangs.
     """
-    import threading
-    import signal
-    
-    debug_log("BULLETPROOF: Starting comment check with hard timeout", "COMMENT_CHECK")
-    
-    # Hard timeout mechanism - function WILL return within 5 seconds
-    start_time = time.time()
-    max_time = 5.0  # Reduced to 5 seconds maximum
-    
     try:
-        # Quick behavioral delay
-        time.sleep(0.3)
+        # Get post ID first
+        post_id, id_method = compute_post_id(post)
         
-        # Timeout check 1
-        if time.time() - start_time > max_time:
-            debug_log("TIMEOUT: Comment check exceeded 5 seconds (start)", "WARNING")
+        if not post_id:
+            debug_log("FAST_CHECK: No post ID found, assuming safe to comment", "COMMENT_CHECK")
             return False
         
-        # Get user name with minimal complexity
-        user_name = None
-        try:
-            # Single attempt with very short timeout
-            original_timeout = driver.implicitly_wait(1)
-            user_elements = driver.find_elements(By.XPATH, "//span[contains(@class, 'global-nav__me-name')]")
-            if user_elements and user_elements[0].text.strip():
-                user_name = user_elements[0].text.strip()[:50]  # Limit length
-                debug_log(f"BULLETPROOF: User name: {user_name}", "COMMENT_CHECK")
-            driver.implicitly_wait(10)  # Reset
-        except:
-            driver.implicitly_wait(10)  # Always reset
-            
-        # Timeout check 2
-        if time.time() - start_time > max_time:
-            debug_log("TIMEOUT: Comment check exceeded 5 seconds (user name)", "WARNING")
-            return False
-            
-        if not user_name:
-            debug_log("BULLETPROOF: No user name found, assuming safe to comment", "COMMENT_CHECK")
-            return False
+        debug_log(f"FAST_CHECK: Checking post ID {post_id} in comment history", "COMMENT_CHECK")
         
-        # Simple comment check - only look for obvious matches
-        try:
-            driver.implicitly_wait(1)  # Very short timeout
-            
-            # Single selector attempt
-            comments = post.find_elements(By.XPATH, ".//div[contains(@class, 'comment')]")
-            
-            # Reset timeout immediately
-            driver.implicitly_wait(10)
-            
-            # Timeout check 3
-            if time.time() - start_time > max_time:
-                debug_log("TIMEOUT: Comment check exceeded 5 seconds (comments)", "WARNING")
-                return False
-                
-            if not comments:
-                debug_log("BULLETPROOF: No comments found", "COMMENT_CHECK")
-                return False
-            
-            # Check maximum 2 comments only
-            for i, comment in enumerate(comments[:2]):
-                # Hard timeout check per comment
-                if time.time() - start_time > max_time:
-                    debug_log("TIMEOUT: Comment check exceeded 5 seconds (per comment)", "WARNING")
-                    return False
-                
-                try:
-                    # Simple text check - no complex selectors
-                    comment_text = comment.text or ""
-                    if user_name.lower() in comment_text.lower():
-                        debug_log(f"BULLETPROOF: Found potential match in comment {i+1}", "COMMENT_CHECK")
-                        return True
-                except:
-                    continue  # Skip any problematic comments
-                    
-        except:
-            # Any error in comment checking = assume safe to comment
-            pass
-        finally:
-            # Always reset timeout
-            try:
-                driver.implicitly_wait(10)
-            except:
-                pass
+        # Load comment history from file (super fast)
+        comment_history = load_comment_history()
         
-        # Final timeout check
-        if time.time() - start_time > max_time:
-            debug_log("TIMEOUT: Comment check exceeded 5 seconds (final)", "WARNING")
-            return False
-            
-        debug_log("BULLETPROOF: Comment check completed - safe to comment", "COMMENT_CHECK")
+        # Check if post ID exists in history
+        if post_id in comment_history:
+            debug_log(f"FAST_CHECK: Post {post_id} found in comment history - SKIPPING", "COMMENT_CHECK")
+            return True
+        
+        debug_log(f"FAST_CHECK: Post {post_id} not in history - safe to comment", "COMMENT_CHECK")
         return False
         
     except Exception as e:
-        debug_log(f"BULLETPROOF: Error in comment check: {e}", "ERROR")
-        # Always reset timeout on error
-        try:
-            driver.implicitly_wait(10)
-        except:
-            pass
-        return False  # Always assume safe to comment on error
+        debug_log(f"FAST_CHECK: Error checking comment history: {e}", "ERROR")
+        return False  # Assume safe to comment on error
 
 def expand_post(driver, post):
     """Expand the post by clicking 'see more' if present, using robust multi-selector logic."""

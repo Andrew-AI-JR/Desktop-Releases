@@ -1,1 +1,7 @@
-{}
+{
+  "urn:li:activity:123456789": {
+    "timestamp": "2025-06-10 23:33:52",
+    "message": "Great insights! Looking forward to connecting.",
+    "score": 85.5
+  }
+}

@@ -32,11 +32,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 import shutil
 
 # Set default encoding to UTF-8
-if sys.stdout.encoding != 'utf-8':
+if sys.stdout is not None and hasattr(sys.stdout, 'encoding') and sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 
-# Configure stdout for immediate flushing (critical for GUI updates)
-sys.stdout.reconfigure(line_buffering=True)
+if sys.stdout is not None and hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(line_buffering=True)
 
 # =====================
 # CRITICAL FIX: APP_OUT Helper Function

@@ -317,6 +317,7 @@ POST_SCORING_CONFIG = {
     'direct_hiring': {
         'weight': 6.0,  # Very high weight - direct hiring signals from decision makers
         'keywords': [
+            'hiring',  # CRITICAL: Basic word that should catch most hiring posts
             "i'm hiring",
             "we're hiring",
             'hiring for',
@@ -331,6 +332,8 @@ POST_SCORING_CONFIG = {
             'opportunity available',
             'seeking candidates',
             'recruiting for',
+            'looking for',  # Common hiring phrase
+            'seeking',      # Another common hiring phrase
             'filling a position'
         ]
     },

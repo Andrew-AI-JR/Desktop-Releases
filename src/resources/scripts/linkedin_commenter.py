@@ -1273,8 +1273,8 @@ class CommentGenerator:
         # Get credentials for backend authentication (separate from LinkedIn)
         # Use desktop app credentials for backend API authentication
         backend_creds = config.get('backend_credentials', {})
-        self.backend_email = backend_creds.get('email') or 'amalinow1973@gmail.com'  # Your backend account email
-        self.backend_password = backend_creds.get('password') or 'test'  # Desktop app password
+        self.backend_email = backend_creds.get('email')  # Your backend account email
+        self.backend_password = backend_creds.get('password')  # Desktop app password
         
         # Keep LinkedIn credentials separate for LinkedIn login
         self.linkedin_email = config.get('linkedin_credentials', {}).get('email')

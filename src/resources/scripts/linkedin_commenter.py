@@ -1465,26 +1465,17 @@ class CommentGenerator:
         # Get Calendly link from config
         calendly_link = self.config.get('calendly_link', '')
         
-        # PRIORITIZE ENHANCED LOCAL GENERATION for reliability and quality
-        print(f"[APP_OUT]🤖 Using enhanced local comment generation...")
-        enhanced_comment = self._generate_fallback_comment(post_text, calendly_link)
+        # PRIORITIZE API-GENERATED COMMENTS for quality and personalization
+        print(f"[APP_OUT]🤖 Generating personalized comment via API...")
         
-        if enhanced_comment:
-            print(f"[APP_OUT]✅ Generated high-quality comment: {enhanced_comment[:100]}...")
-            return enhanced_comment
-        
-        # Skip backend API entirely for now - local generation is superior anyway
-        print(f"[APP_OUT]ℹ️ Skipping backend API (using local generation only)")
-        return self._generate_simple_fallback(post_text, calendly_link)
-        
-        # Only try API if local generation fails (very rare)
+        # Try API first for AI-generated comments
         try:
             # Get authentication headers
             headers = self._get_auth_headers()
             if not headers:
-                print(f"[APP_OUT]❌ Cannot generate comment: Authentication failed")
-                self.debug_log("Cannot generate comment: Authentication failed", "ERROR")
-                return self._generate_simple_fallback(post_text, calendly_link)
+                print(f"[APP_OUT]❌ API authentication failed, falling back to local generation")
+                self.debug_log("API authentication failed, falling back to local generation", "WARNING")
+                return self._generate_fallback_comment(post_text, calendly_link)
             
             # Clean the post text before processing
             cleaned_post_text = self.clean_post_text(post_text)
@@ -1497,15 +1488,15 @@ class CommentGenerator:
                 'calendly_link': calendly_link  # Pass Calendly link to API
             }
             
-            self.debug_log(f"Attempting API call as backup method", "DEBUG")
-            print(f"[APP_OUT]🌐 Trying backend API as backup...")
+            self.debug_log(f"Making primary API call for comment generation", "DEBUG")
+            print(f"[APP_OUT]🌐 Calling /api/comments/generate...")
             
             # Make the authenticated API request
             response = requests.post(
                 self.comments_url,
                 json=payload,
                 headers=headers,
-                timeout=15  # Shorter timeout for backup method
+                timeout=30  # Allow time for AI generation
             )
             
             print(f"[APP_OUT]📨 API Response: Status {response.status_code}")
@@ -1526,12 +1517,12 @@ class CommentGenerator:
                 print(f"[APP_OUT]   • Fallback: Using enhanced local generation")
                 
                 self.debug_log(f"API subscription required for user {getattr(self, 'user_email', 'unknown')}: {error_detail}", "INFO")
-                return self._generate_simple_fallback(post_text, calendly_link)
+                return self._generate_fallback_comment(post_text, calendly_link)
             
             # Handle authentication errors
             if response.status_code in [401, 403]:
                 print(f"[APP_OUT]🔄 Authentication error, falling back to local generation")
-                return self._generate_simple_fallback(post_text, calendly_link)
+                return self._generate_fallback_comment(post_text, calendly_link)
             
             # Check if the request was successful
             if response.status_code == 200:
@@ -1603,8 +1594,9 @@ class CommentGenerator:
             print(f"[APP_OUT]⚠️ API error, using local generation: {str(e)}")
             self.debug_log(f"API error: {str(e)}", "WARNING")
         
-        # Final fallback - simple but reliable comment
-        return self._generate_simple_fallback(post_text, calendly_link)
+        # Final fallback - enhanced local generation
+        print(f"[APP_OUT]🤖 Using enhanced local comment generation as fallback...")
+        return self._generate_fallback_comment(post_text, calendly_link)
     
     def _fix_comment_formatting(self, comment):
         """Fix common formatting issues in generated comments."""
@@ -4195,12 +4187,7 @@ def sleep_until_midnight_edt():
 def get_default_log_path():
     """Get a default log path that will work on any system."""
     try:
-        # For PyInstaller bundled apps, use a simple approach
-        if hasattr(sys, '_MEIPASS'):
-            # Running as PyInstaller bundle - use current directory
-            return os.path.join(os.getcwd(), "linkedin_commenter.log")
-        
-        # Try to use the user's home directory
+        # Always try to use the user's home directory first, regardless of PyInstaller
         home_dir = os.path.expanduser("~")
         if home_dir and home_dir != "~":  # Make sure expansion worked
             log_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
@@ -4884,27 +4871,69 @@ def save_log(processed_posts):
     except Exception as e:
         debug_log(f"Error saving processed posts log: {e}", "ERROR")
 
-def load_comment_history():
-    """Load the comment history from file."""
+def get_comment_history_path():
+    """
+    Get the path for the comment history file using the same logic as log files.
+    Creates the directory if it doesn't exist.
+    """
     try:
-        history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'comment_history.json')
-        if os.path.exists(history_path):
-            with open(history_path, 'r') as f:
-                return json.load(f)
-        return {}
+        # Always try to use the user's home directory first, regardless of PyInstaller
+        home_dir = os.path.expanduser("~")
+        if home_dir and home_dir != "~":  # Make sure expansion worked
+            comment_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
+            os.makedirs(comment_dir, exist_ok=True)
+            return os.path.join(comment_dir, "comment_history.json")
+        else:
+            # Home directory expansion failed, use current directory
+            return os.path.join(os.getcwd(), "comment_history.json")
+            
     except Exception as e:
-        debug_log(f"Error loading comment history: {e}", "ERROR")
+        # Absolute fallback to current directory
+        print(f"Warning: Could not create comment history directory, using current directory: {e}")
+        return "comment_history.json"
+
+def load_comment_history():
+    """Load the comment history from file in the proper JuniorAI/logs directory."""
+    try:
+        history_path = get_comment_history_path()
+        debug_log(f"📖 Loading comment history from: {history_path}", "DATA")
+        print(f"[APP_OUT]📖 Looking for comment history at: {history_path}")
+        
+        if os.path.exists(history_path):
+            with open(history_path, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+            debug_log(f"✅ Loaded {len(history)} comments from history", "DATA")
+            print(f"[APP_OUT]✅ Loaded {len(history)} comments from history")
+            return history
+        else:
+            debug_log(f"📄 Comment history file not found, starting fresh", "DATA")
+            print(f"[APP_OUT]📄 No existing comment history found, starting fresh")
+            return {}
+    except Exception as e:
+        debug_log(f"❌ Error loading comment history: {e}", "ERROR")
+        print(f"[APP_OUT]❌ Error loading comment history: {e}")
         return {}
 
 def save_comment_history(history):
-    """Save the comment history to file."""
+    """Save the comment history to file in the proper JuniorAI/logs directory."""
     try:
-        history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'comment_history.json')
-        with open(history_path, 'w') as f:
-            json.dump(history, f)
-        debug_log(f"Saved {len(history)} comments to history", "DATA")
+        history_path = get_comment_history_path()
+        debug_log(f"💾 Saving comment history to: {history_path}", "DATA")
+        print(f"[APP_OUT]💾 Comment history path: {history_path}")
+        
+        # Ensure directory exists
+        comment_dir = os.path.dirname(history_path)
+        if comment_dir and comment_dir != '':
+            os.makedirs(comment_dir, exist_ok=True)
+            debug_log(f"📁 Created/verified directory: {comment_dir}", "DATA")
+            
+        with open(history_path, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+        debug_log(f"✅ Saved {len(history)} comments to history at {history_path}", "DATA")
+        print(f"[APP_OUT]✅ Successfully saved {len(history)} comments to history file")
     except Exception as e:
-        debug_log(f"Error saving comment history: {e}", "ERROR")
+        debug_log(f"❌ Error saving comment history: {e}", "ERROR")
+        print(f"[APP_OUT]❌ Failed to save comment history: {e}")
 
 def save_cookies(driver, path="linkedin_cookies.json"):
     """Save browser cookies to a file."""
@@ -4999,371 +5028,178 @@ def human_like_distraction(driver):
 
 def advanced_session_warming(driver):
     """
-    Comprehensive LinkedIn session warming to establish human-like browsing patterns
-    before attempting any job-related searches. This prevents immediate bot detection.
+    SIMPLIFIED session warming to reduce browser timeout issues.
+    Focus on essential warming without complex interactions.
     """
-    debug_log("🔥 ULTRA-STEALTH: Beginning advanced session warming sequence")
+    debug_log("🔥 SIMPLIFIED: Beginning lightweight session warming")
     
     try:
-        # Phase 1: Natural LinkedIn entry via search engine
-        debug_log("Phase 1: Natural entry via search engine")
+        # Step 1: Simple LinkedIn landing page visit
+        debug_log("Step 1: Basic LinkedIn navigation")
+        driver.get("https://www.linkedin.com")
+        time.sleep(random.uniform(3, 6))
         
-        # Start from Google and search for LinkedIn naturally
-        driver.get("https://www.google.com")
-        time.sleep(random.uniform(2, 4))
-        
-        # Find search box and type "linkedin" naturally
-        try:
-            search_box = driver.find_element(By.NAME, "q")
-            search_box.click()
-            time.sleep(random.uniform(0.5, 1.2))
-            
-            # Type "linkedin" character by character with human timing
-            linkedin_query = "linkedin"
-            for char in linkedin_query:
-                search_box.send_keys(char)
-                time.sleep(random.uniform(0.15, 0.35))
-            
-            time.sleep(random.uniform(1, 2))
-            search_box.send_keys(Keys.RETURN)
-            time.sleep(random.uniform(3, 5))
-            
-            # Click on LinkedIn.com link (first organic result usually)
-            try:
-                linkedin_links = driver.find_elements(By.PARTIAL_LINK_TEXT, "LinkedIn")
-                if linkedin_links:
-                    linkedin_links[0].click()
-                    debug_log("✅ Successfully navigated to LinkedIn via Google search")
-                else:
-                    # Fallback: direct navigation
-                    driver.get("https://www.linkedin.com")
-            except:
-                driver.get("https://www.linkedin.com")
-                
-        except:
-            # Fallback if Google interaction fails
-            driver.get("https://www.linkedin.com")
-            
-        time.sleep(random.uniform(4, 7))
-        
-        # Phase 2: Casual LinkedIn browsing patterns
-        debug_log("Phase 2: Casual browsing simulation")
-        
-        # Browse different LinkedIn sections naturally
-        casual_pages = [
-            "https://www.linkedin.com/feed/",
-            "https://www.linkedin.com/in/",
-            "https://www.linkedin.com/mynetwork/",
-            "https://www.linkedin.com/learning/",
-            "https://www.linkedin.com/notifications/"
-        ]
-        
-        # Visit 2-3 casual pages
-        pages_to_visit = random.sample(casual_pages, random.randint(2, 3))
-        
-        for page_url in pages_to_visit:
-            try:
-                debug_log(f"Casually browsing: {page_url}")
-                driver.get(page_url)
-                time.sleep(random.uniform(3, 8))
-                
-                # Simulate reading/scrolling
-                scroll_times = random.randint(1, 3)
-                for i in range(scroll_times):
-                    driver.execute_script(f"window.scrollBy(0, {random.randint(200, 600)});")
-                    time.sleep(random.uniform(1.5, 3.5))
-                
-                # Random mouse movements
-                try:
-                    ActionChains(driver).move_by_offset(
-                        random.randint(-100, 100), 
-                        random.randint(-50, 100)
-                    ).perform()
-                    time.sleep(random.uniform(0.5, 1.5))
-                except:
-                    pass
-                    
-            except Exception as e:
-                debug_log(f"Casual browsing error (non-critical): {e}")
-                continue
-        
-        # Phase 3: Gradual transition to search interest
-        debug_log("Phase 3: Gradual transition to professional search")
-        
-        # Visit LinkedIn's main search or jobs page first (not specific searches)
-        transition_pages = [
-            "https://www.linkedin.com/search/",
-            "https://www.linkedin.com/jobs/",
-            "https://www.linkedin.com/posts/"
-        ]
-        
-        for transition_url in random.sample(transition_pages, 2):
-            try:
-                debug_log(f"Transitioning via: {transition_url}")
-                driver.get(transition_url)
-                time.sleep(random.uniform(5, 10))
-                
-                # Simulate exploration
-                driver.execute_script(f"window.scrollBy(0, {random.randint(300, 800)});")
-                time.sleep(random.uniform(2, 5))
-                
-                # Try some generic interactions
-                try:
-                    # Look for any clickable elements and occasionally click them
-                    clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']")
-                    if clickable_elements and random.random() < 0.3:  # 30% chance
-                        safe_element = random.choice(clickable_elements[:5])  # Only first 5 to avoid ads
-                        if safe_element.is_displayed():
-                            safe_element.click()
-                            time.sleep(random.uniform(2, 4))
-                            # Go back
-                            driver.back()
-                            time.sleep(random.uniform(1, 3))
-                except:
-                    pass
-                    
-            except Exception as e:
-                debug_log(f"Transition browsing error (non-critical): {e}")
-                continue
-        
-        # Phase 4: Human-like search preparation
-        debug_log("Phase 4: Search preparation and pattern establishment")
-        
-        # Visit the main search page and do some generic searches first
-        try:
-            driver.get("https://www.linkedin.com/search/results/all/")
-            time.sleep(random.uniform(4, 7))
-            
-            # Find search box and try some generic searches
-            try:
-                search_selectors = [
-                    'input[placeholder*="Search"]',
-                    'input[aria-label*="Search"]',
-                    '.search-global-typeahead__input',
-                    'input[type="text"]'
-                ]
-                
-                search_box = None
-                for selector in search_selectors:
-                    try:
-                        search_box = driver.find_element(By.CSS_SELECTOR, selector)
-                        if search_box.is_displayed():
-                            break
-                    except:
-                        continue
-                
-                if search_box:
-                    # Do 1-2 generic searches first
-                    generic_searches = [
-                        "technology",
-                        "business",
-                        "innovation", 
-                        "professional development",
-                        "networking"
-                    ]
-                    
-                    for search_term in random.sample(generic_searches, random.randint(1, 2)):
-                        debug_log(f"Generic search: {search_term}")
-                        
-                        search_box.clear()
-                        time.sleep(random.uniform(0.5, 1))
-                        
-                        # Type naturally
-                        for char in search_term:
-                            search_box.send_keys(char)
-                            time.sleep(random.uniform(0.1, 0.3))
-                        
-                        time.sleep(random.uniform(1, 2))
-                        search_box.send_keys(Keys.RETURN)
-                        time.sleep(random.uniform(4, 8))
-                        
-                        # Browse results briefly
-                        driver.execute_script(f"window.scrollBy(0, {random.randint(200, 500)});")
-                        time.sleep(random.uniform(2, 4))
-                        
-                        # Clear search for next one
-                        try:
-                            search_box = driver.find_element(By.CSS_SELECTOR, search_selectors[0])
-                        except:
-                            break
-                            
-            except Exception as e:
-                debug_log(f"Generic search simulation error (non-critical): {e}")
-        
-        except Exception as e:
-            debug_log(f"Search preparation error (non-critical): {e}")
-        
-        # Phase 5: Final behavioral establishment
-        debug_log("Phase 5: Final behavioral pattern establishment")
-        
-        # Spend some time on feed to look like a regular user
+        # Step 2: Visit feed page (most common user behavior)
+        debug_log("Step 2: Feed page visit")
         try:
             driver.get("https://www.linkedin.com/feed/")
+            time.sleep(random.uniform(4, 8))
+            
+            # Simple scroll simulation (reduced complexity)
+            for i in range(random.randint(1, 2)):
+                driver.execute_script(f"window.scrollBy(0, {random.randint(300, 600)});")
+                time.sleep(random.uniform(2, 4))
+                
+        except Exception as e:
+            debug_log(f"Feed visit error (non-critical): {e}")
+        
+        # Step 3: Brief visit to one more section (simplified)
+        debug_log("Step 3: Brief secondary page visit")
+        try:
+            secondary_pages = [
+                "https://www.linkedin.com/mynetwork/",
+                "https://www.linkedin.com/notifications/"
+            ]
+            
+            selected_page = random.choice(secondary_pages)
+            driver.get(selected_page)
             time.sleep(random.uniform(3, 6))
             
-            # Simulate typical feed interactions
-            for i in range(random.randint(2, 4)):
-                driver.execute_script(f"window.scrollBy(0, {random.randint(400, 800)});")
-                time.sleep(random.uniform(2, 5))
-                
-                # Occasionally simulate hover or brief stops
-                if random.random() < 0.4:  # 40% chance
-                    try:
-                        posts = driver.find_elements(By.CSS_SELECTOR, "[data-id*='urn:li:activity']")[:3]
-                        if posts:
-                            post = random.choice(posts)
-                            ActionChains(driver).move_to_element(post).perform()
-                            time.sleep(random.uniform(1, 3))
-                    except:
-                        pass
-        
         except Exception as e:
-            debug_log(f"Feed simulation error (non-critical): {e}")
+            debug_log(f"Secondary page error (non-critical): {e}")
         
-        # Final warming delay
-        total_warming_time = random.uniform(15, 30)
-        debug_log(f"🔥 Session warming complete! Total time: {total_warming_time:.1f}s")
-        debug_log("✅ Human-like browsing patterns established - ready for job searches")
-        time.sleep(total_warming_time)
+        # Step 4: Return to feed and final warming
+        debug_log("Step 4: Final warming phase")
+        try:
+            driver.get("https://www.linkedin.com/feed/")
+            time.sleep(random.uniform(5, 10))
+            
+        except Exception as e:
+            debug_log(f"Final warming error (non-critical): {e}")
         
+        debug_log("✅ Simplified session warming completed successfully")
         return True
         
     except Exception as e:
         debug_log(f"⚠️ Session warming encountered issues: {e}")
-        debug_log("Proceeding with basic delay as fallback")
-        time.sleep(random.uniform(10, 20))  # Fallback delay
+        debug_log("Using minimal delay as fallback")
+        time.sleep(random.uniform(8, 15))  # Minimal fallback delay
         return False
 
-def natural_job_search(driver, keywords, time_filter="past-24h"):
+def natural_job_search(driver, keywords, time_filter="past-24h", max_retries=2):
     """
-    Perform job-related searches using LinkedIn's search interface naturally
-    instead of direct URL navigation to avoid bot detection.
+    IMPROVED: Use direct URL navigation to avoid interface interaction issues.
+    This is more reliable than trying to interact with search elements.
     """
-    debug_log(f"🔍 Natural search for: {keywords}")
+    debug_log(f"🔍 Improved search for: {keywords}")
+    
+    for attempt in range(max_retries):
+        try:
+            debug_log(f"Search attempt {attempt + 1}/{max_retries}")
+            
+            # STRATEGY 1: Direct LinkedIn search URL (most reliable)
+            search_query = f"{keywords} hiring"
+            debug_log(f"🔍 Constructed search query: '{search_query}'", "SEARCH")
+            print(f"[APP_OUT]🔍 Search query with hiring: '{search_query}'")
+            encoded_query = search_query.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
+            debug_log(f"🔗 URL-encoded query: '{encoded_query}'", "SEARCH")
+            
+            # Use the most reliable LinkedIn search URL format  
+            if time_filter == "past-24h":
+                direct_url = f"https://www.linkedin.com/search/results/content/?keywords={encoded_query}&origin=SWITCH_SEARCH_VERTICAL&datePosted=past-24h"
+            else:
+                direct_url = f"https://www.linkedin.com/search/results/content/?keywords={encoded_query}&origin=SWITCH_SEARCH_VERTICAL"
+            
+            debug_log(f"Using direct URL: {direct_url}")
+            print(f"[APP_OUT]🔗 Full search URL: {direct_url}")
+            driver.get(direct_url)
+            time.sleep(random.uniform(4, 8))
+            
+            # Check if we successfully reached search results (simple validation)
+            current_url = driver.current_url.lower()
+            page_title = driver.title.lower()
+            
+            if "search" in current_url and "linkedin" in current_url:
+                debug_log("✅ Successfully navigated to LinkedIn search results")
+                
+                # Quick check for any content on the page
+                try:
+                    # Look for any of these indicators that content loaded
+                    result_indicators = [
+                        ".search-results-container",
+                        ".search-results__list", 
+                        "[data-chameleon-result-urn]",
+                        ".feed-shared-update-v2",
+                        ".search-result__wrapper",
+                        ".artdeco-empty-state"  # Even "no results" page is valid
+                    ]
+                    
+                    content_found = False
+                    for indicator in result_indicators:
+                        try:
+                            elements = driver.find_elements(By.CSS_SELECTOR, indicator)
+                            if elements:
+                                debug_log(f"✅ Found content with selector: {indicator}")
+                                content_found = True
+                                break
+                        except:
+                            continue
+                    
+                    if content_found or "no results" in page_title:
+                        debug_log(f"✅ Search completed successfully for: {keywords}")
+                        return True
+                    else:
+                        debug_log("⚠️ Page loaded but no content found, trying fallback...")
+                        
+                except Exception as content_error:
+                    debug_log(f"Content check error (non-critical): {content_error}")
+                    # If we can't verify content but URL looks right, assume success
+                    return True
+            
+            # If direct URL failed, try fallback approach
+            debug_log("⚠️ Direct URL didn't work, trying fallback...")
+            
+        except Exception as e:
+            debug_log(f"❌ Search attempt {attempt + 1} failed: {str(e)[:100]}...")
+            
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 3
+                debug_log(f"⏳ Waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
+                continue
+    
+    # STRATEGY 2: Fallback URL variations if main approach fails
+    debug_log("🔄 Trying fallback URL strategies...")
     
     try:
-        # Go to main search page first
-        driver.get("https://www.linkedin.com/search/results/all/")
-        time.sleep(random.uniform(3, 6))
-        
-        # Find and use search box
-        search_selectors = [
-            'input[placeholder*="Search"]',
-            'input[aria-label*="Search"]', 
-            '.search-global-typeahead__input',
-            'input[type="text"]'
-        ]
-        
-        search_box = None
-        for selector in search_selectors:
-            try:
-                search_box = driver.find_element(By.CSS_SELECTOR, selector)
-                if search_box.is_displayed():
-                    break
-            except:
-                continue
-        
-        if not search_box:
-            debug_log("⚠️ Could not find search box - using fallback URL method")
-            return False
-        
-        # Clear and type search term naturally
-        search_box.clear()
-        time.sleep(random.uniform(0.5, 1.2))
-        
-        # Create natural search query
         search_variations = [
-            f"{keywords} hiring",
-            f"{keywords} jobs", 
-            f"{keywords} recruiting",
-            f"{keywords} opportunities",
+            f"{keywords} jobs",
             f"hiring {keywords}",
-            f"jobs in {keywords}"
+            f"{keywords} recruiting"
         ]
         
-        search_query = random.choice(search_variations)
-        debug_log(f"Using search query: {search_query}")
-        
-        # Type naturally with human timing
-        for char in search_query:
-            search_box.send_keys(char)
-            time.sleep(random.uniform(0.12, 0.28))
-        
-        # Human-like pause before search
-        time.sleep(random.uniform(1.5, 3))
-        search_box.send_keys(Keys.RETURN)
-        time.sleep(random.uniform(4, 8))
-        
-        # Now try to filter to Posts/Content
-        try:
-            # Look for "Posts" filter
-            filter_selectors = [
-                "button[aria-label*='Posts']",
-                "button[data-test-search-results-filter-button*='POSTS']",
-                "a[href*='content']",
-                ".search-reusables__filter-binary-toggle button"
-            ]
-            
-            posts_filter = None
-            for selector in filter_selectors:
-                try:
-                    posts_filter = driver.find_element(By.CSS_SELECTOR, selector)
-                    if posts_filter.is_displayed():
-                        break
-                except:
-                    continue
-            
-            if posts_filter:
-                debug_log("🎯 Clicking Posts filter")
-                posts_filter.click()
-                time.sleep(random.uniform(3, 6))
-            else:
-                debug_log("ℹ️ Posts filter not found - continuing with all results")
-        
-        except Exception as e:
-            debug_log(f"Filter selection error (non-critical): {e}")
-        
-        # Try to apply time filter if possible
-        try:
-            if time_filter == "past-24h":
-                # Look for date filter options
-                date_filter_selectors = [
-                    "button[aria-label*='Date posted']",
-                    "button[data-test*='date']",
-                    ".search-reusables__filter-binary-toggle"
-                ]
+        for variation in search_variations:
+            try:
+                encoded_query = variation.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
+                fallback_url = f"https://www.linkedin.com/search/results/all/?keywords={encoded_query}"
                 
-                for selector in date_filter_selectors:
-                    try:
-                        date_filter = driver.find_element(By.CSS_SELECTOR, selector)
-                        if date_filter.is_displayed():
-                            date_filter.click()
-                            time.sleep(random.uniform(1, 2))
-                            
-                            # Look for "Past 24 hours" option
-                            day_options = driver.find_elements(By.XPATH, "//*[contains(text(), '24') or contains(text(), 'day')]")
-                            if day_options:
-                                day_options[0].click()
-                                time.sleep(random.uniform(2, 4))
-                                debug_log("✅ Applied 24-hour filter")
-                                break
-                    except:
-                        continue
-        
-        except Exception as e:
-            debug_log(f"Time filter error (non-critical): {e}")
-        
-        # Simulate result browsing
-        time.sleep(random.uniform(2, 5))
-        driver.execute_script(f"window.scrollBy(0, {random.randint(300, 600)});")
-        time.sleep(random.uniform(2, 4))
-        
-        debug_log("✅ Natural search completed successfully")
-        return True
-        
+                debug_log(f"Trying fallback: {fallback_url[:80]}...")
+                driver.get(fallback_url)
+                time.sleep(random.uniform(3, 6))
+                
+                if "search" in driver.current_url.lower():
+                    debug_log("✅ Fallback URL successful")
+                    return True
+                    
+            except Exception as fallback_error:
+                debug_log(f"Fallback attempt failed: {fallback_error}")
+                continue
+    
     except Exception as e:
-        debug_log(f"❌ Natural search failed: {e}")
-        return False
+        debug_log(f"❌ All fallback attempts failed: {e}")
+    
+    debug_log(f"❌ All search methods failed for: {keywords}")
+    return False
 
 # ========== ENHANCED BEHAVIORAL PATTERNS ==========
 

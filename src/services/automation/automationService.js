@@ -458,61 +458,120 @@ const automationService = {
     });
 
     pythonProcess.on('close', code => {
-      global.isAutomationRunning = false;
-      global.pythonProcess = null;
-      this.cleanupConfigFile(configPath);
-      // Check for errors even if exit code is 0
-      logToFile(`[Python] process exited with code: ${code}`);
-      if (code === 0) {
-        resolve({
-          success: true,
-          message: errorCodes[code],
-          output: stdoutData,
-        });
-      } else {
-        const errorDetails = {
-          message: errorCodes[code] || 'Unknown error occurred',
-          exitCode: code,
-          stdout: stdoutData,
-          stderr: stderrData,
-          usedBundled: useBundled,
-          scriptPath,
-        };
+      try {
+        global.isAutomationRunning = false;
+        global.pythonProcess = null;
+        this.cleanupConfigFile(configPath);
+        
+        // Check for errors even if exit code is 0
+        logToFile(`[Python] process exited with code: ${code}`);
+        console.log(`[_setupProcessHandlers] Python process closed with code: ${code}`);
+        
+        if (code === 0) {
+          resolve({
+            success: true,
+            message: errorCodes[code] || 'Process completed successfully',
+            output: stdoutData,
+          });
+        } else {
+          const errorDetails = {
+            message: errorCodes[code] || 'Unknown error occurred',
+            exitCode: code,
+            stdout: stdoutData,
+            stderr: stderrData,
+            usedBundled: useBundled,
+            scriptPath,
+          };
 
-        console.error(
-          '[_setupProcessHandlers] Python process exit error:',
-          errorDetails
-        );
-        logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails));
-        logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails), 'main.log');
-        reject(errorDetails);
+          console.error(
+            '[_setupProcessHandlers] Python process exit error:',
+            errorDetails
+          );
+          
+          try {
+            logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails));
+            logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails), 'main.log');
+          } catch (logError) {
+            console.warn('[_setupProcessHandlers] Logging error during close event:', logError.message);
+          }
+          
+          reject(errorDetails);
+        }
+      } catch (closeError) {
+        console.error('[_setupProcessHandlers] Error in close handler:', closeError);
+        // Force reset state to prevent stuck conditions
+        global.isAutomationRunning = false;
+        global.pythonProcess = null;
+        
+        // Always try to cleanup config file
+        try {
+          this.cleanupConfigFile(configPath);
+        } catch (cleanupError) {
+          console.warn('[_setupProcessHandlers] Config cleanup error:', cleanupError.message);
+        }
+        
+        // Reject with safe error details
+        reject({
+          message: 'Process handler error during cleanup',
+          originalError: closeError.message,
+          exitCode: code || -1,
+          status: 500,
+        });
       }
     });
 
     pythonProcess.on('error', error => {
-      global.isAutomationRunning = false;
-      global.pythonProcess = null;
-      this.cleanupConfigFile(configPath);
+      try {
+        global.isAutomationRunning = false;
+        global.pythonProcess = null;
+        this.cleanupConfigFile(configPath);
 
-      const errorDetails = {
-        message: 'Faile to start LinkedIn automation process',
-        originalError: error.message,
-        exitCode: error.code,
-        errorType: error.name,
-        usedBundled: useBundled,
-        scriptPath,
-        platform: process.platform,
-        arch: process.arch,
-        status: 500,
-      };
+        const errorDetails = {
+          message: 'Failed to start LinkedIn automation process',
+          originalError: error.message,
+          exitCode: error.code,
+          errorType: error.name,
+          usedBundled: useBundled,
+          scriptPath,
+          platform: process.platform,
+          arch: process.arch,
+          status: 500,
+        };
 
-      console.error(
-        '[_setupProcessHandlers] Python process error:',
-        errorDetails
-      );
-      logToFile('[Python] process error: ' + JSON.stringify(errorDetails));
-      sendLogMessage(`Process error: ${error.message}`);
-      reject(errorDetails);
+        console.error(
+          '[_setupProcessHandlers] Python process error:',
+          errorDetails
+        );
+        
+        try {
+          logToFile('[Python] process error: ' + JSON.stringify(errorDetails));
+          sendLogMessage(`Process error: ${error.message}`);
+        } catch (logError) {
+          console.warn('[_setupProcessHandlers] Logging error during error event:', logError.message);
+        }
+        
+        reject(errorDetails);
+      } catch (errorHandlerError) {
+        console.error('[_setupProcessHandlers] Error in error handler:', errorHandlerError);
+        // Force reset state to prevent stuck conditions
+        global.isAutomationRunning = false;
+        global.pythonProcess = null;
+        
+        // Always try to cleanup config file
+        try {
+          this.cleanupConfigFile(configPath);
+        } catch (cleanupError) {
+          console.warn('[_setupProcessHandlers] Config cleanup error in error handler:', cleanupError.message);
+        }
+        
+        // Reject with safe error details
+        reject({
+          message: 'Critical error in process error handler',
+          originalError: errorHandlerError.message,
+          processError: error.message,
+          status: 500,
+        });
+      }
     });
   },
 
@@ -624,40 +683,119 @@ const automationService = {
       };
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       try {
         console.log('[stopAutomation] Attempting to stop automation process...');
         
-        // Kill the Python process using the correct global reference
-        if (process.platform === 'win32') {
-          // On Windows - use taskkill to terminate process tree
-          console.log(`[stopAutomation] Killing Windows process tree for PID: ${global.pythonProcess.pid}`);
-          spawn('taskkill', ['/pid', global.pythonProcess.pid, '/f', '/t']);
-        } else {
-          // On macOS/Linux - use process.kill
-          console.log(`[stopAutomation] Killing process for PID: ${global.pythonProcess.pid}`);
-          process.kill(global.pythonProcess.pid, 'SIGTERM');
+        const processToKill = global.pythonProcess;
+        const pidToKill = processToKill?.pid;
+        
+        if (!pidToKill) {
+          console.log('[stopAutomation] No valid PID found, resetting state');
+          global.pythonProcess = null;
+          global.isAutomationRunning = false;
+          resolve({
+            success: true,
+            message: 'No valid process found, state reset',
+          });
+          return;
         }
 
-        // Reset global state variables correctly
-        global.pythonProcess = null;
-        global.isAutomationRunning = false;
+        // Set a timeout to force cleanup if process doesn't terminate
+        const forceCleanupTimeout = setTimeout(() => {
+          console.log('[stopAutomation] Force cleanup timeout reached');
+          global.pythonProcess = null;
+          global.isAutomationRunning = false;
+          resolve({
+            success: true,
+            message: 'Automation stopped (forced cleanup after timeout)',
+          });
+        }, 5000); // 5 second timeout
 
-        console.log('[stopAutomation] Automation stopped successfully');
-        resolve({
-          success: true,
-          message: 'Automation stopped successfully',
-        });
+        // Handle process termination event
+        const onProcessExit = () => {
+          clearTimeout(forceCleanupTimeout);
+          global.pythonProcess = null;
+          global.isAutomationRunning = false;
+          console.log('[stopAutomation] Process terminated successfully');
+          resolve({
+            success: true,
+            message: 'Automation stopped successfully',
+          });
+        };
+
+        // Listen for process exit (only if process still exists)
+        if (processToKill && !processToKill.killed) {
+          processToKill.once('exit', onProcessExit);
+          processToKill.once('close', onProcessExit);
+        }
+
+        // Kill the Python process using the correct method per platform
+        if (process.platform === 'win32') {
+          // On Windows - use taskkill to terminate process tree
+          console.log(`[stopAutomation] Killing Windows process tree for PID: ${pidToKill}`);
+          
+          const killProcess = spawn('taskkill', ['/pid', pidToKill.toString(), '/f', '/t'], {
+            detached: true,
+            stdio: 'ignore'
+          });
+
+          killProcess.on('error', (error) => {
+            console.warn('[stopAutomation] Taskkill error (non-critical):', error.message);
+            // Don't fail, continue with cleanup
+          });
+
+          killProcess.on('exit', (code) => {
+            console.log(`[stopAutomation] Taskkill exited with code: ${code}`);
+            // Code 0 = success, 128 = process not found (already dead)
+            if (code === 0 || code === 128) {
+              // Success or process already dead
+              if (!global.pythonProcess) {
+                // Already cleaned up by onProcessExit
+                return;
+              }
+              // Trigger cleanup manually if process didn't emit exit event
+              setTimeout(onProcessExit, 1000);
+            }
+          });
+
+        } else {
+          // On macOS/Linux - use process.kill
+          console.log(`[stopAutomation] Killing process for PID: ${pidToKill}`);
+          
+          try {
+            process.kill(pidToKill, 'SIGTERM');
+            
+            // If SIGTERM doesn't work after 3 seconds, use SIGKILL
+            setTimeout(() => {
+              if (global.pythonProcess && global.pythonProcess.pid === pidToKill) {
+                console.log('[stopAutomation] SIGTERM timeout, using SIGKILL');
+                try {
+                  process.kill(pidToKill, 'SIGKILL');
+                } catch (killError) {
+                  console.warn('[stopAutomation] SIGKILL error:', killError.message);
+                }
+              }
+            }, 3000);
+            
+          } catch (killError) {
+            console.warn('[stopAutomation] Process kill error:', killError.message);
+            // Process might already be dead, trigger cleanup
+            onProcessExit();
+          }
+        }
+
       } catch (error) {
-        // Reset state even if there was an error to prevent stuck states
+        console.error('[stopAutomation] Critical error during stop:', error);
+        
+        // Force reset state to prevent stuck states
         global.pythonProcess = null;
         global.isAutomationRunning = false;
-        console.error('[stopAutomation] Error stopping automation:', error);
         
-        // Still resolve successfully since we reset the state
+        // Always resolve successfully to prevent unhandled rejections
         resolve({
           success: true,
-          message: 'Automation process terminated (with cleanup)',
+          message: 'Automation process terminated (with error recovery)',
           warning: error.message,
         });
       }
@@ -725,11 +863,34 @@ const automationService = {
    */
   cleanupConfigFile(configPath) {
     try {
-      if (configPath && fs.existsSync(configPath)) {
-        fs.unlinkSync(configPath);
+      if (!configPath) {
+        console.log('[cleanupConfigFile] No config path provided, skipping cleanup');
+        return;
+      }
+
+      if (typeof configPath !== 'string') {
+        console.warn('[cleanupConfigFile] Invalid config path type:', typeof configPath);
+        return;
+      }
+
+      if (fs.existsSync(configPath)) {
+        try {
+          fs.unlinkSync(configPath);
+          console.log(`[cleanupConfigFile] Config file cleaned up: ${configPath}`);
+        } catch (unlinkError) {
+          console.warn(
+            `[cleanupConfigFile] Failed to delete config file ${configPath}:`,
+            unlinkError.message
+          );
+        }
+      } else {
+        console.log(`[cleanupConfigFile] Config file not found (already cleaned?): ${configPath}`);
       }
     } catch (error) {
-      console.error('Error cleaning up config file:', error);
+      console.warn(
+        `[cleanupConfigFile] Error during config cleanup for ${configPath}:`,
+        error.message
+      );
     }
   },
 
@@ -930,33 +1091,65 @@ const automationService = {
  */
 automationService.forceResetState = function() {
   const wasRunning = global.isAutomationRunning;
+  let killAttempted = false;
   
   // Force kill any process if it exists
   if (global.pythonProcess) {
     try {
-      if (process.platform === 'win32') {
-        // On Windows
-        spawn('taskkill', ['/pid', global.pythonProcess.pid, '/f', '/t']);
-      } else {
-        // On macOS/Linux
-        process.kill(global.pythonProcess.pid);
+      const pidToKill = global.pythonProcess.pid;
+      
+      if (pidToKill) {
+        killAttempted = true;
+        console.log(`[forceResetState] Force killing process PID: ${pidToKill}`);
+        
+        if (process.platform === 'win32') {
+          // On Windows - use taskkill with error handling
+          const killProcess = spawn('taskkill', ['/pid', pidToKill.toString(), '/f', '/t'], {
+            detached: true,
+            stdio: 'ignore'
+          });
+          
+          killProcess.on('error', (error) => {
+            console.warn('[forceResetState] Taskkill error (ignored):', error.message);
+          });
+          
+        } else {
+          // On macOS/Linux - use process.kill with SIGKILL for force kill
+          try {
+            process.kill(pidToKill, 'SIGKILL');
+          } catch (killError) {
+            console.warn('[forceResetState] SIGKILL error (ignored):', killError.message);
+          }
+        }
       }
     } catch (e) {
-      // Ignore errors during forced kill
-      console.log('[forceResetState] Error killing process:', e.message);
+      // Ignore all errors during forced kill
+      console.warn('[forceResetState] Error during force kill (ignored):', e.message);
     }
   }
   
-  // Reset state variables
+  // Always reset state variables regardless of kill success
   global.pythonProcess = null;
   global.isAutomationRunning = false;
   
-  logToFile(`Forced reset of automation state. Was running: ${wasRunning}`);
+  const resultMessage = killAttempted 
+    ? 'Automation state forcibly reset with process termination'
+    : 'Automation state forcibly reset (no active process found)';
+  
+  console.log(`[forceResetState] ${resultMessage}. Was running: ${wasRunning}`);
+  
+  try {
+    logToFile(`Forced reset of automation state. Was running: ${wasRunning}, Kill attempted: ${killAttempted}`);
+  } catch (logError) {
+    // Don't let logging errors affect the reset operation
+    console.warn('[forceResetState] Logging error (ignored):', logError.message);
+  }
   
   return {
     success: true,
     wasRunning,
-    message: 'Automation state has been forcibly reset'
+    killAttempted,
+    message: resultMessage
   };
 };
 

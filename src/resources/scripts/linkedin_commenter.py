@@ -2359,7 +2359,14 @@ def main():
             session_comments = 0
             daily_comments = 0
             
+            # Initialize session timing for human-like behavior
+            session_start_time = datetime.now()
+            session_duration_minutes = random.randint(20, 90)  # Random session length: 20-90 minutes
+            session_break_minutes = random.randint(5, 20)      # Random break length: 5-20 minutes
+            
             print("[APP_OUT]⚙️ Initializing components...")
+            print(f"[APP_OUT]⏰ Session planned: {session_duration_minutes} minutes active, {session_break_minutes} minute break")
+            debug_log(f"SESSION: Planned session duration: {session_duration_minutes} minutes, break: {session_break_minutes} minutes", "SESSION")
             
             # Initialize search performance tracker
             try:
@@ -2506,6 +2513,31 @@ def main():
                 for i, keyword in enumerate(search_keywords, 1):
                     print(f"[APP_OUT]📍 Processing keyword {i}/{len(search_keywords)}: {keyword}")
                     debug_log(f"Natural search for keyword: {keyword}", "SEARCH")
+                    
+                    # HUMAN-LIKE SESSION MANAGEMENT: Check if it's time for a session break
+                    current_session_time = (datetime.now() - session_start_time).total_seconds() / 60  # minutes
+                    
+                    if current_session_time >= session_duration_minutes:
+                        print(f"[APP_OUT]😴 Session break time! Active for {current_session_time:.1f} minutes")
+                        print(f"[APP_OUT]☕ Taking {session_break_minutes} minute break (like a real person would)")
+                        debug_log(f"SESSION: Taking session break after {current_session_time:.1f} minutes of activity", "SESSION")
+                        
+                        # Long break simulation (5-20 minutes)
+                        break_seconds = session_break_minutes * 60
+                        print(f"[APP_OUT]⏰ Break will last {session_break_minutes} minutes...")
+                        time.sleep(break_seconds)
+                        
+                        # Reset session timing for next session
+                        session_start_time = datetime.now()
+                        session_duration_minutes = random.randint(20, 90)  # New random session length
+                        session_break_minutes = random.randint(5, 20)     # New random break length
+                        
+                        print(f"[APP_OUT]🔄 Session break complete! Next session: {session_duration_minutes} minutes")
+                        debug_log(f"SESSION: Break complete, new session planned: {session_duration_minutes} minutes", "SESSION")
+                    else:
+                        # Show session progress for transparency
+                        remaining_minutes = session_duration_minutes - current_session_time
+                        print(f"[APP_OUT]⏱️ Session progress: {current_session_time:.1f}/{session_duration_minutes} minutes ({remaining_minutes:.1f} min remaining)")
                     
                     # ENHANCED: Use backend subscription limits instead of hardcoded limits
                     try:

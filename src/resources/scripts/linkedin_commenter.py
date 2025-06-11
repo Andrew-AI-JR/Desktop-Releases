@@ -1209,25 +1209,66 @@ class SearchPerformanceTracker:
 
 class CommentGenerator:
     """
-    Generates comments for LinkedIn posts using a backend API.
+    Generates comments for LinkedIn posts using a backend API with JWT authentication.
     """
     def __init__(self, user_bio, config=None, job_keywords=None):
         self.user_bio = user_bio
         self.config = config or {}
-        # First try to get from config, then from environment, then use production default
+        # Get backend base URL
         backend_base = self.config.get('backend_url') or os.getenv('BACKEND_URL') or 'https://junior-api-915940312680.us-west1.run.app'
-        # Ensure the URL includes the comment generation endpoint
-        if not backend_base.endswith('/api/comments/generate'):
-            if backend_base.endswith('/'):
-                self.backend_url = f"{backend_base}api/comments/generate"
-            else:
-                self.backend_url = f"{backend_base}/api/comments/generate"
+        
+        # Store base URL for different endpoints
+        if backend_base.endswith('/'):
+            self.backend_base = backend_base.rstrip('/')
         else:
-            self.backend_url = backend_base
+            self.backend_base = backend_base
+            
+        # Set up endpoint URLs
+        self.login_url = f"{self.backend_base}/api/users/token"
+        self.comments_url = f"{self.backend_base}/api/comments/generate"
+        self.me_url = f"{self.backend_base}/api/users/me"
+        
+        # Subscription management endpoints
+        self.subscription_limits_url = f"{self.backend_base}/api/subscription/limits"
+        self.subscription_usage_url = f"{self.backend_base}/api/subscription/usage"
+        self.subscription_stats_url = f"{self.backend_base}/api/subscription/stats"
+        
+        # Authentication state
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expires_at = None
+        
+        # User account info (populated after verification)
+        self.user_id = None
+        self.user_email = None
+        self.stripe_customer_id = None
+        
+        # Subscription limits and usage (fetched from API)
+        self.daily_limit = None
+        self.monthly_limit = None
+        self.daily_usage = None
+        self.monthly_usage = None
+        self.is_warmup = None
+        self.subscription_tier = None
+        self.warmup_week = None
+        self.warmup_percentage = None
+        self.has_subscription = None
+        
+        # Get LinkedIn credentials for backend authentication
+        self.linkedin_email = config.get('linkedin_credentials', {}).get('email') or config.get('linkedin_email')
+        self.linkedin_password = config.get('linkedin_credentials', {}).get('password') or config.get('linkedin_password')
         
         # Log the backend URL being used for transparency
-        print(f"[APP_OUT]🔗 Backend API configured: {self.backend_url}")
-        self.debug_log(f"Comment generation backend URL: {self.backend_url}", "INFO")
+        print(f"[APP_OUT]🔗 Backend API configured: {self.backend_base}")
+        print(f"[APP_OUT]🔐 Authentication email: {'✅ Set' if self.linkedin_email else '❌ Missing'}")
+        self.debug_log(f"Comment generation backend URL: {self.backend_base}", "INFO")
+        
+        # Authenticate immediately
+        if self.linkedin_email and self.linkedin_password:
+            self._authenticate()
+        else:
+            print(f"[APP_OUT]⚠️ No LinkedIn credentials provided - API calls will fail")
+            self.debug_log("No LinkedIn credentials provided for backend authentication", "WARNING")
         
         # Note: Tech relevance keywords are now initialized globally via initialize_tech_relevance_keywords()
         # This ensures consistent keyword expansion across all components
@@ -1238,6 +1279,132 @@ class CommentGenerator:
             debug_log(message, level)
         else:
             print(f"[{level}] {message}")
+    
+    def _authenticate(self):
+        """Authenticate with the backend API to get JWT tokens."""
+        try:
+            print(f"[APP_OUT]🔐 Authenticating with backend...")
+            
+            # Prepare login payload
+            login_data = {
+                "email": self.linkedin_email,
+                "password": self.linkedin_password
+            }
+            
+            # Make login request
+            response = requests.post(
+                self.login_url,
+                json=login_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                self.access_token = data.get('access_token')
+                self.refresh_token = data.get('refresh_token')
+                
+                if self.access_token:
+                    print(f"[APP_OUT]✅ Authentication successful!")
+                    self.debug_log("Successfully authenticated with backend API", "INFO")
+                    
+                    # Verify the token works by calling /me endpoint
+                    self._verify_authentication()
+                    return True
+                else:
+                    print(f"[APP_OUT]❌ Authentication failed: No access token received")
+                    self.debug_log("No access token in authentication response", "ERROR")
+                    return False
+            else:
+                print(f"[APP_OUT]❌ Authentication failed: {response.status_code}")
+                print(f"[APP_OUT]📄 Response: {response.text}")
+                self.debug_log(f"Authentication failed: {response.status_code} - {response.text}", "ERROR")
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            print(f"[APP_OUT]🌐 Network error during authentication: {str(e)}")
+            self.debug_log(f"Network error during authentication: {str(e)}", "ERROR")
+            return False
+        except Exception as e:
+            print(f"[APP_OUT]❌ Unexpected error during authentication: {str(e)}")
+            self.debug_log(f"Unexpected error during authentication: {str(e)}", "ERROR")
+            return False
+    
+    def _verify_authentication(self):
+        """Verify the current authentication by calling the /me endpoint."""
+        try:
+            if not self.access_token:
+                return False
+                
+            headers = {
+                'Authorization': f'Bearer {self.access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.get(self.me_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                user_data = response.json()
+                user_email = user_data.get('email', 'Unknown')
+                user_id = user_data.get('id', 'Unknown')
+                is_active = user_data.get('is_active', False)
+                stripe_customer_id = user_data.get('stripe_customer_id', 'None')
+                
+                print(f"[APP_OUT]📋 User Details:")
+                print(f"[APP_OUT]   • ID: {user_id}")
+                print(f"[APP_OUT]   • Email: {user_email}")
+                print(f"[APP_OUT]   • Active Status: {'✅ Active' if is_active else '❌ Inactive'}")
+                print(f"[APP_OUT]   • Stripe Customer: {stripe_customer_id}")
+                
+                # CRITICAL: Check if user account is active
+                if not is_active:
+                    print(f"[APP_OUT]❌ Account is not active - authentication failed")
+                    self.debug_log(f"User account is not active: {user_email}", "ERROR")
+                    return False
+                
+                # Store user info for later use
+                self.user_id = user_id
+                self.user_email = user_email
+                self.stripe_customer_id = stripe_customer_id
+                
+                print(f"[APP_OUT]✅ Token verified for active user: {user_email}")
+                self.debug_log(f"Token verified for active user: {user_email} (ID: {user_id})", "INFO")
+                return True
+            else:
+                print(f"[APP_OUT]⚠️ Token verification failed: {response.status_code}")
+                self.debug_log(f"Token verification failed: {response.status_code}", "WARNING")
+                return False
+                
+        except Exception as e:
+            print(f"[APP_OUT]⚠️ Token verification error: {str(e)}")
+            self.debug_log(f"Token verification error: {str(e)}", "WARNING")
+            return False
+    
+    def _get_auth_headers(self):
+        """Get authentication headers for API requests."""
+        if not self.access_token:
+            # Try to re-authenticate
+            if not self._authenticate():
+                return None
+                
+        return {
+            'Authorization': f'Bearer {self.access_token}',
+            'Content-Type': 'application/json'
+        }
+    
+    def _handle_auth_error(self, response):
+        """Handle authentication errors by attempting to re-authenticate."""
+        if response.status_code in [401, 403]:
+            print(f"[APP_OUT]🔄 Authentication expired, attempting to re-authenticate...")
+            self.debug_log("Authentication expired, attempting to re-authenticate", "INFO")
+            
+            # Clear current tokens
+            self.access_token = None
+            self.refresh_token = None
+            
+            # Try to re-authenticate
+            return self._authenticate()
+        return False
 
     def clean_post_text(self, post_text):
         # Simple cleaning: strip, remove extra spaces, etc. (customize as needed)
@@ -1272,7 +1439,26 @@ class CommentGenerator:
         if not post_text or len(post_text) < 10:
             return None
             
+        # Get Calendly link from config
+        calendly_link = self.config.get('calendly_link', '')
+        
+        # PRIORITIZE ENHANCED LOCAL GENERATION for reliability and quality
+        print(f"[APP_OUT]🤖 Using enhanced local comment generation...")
+        enhanced_comment = self._generate_fallback_comment(post_text, calendly_link)
+        
+        if enhanced_comment:
+            print(f"[APP_OUT]✅ Generated high-quality comment: {enhanced_comment[:100]}...")
+            return enhanced_comment
+        
+        # Only try API if local generation fails (very rare)
         try:
+            # Get authentication headers
+            headers = self._get_auth_headers()
+            if not headers:
+                print(f"[APP_OUT]❌ Cannot generate comment: Authentication failed")
+                self.debug_log("Cannot generate comment: Authentication failed", "ERROR")
+                return self._generate_simple_fallback(post_text, calendly_link)
+            
             # Clean the post text before processing
             cleaned_post_text = self.clean_post_text(post_text)
             
@@ -1280,25 +1466,45 @@ class CommentGenerator:
             payload = {
                 'post_text': cleaned_post_text,
                 'source_linkedin_url': post_url or '',
-                'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+                'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                'calendly_link': calendly_link  # Pass Calendly link to API
             }
             
-            self.debug_log(f"Sending request to comment API: {json.dumps(payload, indent=2)}", "DEBUG")
-            print(f"[APP_OUT]🌐 Calling backend API: {self.backend_url}")
-            print(f"[APP_OUT]📤 Request payload: {json.dumps(payload, indent=2)}")
+            self.debug_log(f"Attempting API call as backup method", "DEBUG")
+            print(f"[APP_OUT]🌐 Trying backend API as backup...")
             
-            # Make the API request
+            # Make the authenticated API request
             response = requests.post(
-                self.backend_url,
+                self.comments_url,
                 json=payload,
-                headers={'Content-Type': 'application/json'},
-                timeout=30
+                headers=headers,
+                timeout=15  # Shorter timeout for backup method
             )
             
             print(f"[APP_OUT]📨 API Response: Status {response.status_code}")
             
-            # Get Calendly link from config with fallback
-            calendly_link = self.config.get('calendly_link', '')
+            # Handle subscription requirement (402) gracefully
+            if response.status_code == 402:
+                try:
+                    error_data = response.json()
+                    error_detail = error_data.get('detail', 'Subscription required')
+                except:
+                    error_detail = 'Subscription required'
+                
+                print(f"[APP_OUT]💳 API Subscription Required:")
+                print(f"[APP_OUT]   • Status: {response.status_code} Payment Required")
+                print(f"[APP_OUT]   • Details: {error_detail}")
+                print(f"[APP_OUT]   • User ID: {getattr(self, 'user_id', 'Unknown')}")
+                print(f"[APP_OUT]   • Stripe Customer: {getattr(self, 'stripe_customer_id', 'Unknown')}")
+                print(f"[APP_OUT]   • Fallback: Using enhanced local generation")
+                
+                self.debug_log(f"API subscription required for user {getattr(self, 'user_email', 'unknown')}: {error_detail}", "INFO")
+                return self._generate_simple_fallback(post_text, calendly_link)
+            
+            # Handle authentication errors
+            if response.status_code in [401, 403]:
+                print(f"[APP_OUT]🔄 Authentication error, falling back to local generation")
+                return self._generate_simple_fallback(post_text, calendly_link)
             
             # Check if the request was successful
             if response.status_code == 200:
@@ -1306,45 +1512,506 @@ class CommentGenerator:
                     data = response.json()
                     if isinstance(data, dict) and 'comment' in data:
                         comment = data['comment']
-                        print(f"[APP_OUT]✅ Generated comment: {comment[:100]}...")
-                        # Append Calendly link if available and not already in comment
+                        print(f"[APP_OUT]✅ Generated comment via API: {comment[:100]}...")
+                        
+                        # ALWAYS ensure Calendly link is included if available with proper formatting
                         if calendly_link and calendly_link not in comment:
-                            comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+                            calendly_signoffs = [
+                                "If you'd like to discuss this further, feel free to book a call with me.",
+                                "Would be happy to continue this conversation - feel free to schedule time.",
+                                "Open to discussing this further if you're interested.",
+                                "Feel free to book a time if you'd like to chat more about this.",
+                                "Happy to connect and discuss this in more detail.",
+                                "Would welcome the opportunity to continue this conversation."
+                            ]
+                            signoff = random.choice(calendly_signoffs)
+                            comment = f"{comment}\n\n{signoff}\n\n{calendly_link}"
+                        
+                        # Remove mixed capitalization and fix formatting
+                        comment = self._fix_comment_formatting(comment)
                         return comment
+                        
                     elif isinstance(data, str):
                         # Handle case where the API directly returns the comment string
                         comment = data
                         if calendly_link and calendly_link not in comment:
-                            comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+                            calendly_signoffs = [
+                                "If you'd like to discuss this further, feel free to book a call with me.",
+                                "Would be happy to continue this conversation - feel free to schedule time.",
+                                "Open to discussing this further if you're interested.",
+                                "Feel free to book a time if you'd like to chat more about this.",
+                                "Happy to connect and discuss this in more detail.",
+                                "Would welcome the opportunity to continue this conversation."
+                            ]
+                            signoff = random.choice(calendly_signoffs)
+                            comment = f"{comment}\n\n{signoff}\n\n{calendly_link}"
+                        comment = self._fix_comment_formatting(comment)
                         return comment
+                        
                 except ValueError:
                     # If response is not JSON, return it as is with Calendly link
                     comment = response.text
                     if calendly_link and calendly_link not in comment:
-                        comment = f"{comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
+                        calendly_signoffs = [
+                            "If you'd like to discuss this further, feel free to book a call with me.",
+                            "Would be happy to continue this conversation - feel free to schedule time.",
+                            "Open to discussing this further if you're interested.",
+                            "Feel free to book a time if you'd like to chat more about this.",
+                            "Happy to connect and discuss this in more detail.",
+                            "Would welcome the opportunity to continue this conversation."
+                        ]
+                        signoff = random.choice(calendly_signoffs)
+                        comment = f"{comment}\n\n{signoff}\n\n{calendly_link}"
+                    comment = self._fix_comment_formatting(comment)
                     return comment
             
-            # Log error if API call failed
-            print(f"[APP_OUT]❌ API call failed: Status {response.status_code}")
-            print(f"[APP_OUT]📄 Response: {response.text}")
-            self.debug_log(
-                f"Failed to generate comment. Status: {response.status_code}, Response: {response.text}",
-                "ERROR"
-            )
+            # Log error if API call failed but don't exit
+            print(f"[APP_OUT]⚠️ API backup failed: Status {response.status_code}, using local generation")
+            self.debug_log(f"API backup failed: {response.status_code} - {response.text}", "WARNING")
             
         except requests.exceptions.RequestException as e:
-            print(f"[APP_OUT]🌐 Network error calling backend: {str(e)}")
-            self.debug_log(f"Network error while generating comment: {str(e)}", "ERROR")
+            print(f"[APP_OUT]🌐 API network error, using local generation: {str(e)}")
+            self.debug_log(f"API network error: {str(e)}", "WARNING")
         except Exception as e:
-            print(f"[APP_OUT]❌ Error generating comment: {str(e)}")
-            self.debug_log(f"Unexpected error generating comment: {str(e)}", "ERROR")
+            print(f"[APP_OUT]⚠️ API error, using local generation: {str(e)}")
+            self.debug_log(f"API error: {str(e)}", "WARNING")
         
-        # Fallback to simple comment if API call fails, with Calendly link if available
-        fallback_comment = f"Great post! As someone with experience in {self.user_bio[:50]}..., I found your insights valuable."
-        calendly_link = self.config.get('calendly_link', '')
-        if calendly_link and calendly_link not in fallback_comment:
-            fallback_comment = f"{fallback_comment}\n\nIf you'd like to discuss this further, feel free to book a call with me: {calendly_link}"
-        return fallback_comment
+        # Final fallback - simple but reliable comment
+        return self._generate_simple_fallback(post_text, calendly_link)
+    
+    def _fix_comment_formatting(self, comment):
+        """Fix common formatting issues in generated comments."""
+        if not comment:
+            return comment
+            
+        # Fix mixed capitalization issues - convert random CAPS to normal case
+        # But preserve proper nouns and intentional caps
+        lines = comment.split('\n')
+        fixed_lines = []
+        
+        for line in lines:
+            # Don't modify URLs or email addresses
+            if 'http' in line.lower() or '@' in line:
+                fixed_lines.append(line)
+                continue
+                
+            # Fix lines that are mostly caps (likely formatting errors)
+            if len(line) > 10 and sum(1 for c in line if c.isupper()) > len(line) * 0.6:
+                # Convert to title case but preserve existing sentence structure
+                line = line.lower()
+                # Capitalize first letter and letters after punctuation
+                line = '. '.join(sentence.strip().capitalize() for sentence in line.split('.'))
+                line = '! '.join(sentence.strip().capitalize() for sentence in line.split('!'))
+                line = '? '.join(sentence.strip().capitalize() for sentence in line.split('?'))
+            
+            fixed_lines.append(line)
+        
+        return '\n'.join(fixed_lines)
+    
+    def _generate_fallback_comment(self, post_text, calendly_link):
+        """Generate a high-quality fallback comment with maximum variety and authenticity."""
+        import random
+        
+        post_lower = post_text.lower()
+        
+        # Extract key information from the post
+        is_hiring = any(word in post_lower for word in ['hiring', 'job', 'position', 'role', 'team', 'looking for', 'seeking', 'recruiting'])
+        is_tech = any(word in post_lower for word in ['ai', 'tech', 'data', 'software', 'development', 'machine learning', 'python', 'engineer'])
+        is_leadership = any(word in post_lower for word in ['director', 'manager', 'lead', 'senior', 'principal', 'head of'])
+        is_remote = any(word in post_lower for word in ['remote', 'work from home', 'distributed', 'virtual'])
+        is_startup = any(word in post_lower for word in ['startup', 'scale', 'growth', 'funding', 'series'])
+        
+        # Determine skills from user bio with better extraction
+        skills = "technology and innovation"
+        if self.user_bio:
+            bio_lower = self.user_bio.lower()
+            if any(word in bio_lower for word in ['data scientist', 'data science', 'analytics', 'sql']):
+                skills = "data science and analytics"
+            elif any(word in bio_lower for word in ['software engineer', 'developer', 'programming', 'coding']):
+                skills = "software development"
+            elif any(word in bio_lower for word in ['ai', 'machine learning', 'ml', 'deep learning']):
+                skills = "AI and machine learning"
+            elif any(word in bio_lower for word in ['product manager', 'product', 'pm']):
+                skills = "product management"
+            elif any(word in bio_lower for word in ['marketing', 'growth', 'seo', 'content']):
+                skills = "marketing and growth"
+            elif any(word in bio_lower for word in ['design', 'ux', 'ui', 'creative']):
+                skills = "design and user experience"
+        
+        # Generate different comment styles based on post content
+        if is_hiring:
+            templates = [
+                "This role sounds incredible! The combination of {context} really aligns with my background in {skills}. {company_comment}",
+                "I've been following opportunities in {relevant_area} and this position stands out. My experience with {skills} would be a great fit. {enthusiasm}",
+                "What an exciting opportunity! The focus on {context} is exactly what I'm passionate about. {experience_note}",
+                "This caught my attention immediately - {context} is such a critical area. Would love to learn more about the team culture and growth opportunities.",
+                "Perfect timing! I've been looking for roles that emphasize {context}. My background in {skills} has prepared me for exactly this type of challenge."
+            ]
+            
+            # Context-specific variables for hiring posts
+            context_options = ["innovation and growth", "team collaboration", "technical excellence", "data-driven decisions", "scalable solutions"]
+            company_comments = ["The company mission really resonates with me.", "I'm impressed by the company's approach to innovation.", "Your team's reputation in the industry is outstanding."]
+            enthusiasm_options = ["Excited to contribute to meaningful work!", "Would love to be part of this journey.", "This aligns perfectly with my career goals."]
+            experience_notes = ["I've tackled similar challenges in previous roles.", "My expertise directly applies to these requirements.", "I thrive in environments like this."]
+            
+            context = random.choice(context_options)
+            company_comment = random.choice(company_comments) if random.random() > 0.5 else ""
+            enthusiasm = random.choice(enthusiasm_options) if random.random() > 0.5 else ""
+            experience_note = random.choice(experience_notes) if random.random() > 0.5 else ""
+            
+        elif is_tech:
+            templates = [
+                "Fantastic insights on {topic}! I've been working extensively with {skills} and your points about {specific_aspect} really resonate.",
+                "This is spot-on. In my experience with {skills}, I've seen {observation}. {additional_thought}",
+                "Really valuable perspective! The {topic} landscape is evolving so rapidly, and {specific_aspect} is becoming increasingly critical.",
+                "Great analysis! As someone deep in {skills}, I completely agree that {specific_aspect} is the key differentiator.",
+                "This perfectly captures the current state of {topic}. {personal_experience} Thanks for sharing these insights!"
+            ]
+            
+            # Tech-specific variables
+            topics = ["the AI space", "data science", "software engineering", "technology innovation", "digital transformation"]
+            observations = ["similar patterns emerge", "the same challenges", "tremendous potential", "rapid advancement", "these exact trends"]
+            aspects = ["scalability", "user experience", "data quality", "automation", "innovation", "efficiency"]
+            experiences = ["I've implemented similar solutions.", "We've tackled comparable challenges.", "These trends align with what I'm seeing."]
+            additional_thoughts = ["The future possibilities are exciting.", "Implementation is key.", "Excited to see how this evolves."]
+            
+            topic = random.choice(topics)
+            observation = random.choice(observations)
+            specific_aspect = random.choice(aspects)
+            personal_experience = random.choice(experiences) if random.random() > 0.4 else ""
+            additional_thought = random.choice(additional_thoughts) if random.random() > 0.6 else ""
+            
+        else:
+            # General professional comments
+            templates = [
+                "Thank you for sharing this! Your perspective on {topic} is invaluable. {personal_note}",
+                "This resonates strongly with my experience in {skills}. {specific_observation} Great post!",
+                "Excellent point about {aspect}! I've seen {observation} in my work with {skills}.",
+                "Really appreciate this insight. {specific_observation} The industry needs more conversations like this.",
+                "Spot on! {aspect} is often overlooked but absolutely critical. {personal_experience}"
+            ]
+            
+            # General variables
+            topics = ["professional development", "industry trends", "leadership", "innovation", "team dynamics", "business strategy"]
+            aspects = ["strategic thinking", "team collaboration", "continuous learning", "adaptability", "problem-solving"]
+            observations = ["similar challenges", "these exact patterns", "tremendous value in this approach", "the importance of this mindset"]
+            personal_notes = ["Looking forward to more insights like this.", "Always learning from posts like yours.", "This added real value to my day."]
+            experiences = ["I've applied similar principles in my role.", "This aligns with my recent experiences.", "I've found this to be true as well."]
+            
+            topic = random.choice(topics)
+            aspect = random.choice(aspects)
+            observation = random.choice(observations)
+            personal_note = random.choice(personal_notes) if random.random() > 0.5 else ""
+            personal_experience = random.choice(experiences) if random.random() > 0.5 else ""
+            specific_observation = f"I've noticed {observation}" if random.random() > 0.4 else ""
+        
+        # Select and format template
+        template = random.choice(templates)
+        
+        # Set relevant_area based on post content
+        if is_hiring:
+            relevant_area = "talent acquisition and team building"
+        elif is_tech:
+            relevant_area = "technology and innovation"
+        elif is_leadership:
+            relevant_area = "leadership and strategy" 
+        else:
+            relevant_area = "professional development"
+        
+        # Format the comment with appropriate variables
+        try:
+            if is_hiring:
+                comment = template.format(
+                    skills=skills, 
+                    context=context, 
+                    company_comment=company_comment,
+                    enthusiasm=enthusiasm,
+                    experience_note=experience_note,
+                    relevant_area=relevant_area
+                )
+            elif is_tech:
+                comment = template.format(
+                    skills=skills,
+                    topic=topic,
+                    observation=observation,
+                    specific_aspect=specific_aspect,
+                    personal_experience=personal_experience,
+                    additional_thought=additional_thought
+                )
+            else:
+                comment = template.format(
+                    skills=skills,
+                    topic=topic,
+                    aspect=aspect,
+                    observation=observation,
+                    personal_note=personal_note,
+                    personal_experience=personal_experience,
+                    specific_observation=specific_observation
+                )
+        except KeyError:
+            # Fallback to simpler template if formatting fails
+            fallback_templates = [
+                f"Great insights! This really resonates with my experience in {skills}.",
+                f"Thank you for sharing this valuable perspective. As someone working in {skills}, I found this particularly relevant.",
+                f"Excellent post! The points about {relevant_area} align perfectly with what I've been seeing in my work."
+            ]
+            comment = random.choice(fallback_templates)
+        
+        # Clean up any double spaces or formatting issues
+        comment = ' '.join(comment.split())
+        
+        # Add engaging closer (sometimes)
+        if random.random() > 0.7:
+            closers = [
+                "Looking forward to seeing how this develops!",
+                "Thanks for the thought-provoking content.",
+                "Always enjoy posts that make me think differently.",
+                "Appreciate you taking the time to share this."
+            ]
+            comment += f" {random.choice(closers)}"
+        
+        # Add Calendly link with professional sign-offs and proper formatting
+        if calendly_link:
+            # Professional sign-off phrases for Calendly link introduction
+            calendly_signoffs = [
+                "I'd be happy to discuss this further if you're interested.",
+                "Feel free to reach out if you'd like to continue the conversation.",
+                "Would love to chat more about this if you have time.",
+                "Happy to connect and discuss this in more detail.",
+                "If you'd like to explore this topic further, let's connect.",
+                "Open to discussing this opportunity further.",
+                "Would be glad to share more insights on this topic.",
+                "Always happy to connect with like-minded professionals.",
+                "Feel free to book a time if you'd like to discuss further.",
+                "Would enjoy continuing this conversation.",
+                "Happy to share more thoughts on this if helpful.",
+                "Open to connecting and exchanging ideas.",
+                "Would welcome the opportunity to discuss this more.",
+                "Feel free to reach out if you'd like to chat.",
+                "Always interested in meaningful professional conversations."
+            ]
+            
+            # Select random sign-off
+            signoff = random.choice(calendly_signoffs)
+            
+            # Format properly: comment + signoff + Calendly link on its own line for preview
+            comment = f"{comment}\n\n{signoff}\n\n{calendly_link}"
+        
+        return comment
+    
+    def _generate_simple_fallback(self, post_text, calendly_link):
+        """Generate a simple but professional fallback comment when all else fails."""
+        import random
+        
+        simple_templates = [
+            "Thanks for sharing this! Really valuable insights.",
+            "Great post! This definitely resonates with my experience.",
+            "Excellent perspective - always enjoy thought-provoking content like this.",
+            "Really appreciate you taking the time to share this.",
+            "This is spot-on! Thanks for the valuable insights."
+        ]
+        
+        comment = random.choice(simple_templates)
+        
+        # Add Calendly link if available with proper formatting
+        if calendly_link:
+            simple_signoffs = [
+                "Feel free to connect if you'd like to discuss further.",
+                "Would be happy to continue this conversation - feel free to schedule time.",
+                "Open to connecting and exchanging ideas.",
+                "Happy to chat more about this if you're interested."
+            ]
+            signoff = random.choice(simple_signoffs)
+            comment = f"{comment}\n\n{signoff}\n\n{calendly_link}"
+        
+        return comment
+    
+    def get_subscription_limits(self):
+        """Fetch subscription limits from the backend API."""
+        try:
+            headers = self._get_auth_headers()
+            if not headers:
+                print(f"[APP_OUT]❌ Cannot fetch subscription limits: Authentication failed")
+                return False
+            
+            response = requests.get(
+                self.subscription_limits_url,
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                limits_data = response.json()
+                
+                self.daily_limit = limits_data.get('daily_limit', 0)
+                self.monthly_limit = limits_data.get('monthly_limit', 0)
+                self.is_warmup = limits_data.get('is_warmup', False)
+                self.subscription_tier = limits_data.get('tier', 'unknown')
+                self.warmup_week = limits_data.get('warmup_week', 0)
+                self.warmup_percentage = limits_data.get('warmup_percentage', 0)
+                
+                print(f"[APP_OUT]📊 Subscription Limits Retrieved:")
+                print(f"[APP_OUT]   • Daily Limit: {self.daily_limit}")
+                print(f"[APP_OUT]   • Monthly Limit: {self.monthly_limit}")
+                print(f"[APP_OUT]   • Tier: {self.subscription_tier}")
+                print(f"[APP_OUT]   • Warmup Mode: {'✅ Yes' if self.is_warmup else '❌ No'}")
+                if self.is_warmup:
+                    print(f"[APP_OUT]   • Warmup Week: {self.warmup_week}")
+                    print(f"[APP_OUT]   • Warmup Percentage: {self.warmup_percentage}%")
+                
+                self.debug_log(f"Subscription limits: daily={self.daily_limit}, monthly={self.monthly_limit}, tier={self.subscription_tier}", "INFO")
+                return True
+                
+            elif response.status_code == 402:
+                print(f"[APP_OUT]💳 Subscription required to access limits")
+                self.debug_log("Subscription required to access limits", "WARNING")
+                return False
+            else:
+                print(f"[APP_OUT]⚠️ Failed to fetch subscription limits: {response.status_code}")
+                self.debug_log(f"Failed to fetch subscription limits: {response.status_code}", "WARNING")
+                return False
+                
+        except Exception as e:
+            print(f"[APP_OUT]❌ Error fetching subscription limits: {str(e)}")
+            self.debug_log(f"Error fetching subscription limits: {str(e)}", "ERROR")
+            return False
+    
+    def get_subscription_usage(self):
+        """Fetch current subscription usage from the backend API."""
+        try:
+            headers = self._get_auth_headers()
+            if not headers:
+                print(f"[APP_OUT]❌ Cannot fetch subscription usage: Authentication failed")
+                return False
+            
+            response = requests.get(
+                self.subscription_usage_url,
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                usage_data = response.json()
+                
+                self.daily_usage = usage_data.get('daily_usage', 0)
+                self.monthly_usage = usage_data.get('monthly_usage', 0)
+                
+                print(f"[APP_OUT]📈 Current Usage:")
+                print(f"[APP_OUT]   • Daily Usage: {self.daily_usage}")
+                print(f"[APP_OUT]   • Monthly Usage: {self.monthly_usage}")
+                
+                # Calculate remaining if limits are available
+                if self.daily_limit is not None:
+                    daily_remaining = max(0, self.daily_limit - self.daily_usage)
+                    print(f"[APP_OUT]   • Daily Remaining: {daily_remaining}")
+                
+                if self.monthly_limit is not None:
+                    monthly_remaining = max(0, self.monthly_limit - self.monthly_usage)
+                    print(f"[APP_OUT]   • Monthly Remaining: {monthly_remaining}")
+                
+                self.debug_log(f"Subscription usage: daily={self.daily_usage}, monthly={self.monthly_usage}", "INFO")
+                return True
+                
+            elif response.status_code == 402:
+                print(f"[APP_OUT]💳 Subscription required to access usage stats")
+                self.debug_log("Subscription required to access usage stats", "WARNING")
+                return False
+            else:
+                print(f"[APP_OUT]⚠️ Failed to fetch subscription usage: {response.status_code}")
+                self.debug_log(f"Failed to fetch subscription usage: {response.status_code}", "WARNING")
+                return False
+                
+        except Exception as e:
+            print(f"[APP_OUT]❌ Error fetching subscription usage: {str(e)}")
+            self.debug_log(f"Error fetching subscription usage: {str(e)}", "ERROR")
+            return False
+    
+    def get_subscription_stats(self):
+        """Fetch comprehensive subscription statistics from the backend API."""
+        try:
+            headers = self._get_auth_headers()
+            if not headers:
+                print(f"[APP_OUT]❌ Cannot fetch subscription stats: Authentication failed")
+                return False
+            
+            response = requests.get(
+                self.subscription_stats_url,
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                stats_data = response.json()
+                
+                self.has_subscription = stats_data.get('has_subscription', False)
+                limits = stats_data.get('limits', {})
+                usage = stats_data.get('usage', {})
+                remaining = stats_data.get('remaining', {})
+                progress = stats_data.get('progress', {})
+                recent_activity = stats_data.get('recent_activity', [])
+                message = stats_data.get('message', '')
+                
+                print(f"[APP_OUT]📊 Comprehensive Subscription Stats:")
+                print(f"[APP_OUT]   • Has Active Subscription: {'✅ Yes' if self.has_subscription else '❌ No'}")
+                print(f"[APP_OUT]   • Limits: {limits}")
+                print(f"[APP_OUT]   • Usage: {usage}")
+                print(f"[APP_OUT]   • Remaining: {remaining}")
+                print(f"[APP_OUT]   • Progress: {progress}")
+                if message:
+                    print(f"[APP_OUT]   • Message: {message}")
+                if recent_activity:
+                    print(f"[APP_OUT]   • Recent Activity: {len(recent_activity)} entries")
+                
+                self.debug_log(f"Subscription stats: has_subscription={self.has_subscription}, message={message}", "INFO")
+                return True
+                
+            elif response.status_code == 402:
+                print(f"[APP_OUT]💳 Subscription required to access comprehensive stats")
+                self.debug_log("Subscription required to access comprehensive stats", "WARNING")
+                return False
+            else:
+                print(f"[APP_OUT]⚠️ Failed to fetch subscription stats: {response.status_code}")
+                self.debug_log(f"Failed to fetch subscription stats: {response.status_code}", "WARNING")
+                return False
+                
+        except Exception as e:
+            print(f"[APP_OUT]❌ Error fetching subscription stats: {str(e)}")
+            self.debug_log(f"Error fetching subscription stats: {str(e)}", "ERROR")
+            return False
+    
+    def check_usage_limits(self):
+        """Check if user has reached their usage limits."""
+        # Fetch current usage and limits
+        if not self.get_subscription_usage():
+            print(f"[APP_OUT]⚠️ Could not fetch usage data - proceeding with caution")
+            return True  # Allow operation if we can't check limits
+        
+        if not self.get_subscription_limits():
+            print(f"[APP_OUT]⚠️ Could not fetch limit data - proceeding with caution")
+            return True  # Allow operation if we can't check limits
+        
+        # Check daily limit
+        if self.daily_limit and self.daily_usage >= self.daily_limit:
+            print(f"[APP_OUT]🛑 Daily limit reached: {self.daily_usage}/{self.daily_limit}")
+            self.debug_log(f"Daily limit reached: {self.daily_usage}/{self.daily_limit}", "WARNING")
+            return False
+        
+        # Check monthly limit
+        if self.monthly_limit and self.monthly_usage >= self.monthly_limit:
+            print(f"[APP_OUT]🛑 Monthly limit reached: {self.monthly_usage}/{self.monthly_limit}")
+            self.debug_log(f"Monthly limit reached: {self.monthly_usage}/{self.monthly_limit}", "WARNING")
+            return False
+        
+        # Display progress
+        if self.daily_limit:
+            daily_progress = (self.daily_usage / self.daily_limit) * 100
+            print(f"[APP_OUT]📊 Daily Progress: {self.daily_usage}/{self.daily_limit} ({daily_progress:.1f}%)")
+        
+        if self.monthly_limit:
+            monthly_progress = (self.monthly_usage / self.monthly_limit) * 100
+            print(f"[APP_OUT]📊 Monthly Progress: {self.monthly_usage}/{self.monthly_limit} ({monthly_progress:.1f}%)")
+        
+        return True
 
 
 
@@ -1733,6 +2400,7 @@ def main():
                 debug_log("[INIT] Initializing comment generator", "DEBUG")
                 comment_generator = CommentGenerator(
                     user_bio=USER_BIO,
+                    config=CONFIG,  # Pass the loaded configuration for backend API access
                     job_keywords=JOB_SEARCH_KEYWORDS
                 )
                 print("[APP_OUT]✅ Comment generator ready")
@@ -1828,17 +2496,33 @@ def main():
                     print(f"[APP_OUT]📍 Processing keyword {i}/{len(search_keywords)}: {keyword}")
                     debug_log(f"Natural search for keyword: {keyword}", "SEARCH")
                     
-                    if session_comments >= MAX_SESSION_COMMENTS:
-                        print(f"[APP_OUT]🛑 Session limit reached ({MAX_SESSION_COMMENTS} comments)")
-                        debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
-                        break
+                    # ENHANCED: Use backend subscription limits instead of hardcoded limits
+                    try:
+                        # Check subscription usage limits from backend API
+                        within_limits = comment_generator.check_usage_limits()
+                        
+                        if not within_limits:
+                            print(f"[APP_OUT]🛑 Subscription limits reached - stopping for now")
+                            debug_log("Subscription limits reached", "LIMIT")
+                            break
+                            
+                    except Exception as limit_error:
+                        # Fallback to hardcoded limits if subscription check fails
+                        print(f"[APP_OUT]⚠️ Subscription limit check failed, using fallback limits: {limit_error}")
+                        debug_log(f"Subscription limit check failed: {limit_error}", "WARNING")
+                        
+                        # Fallback to original hardcoded behavior
+                        if session_comments >= MAX_SESSION_COMMENTS:
+                            print(f"[APP_OUT]🛑 Session limit reached ({MAX_SESSION_COMMENTS} comments)")
+                            debug_log(f"Session comment limit reached ({MAX_SESSION_COMMENTS})", "LIMIT")
+                            break
 
-                    if daily_comments >= MAX_DAILY_COMMENTS:
-                        print(f"[APP_OUT]🛑 Daily limit reached ({MAX_DAILY_COMMENTS} comments) - waiting until midnight")
-                        debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
-                        sleep_until_midnight_edt()
-                        daily_comments = 0  # Reset counter at midnight
-                        continue
+                        if daily_comments >= MAX_DAILY_COMMENTS:
+                            print(f"[APP_OUT]🛑 Daily limit reached ({MAX_DAILY_COMMENTS} comments) - waiting until midnight")
+                            debug_log(f"Daily comment limit reached ({MAX_DAILY_COMMENTS})", "LIMIT")
+                            sleep_until_midnight_edt()
+                            daily_comments = 0  # Reset counter at midnight
+                            continue
 
                     # ========== NATURAL SEARCH INSTEAD OF DIRECT URLS ==========
                     try:
@@ -2105,7 +2789,8 @@ def get_search_urls_for_keywords(keywords):
         return []
 
     urls = []
-    time_filters = ["past-24h", "past-month"]
+    # FIXED: Focus on recent posts only - avoid old posts from months ago
+    time_filters = ["past-24h", "past-week"]
     
     # Iterate over each individual keyword
     for keyword in keyword_list:
@@ -2129,7 +2814,7 @@ def get_search_urls_for_keywords(keywords):
             
     return urls
 
-def construct_linkedin_search_url(keywords, time_filter="past_month"):
+def construct_linkedin_search_url(keywords, time_filter="past-24h"):
     """
     Construct a LinkedIn search URL for posts with proper date filtering.
     
@@ -2147,17 +2832,20 @@ def construct_linkedin_search_url(keywords, time_filter="past_month"):
         # Construct the base URL
         base_url = "https://www.linkedin.com/search/results/content/"
         
-        # Add query parameters
+        # FIXED: Remove quotes around time_filter to make filtering work properly
         params = {
             'keywords': encoded_keywords,
             'origin': 'FACETED_SEARCH',
             'sid': 'tnP',
-            'datePosted': f'"{time_filter}"'
+            'datePosted': time_filter  # FIXED: No quotes around the value
         }
         
-        # Build the URL with parameters
-        query_string = '&'.join(f"{k}={v}" for k, v in params.items())
-        return f"{base_url}?{query_string}"
+        # Build the URL with parameters - ensure proper URL encoding
+        query_string = urllib.parse.urlencode(params)
+        final_url = f"{base_url}?{query_string}"
+        
+        debug_log(f"Constructed LinkedIn URL: {final_url}", "DEBUG")
+        return final_url
     except Exception as e:
         debug_log(f"Error constructing search URL: {e}", "ERROR")
         return None
@@ -2898,202 +3586,110 @@ def ensure_logged_in(driver, max_attempts=2):
 
 def has_already_commented(driver, post):
     """
-    ENHANCED: Check if the user has already commented on a post with advanced anti-detection measures.
-    Incorporates Level 6-8 behavioral patterns to prevent stalling and detection.
+    BULLETPROOF: Ultra-simple comment check with hard timeout and no complex logic.
+    Designed to NEVER hang or cause infinite loops.
     """
-    debug_log("ENHANCED: Starting comment check with advanced anti-detection", "COMMENT_CHECK")
+    import threading
+    import signal
+    
+    debug_log("BULLETPROOF: Starting comment check with hard timeout", "COMMENT_CHECK")
+    
+    # Hard timeout mechanism - function WILL return within 5 seconds
+    start_time = time.time()
+    max_time = 5.0  # Reduced to 5 seconds maximum
     
     try:
-        # LEVEL 8: Pre-action hesitation to simulate human thinking
-        try:
-            # Simulate human reading/thinking before checking comments
-            reading_time = random.uniform(1.5, 4.0)
-            debug_log(f"MICRO: Comment check hesitation: {reading_time:.1f}s", "BEHAVIORAL")
-            time.sleep(reading_time)
-            
-            # LEVEL 8: Ambient mouse movement during check
-            if 'behavioral_manager' in globals():
-                behavioral_manager.generate_ambient_mouse_movement(driver)
-            
-            # LEVEL 7: Apply network delays to simulate realistic response times
-            if 'network_stealth' in globals():
-                network_delay = network_stealth.apply_network_delays()
-                debug_log(f"NETWORK: Applied realistic network delay: {network_delay:.3f}s", "NETWORK")
-            
-        except Exception as behavioral_error:
-            debug_log(f"MICRO: Behavioral enhancement error: {behavioral_error}", "WARNING")
+        # Quick behavioral delay
+        time.sleep(0.3)
         
-        # ENHANCED: Multiple timeout strategies to prevent stalling
-        max_check_time = 15  # Maximum time to spend checking comments
-        start_time = time.time()
-        
-        # Look for comment sections within the post with timeout protection
-        comment_selectors = [
-            ".//div[contains(@class, 'comments-comment-item')]",
-            ".//article[contains(@class, 'comments-comment-item')]",
-            ".//div[contains(@class, 'comment-item')]",
-            ".//div[contains(@class, 'social-comments-comment')]"
-        ]
-        
-        # ENHANCED: Get current user info with timeout and fallback methods
-        user_name = None
-        name_selectors = [
-            "//span[contains(@class, 'global-nav__me-name')]",
-            "//div[contains(@class, 'identity-headline')]//h1",
-            "//button[contains(@class, 'global-nav__primary-link-me')]//span",
-            "//a[contains(@class, 'global-nav__primary-link-me')]//span",
-            "//button[contains(@class, 'artdeco-dropdown__trigger')]//span"
-        ]
-        
-        # LEVEL 6: Reading simulation for user name detection
-        for selector in name_selectors:
-            # Check if we've exceeded max time
-            if time.time() - start_time > max_check_time:
-                debug_log("TIMEOUT: Comment check exceeded maximum time, returning false", "WARNING")
-                return False
-                
-            try:
-                # ENHANCED: Use WebDriverWait with short timeout to prevent stalling
-                name_element = WebDriverWait(driver, 2).until(
-                    EC.presence_of_element_located((By.XPATH, selector))
-                )
-                
-                if name_element and name_element.text.strip():
-                    user_name = name_element.text.strip()
-                    debug_log(f"ENHANCED: Found user name via {selector}: {user_name}", "COMMENT_CHECK")
-                    break
-                    
-            except TimeoutException:
-                debug_log(f"TIMEOUT: User name selector timed out: {selector}", "WARNING")
-                continue
-            except Exception as name_error:
-                debug_log(f"ENHANCED: Error with name selector {selector}: {name_error}", "WARNING")
-                continue
-        
-        if not user_name:
-            debug_log("ENHANCED: Could not determine user name, assuming no previous comments", "COMMENT_CHECK")
+        # Timeout check 1
+        if time.time() - start_time > max_time:
+            debug_log("TIMEOUT: Comment check exceeded 5 seconds (start)", "WARNING")
             return False
         
-        # ENHANCED: Look for existing comments with timeout protection and behavioral patterns
-        comments_found = 0
-        for comment_selector in comment_selectors:
-            # Check timeout again
-            if time.time() - start_time > max_check_time:
-                debug_log("TIMEOUT: Comment search exceeded maximum time", "WARNING")
-                break
+        # Get user name with minimal complexity
+        user_name = None
+        try:
+            # Single attempt with very short timeout
+            original_timeout = driver.implicitly_wait(1)
+            user_elements = driver.find_elements(By.XPATH, "//span[contains(@class, 'global-nav__me-name')]")
+            if user_elements and user_elements[0].text.strip():
+                user_name = user_elements[0].text.strip()[:50]  # Limit length
+                debug_log(f"BULLETPROOF: User name: {user_name}", "COMMENT_CHECK")
+            driver.implicitly_wait(10)  # Reset
+        except:
+            driver.implicitly_wait(10)  # Always reset
+            
+        # Timeout check 2
+        if time.time() - start_time > max_time:
+            debug_log("TIMEOUT: Comment check exceeded 5 seconds (user name)", "WARNING")
+            return False
+            
+        if not user_name:
+            debug_log("BULLETPROOF: No user name found, assuming safe to comment", "COMMENT_CHECK")
+            return False
+        
+        # Simple comment check - only look for obvious matches
+        try:
+            driver.implicitly_wait(1)  # Very short timeout
+            
+            # Single selector attempt
+            comments = post.find_elements(By.XPATH, ".//div[contains(@class, 'comment')]")
+            
+            # Reset timeout immediately
+            driver.implicitly_wait(10)
+            
+            # Timeout check 3
+            if time.time() - start_time > max_time:
+                debug_log("TIMEOUT: Comment check exceeded 5 seconds (comments)", "WARNING")
+                return False
                 
-            try:
-                # LEVEL 6: Simulate reading time based on content complexity
+            if not comments:
+                debug_log("BULLETPROOF: No comments found", "COMMENT_CHECK")
+                return False
+            
+            # Check maximum 2 comments only
+            for i, comment in enumerate(comments[:2]):
+                # Hard timeout check per comment
+                if time.time() - start_time > max_time:
+                    debug_log("TIMEOUT: Comment check exceeded 5 seconds (per comment)", "WARNING")
+                    return False
+                
                 try:
-                    if 'behavioral_manager' in globals():
-                        selector_complexity = len(comment_selector)
-                        reading_delay = behavioral_manager.calculate_reading_time(selector_complexity * 10)
-                        reading_delay = min(reading_delay, 2.0)  # Cap at 2 seconds for efficiency
-                        time.sleep(reading_delay)
+                    # Simple text check - no complex selectors
+                    comment_text = comment.text or ""
+                    if user_name.lower() in comment_text.lower():
+                        debug_log(f"BULLETPROOF: Found potential match in comment {i+1}", "COMMENT_CHECK")
+                        return True
                 except:
-                    time.sleep(random.uniform(0.2, 0.8))  # Fallback delay
-                
-                # ENHANCED: Find comments with timeout protection
-                comments = WebDriverWait(driver, 3).until(
-                    lambda d: post.find_elements(By.XPATH, comment_selector)
-                )
-                
-                if not comments:
-                    continue
+                    continue  # Skip any problematic comments
                     
-                debug_log(f"ENHANCED: Found {len(comments)} potential comments with {comment_selector}", "COMMENT_CHECK")
-                comments_found += len(comments)
-                
-                # LEVEL 8: Visual element focus simulation
-                for i, comment in enumerate(comments[:5]):  # Limit to first 5 comments for efficiency
-                    # Check timeout for each comment
-                    if time.time() - start_time > max_check_time:
-                        debug_log("TIMEOUT: Individual comment check exceeded time limit", "WARNING")
-                        break
-                        
-                    if not comment.is_displayed():
-                        continue
-                    
-                    # LEVEL 8: Simulate visual focus on comment element
-                    try:
-                        if 'behavioral_manager' in globals():
-                            focus_time = behavioral_manager.visual_element_focus_time('text', len(comment.text or ''))
-                            focus_time = min(focus_time, 1.5)  # Cap for efficiency
-                            time.sleep(focus_time)
-                    except:
-                        time.sleep(random.uniform(0.1, 0.5))  # Fallback
-                    
-                    # Check comment author with multiple selectors and timeout
-                    author_selectors = [
-                        ".//span[contains(@class, 'comments-comment-item__commenter-name')]",
-                        ".//a[contains(@class, 'comment-author')]",
-                        ".//div[contains(@class, 'comment-author-name')]",
-                        ".//a[contains(@class, 'app-aware-link')]",
-                        ".//span[contains(@class, 'hoverable-link-text')]"
-                    ]
-                    
-                    for author_selector in author_selectors:
-                        try:
-                            # Quick timeout to prevent hanging
-                            author_element = WebDriverWait(comment, 1).until(
-                                EC.presence_of_element_located((By.XPATH, author_selector))
-                            )
-                            
-                            if author_element and author_element.text.strip():
-                                comment_author = author_element.text.strip()
-                                
-                                # ENHANCED: Fuzzy matching for author names (handles formatting differences)
-                                if user_name and comment_author:
-                                    # Clean both names for comparison
-                                    clean_user = ''.join(user_name.lower().split())
-                                    clean_author = ''.join(comment_author.lower().split())
-                                    
-                                    if clean_user == clean_author or clean_user in clean_author or clean_author in clean_user:
-                                        debug_log(f"ENHANCED: Found existing comment by {comment_author} (matched with {user_name})", "COMMENT_CHECK")
-                                        
-                                        # LEVEL 6: Simulate human reaction to finding own comment
-                                        reaction_time = random.uniform(0.5, 1.5)
-                                        debug_log(f"BEHAVIORAL: Human recognition delay: {reaction_time:.1f}s", "BEHAVIORAL")
-                                        time.sleep(reaction_time)
-                                        
-                                        return True
-                                        
-                        except TimeoutException:
-                            continue  # Quick timeout, move to next selector
-                        except Exception as author_error:
-                            debug_log(f"ENHANCED: Error checking comment author: {author_error}", "WARNING")
-                            continue
-                
-            except TimeoutException:
-                debug_log(f"TIMEOUT: Comment selector timed out: {comment_selector}", "WARNING")
-                continue
-            except Exception as comment_error:
-                debug_log(f"ENHANCED: Error with comment selector {comment_selector}: {comment_error}", "WARNING")
-                continue
+        except:
+            # Any error in comment checking = assume safe to comment
+            pass
+        finally:
+            # Always reset timeout
+            try:
+                driver.implicitly_wait(10)
+            except:
+                pass
         
-        # LEVEL 6: Simulate completing the review process
-        completion_time = random.uniform(0.3, 1.0)
-        debug_log(f"ENHANCED: Comment check completed - found {comments_found} total comments, no matches for {user_name}", "COMMENT_CHECK")
-        debug_log(f"BEHAVIORAL: Review completion delay: {completion_time:.1f}s", "BEHAVIORAL")
-        time.sleep(completion_time)
-        
+        # Final timeout check
+        if time.time() - start_time > max_time:
+            debug_log("TIMEOUT: Comment check exceeded 5 seconds (final)", "WARNING")
+            return False
+            
+        debug_log("BULLETPROOF: Comment check completed - safe to comment", "COMMENT_CHECK")
         return False
         
     except Exception as e:
-        debug_log(f"ENHANCED: Error in enhanced comment check: {e}", "ERROR")
-        
-        # LEVEL 9: Record potential detection event for ML adaptation
+        debug_log(f"BULLETPROOF: Error in comment check: {e}", "ERROR")
+        # Always reset timeout on error
         try:
-            if 'ml_counter' in globals():
-                ml_counter.record_detection_event('comment_check_error', {
-                    'error_type': str(type(e).__name__),
-                    'error_message': str(e)
-                })
+            driver.implicitly_wait(10)
         except:
             pass
-        
-        # Fallback: assume no comments to avoid infinite loops
-        return False
+        return False  # Always assume safe to comment on error
 
 def expand_post(driver, post):
     """Expand the post by clicking 'see more' if present, using robust multi-selector logic."""

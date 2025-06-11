@@ -2155,7 +2155,7 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
     
     return final_score
 
-def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=60, time_filter=None):
+def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=20, time_filter=None):
     """Determine if a post is worth commenting on based on score."""
     score = calculate_post_score(post_text, author_name, time_filter)
     print(f"[APP_OUT]⚖️ Post scored: {score}/100 (min required: {min_score})")
@@ -3208,7 +3208,7 @@ def process_posts(driver):
                         continue
                     
                     # Use the standalone should_comment_on_post function
-                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=50, time_filter=time_filter)
+                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=20, time_filter=time_filter)
                     
                     if not should_comment:
                         print(f"[APP_OUT]⏭️ Skipping post - score {final_score:.1f} below threshold")

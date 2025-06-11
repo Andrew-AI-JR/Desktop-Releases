@@ -4877,24 +4877,21 @@ def save_log(processed_posts):
         debug_log(f"Error saving processed posts log: {e}", "ERROR")
 
 def get_comment_history_path():
-    """
-    Get the path for the comment history file using the same logic as log files.
-    Creates the directory if it doesn't exist.
-    """
+    """Get comment history path using EXACTLY the same logic as get_default_log_path()."""
     try:
         # Always try to use the user's home directory first, regardless of PyInstaller
         home_dir = os.path.expanduser("~")
         if home_dir and home_dir != "~":  # Make sure expansion worked
-            comment_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
-            os.makedirs(comment_dir, exist_ok=True)
-            return os.path.join(comment_dir, "comment_history.json")
+            log_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            return os.path.join(log_dir, "comment_history.json")
         else:
             # Home directory expansion failed, use current directory
             return os.path.join(os.getcwd(), "comment_history.json")
             
     except Exception as e:
         # Absolute fallback to current directory
-        print(f"Warning: Could not create comment history directory, using current directory: {e}")
+        print(f"Warning: Could not create log directory, using current directory: {e}")
         return "comment_history.json"
 
 def load_comment_history():

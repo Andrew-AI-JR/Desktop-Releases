@@ -3148,6 +3148,11 @@ def process_posts(driver):
         print(f"[APP_OUT]📝 Loaded {len(processed_log)} processed posts and {len(comment_history)} comment records")
         debug_log(f"Loaded {len(processed_log)} processed posts and {len(comment_history)} comments", "DATA")
         
+        # CRITICAL: Ensure comment history file exists from the start
+        debug_log("💾 Creating/updating comment history file to ensure Dashboard can read it", "INIT")
+        print("[APP_OUT]💾 Initializing comment history file for Dashboard...")
+        save_comment_history(comment_history)
+        
         # Get current URL and extract time filter
         current_url = driver.current_url
         time_filter = None
@@ -4926,14 +4931,31 @@ def save_comment_history(history):
         if comment_dir and comment_dir != '':
             os.makedirs(comment_dir, exist_ok=True)
             debug_log(f"📁 Created/verified directory: {comment_dir}", "DATA")
+            print(f"[APP_OUT]📁 Created/verified directory: {comment_dir}")
+            
+        # Additional validation
+        if not isinstance(history, dict):
+            debug_log(f"⚠️ Warning: history is not a dict, converting. Type: {type(history)}", "WARNING")
+            history = {} if history is None else dict(history)
             
         with open(history_path, 'w', encoding='utf-8') as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
-        debug_log(f"✅ Saved {len(history)} comments to history at {history_path}", "DATA")
-        print(f"[APP_OUT]✅ Successfully saved {len(history)} comments to history file")
+        
+        # Verify the file was actually created
+        if os.path.exists(history_path):
+            file_size = os.path.getsize(history_path)
+            debug_log(f"✅ Saved {len(history)} comments to history at {history_path} (size: {file_size} bytes)", "DATA")
+            print(f"[APP_OUT]✅ Successfully saved {len(history)} comments to history file ({file_size} bytes)")
+        else:
+            debug_log(f"❌ File was not created: {history_path}", "ERROR")
+            print(f"[APP_OUT]❌ File was not created: {history_path}")
+        
     except Exception as e:
         debug_log(f"❌ Error saving comment history: {e}", "ERROR")
         print(f"[APP_OUT]❌ Failed to save comment history: {e}")
+        # Try to provide more details about the error
+        import traceback
+        debug_log(f"❌ Comment history save traceback: {traceback.format_exc()}", "ERROR")
 
 def save_cookies(driver, path="linkedin_cookies.json"):
     """Save browser cookies to a file."""

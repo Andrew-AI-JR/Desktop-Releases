@@ -714,14 +714,26 @@ const automationService = {
 
         // Handle process termination event
         const onProcessExit = () => {
-          clearTimeout(forceCleanupTimeout);
-          global.pythonProcess = null;
-          global.isAutomationRunning = false;
-          console.log('[stopAutomation] Process terminated successfully');
-          resolve({
-            success: true,
-            message: 'Automation stopped successfully',
-          });
+          try {
+            clearTimeout(forceCleanupTimeout);
+            global.pythonProcess = null;
+            global.isAutomationRunning = false;
+            console.log('[stopAutomation] Process terminated successfully');
+            resolve({
+              success: true,
+              message: 'Automation stopped successfully',
+            });
+          } catch (exitError) {
+            console.error('[stopAutomation] Error in onProcessExit:', exitError);
+            // Still resolve successfully to prevent unhandled rejection
+            global.pythonProcess = null;
+            global.isAutomationRunning = false;
+            resolve({
+              success: true,
+              message: 'Automation stopped (with cleanup warning)',
+              warning: exitError.message,
+            });
+          }
         };
 
         // Listen for process exit (only if process still exists)

@@ -2733,7 +2733,7 @@ def main():
                         search_tracker.record_url_performance(dummy_url, success=False, comments_made=0, error=True)
                         continue # Move to the next keyword
 
-                                            try:
+                    try:
                         app_out("🔍 Starting post analysis and commenting...")
                         app_out("🚀 CALLING process_posts() function...")
                         debug_log("About to call process_posts() function", "DEBUG")

@@ -1621,7 +1621,6 @@ class CommentGenerator:
     
     def _generate_fallback_comment(self, post_text, calendly_link):
         """Generate a high-quality fallback comment with maximum variety and authenticity."""
-        import random
         
         post_lower = post_text.lower()
         
@@ -1812,7 +1811,6 @@ class CommentGenerator:
     
     def _generate_simple_fallback(self, post_text, calendly_link):
         """Generate a simple but professional fallback comment when all else fails."""
-        import random
         
         simple_templates = [
             "Thanks for sharing this! Really valuable insights.",
@@ -2502,7 +2500,6 @@ def main():
                     search_keywords = ["technology", "software", "business"]
                 
                 # Anti-detection: Randomize keyword order
-                import random
                 search_keywords = search_keywords.copy()  # Don't modify original
                 random.shuffle(search_keywords)
                 

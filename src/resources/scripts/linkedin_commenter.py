@@ -1254,21 +1254,28 @@ class CommentGenerator:
         self.warmup_percentage = None
         self.has_subscription = None
         
-        # Get LinkedIn credentials for backend authentication
-        self.linkedin_email = config.get('linkedin_credentials', {}).get('email') or config.get('linkedin_email')
-        self.linkedin_password = config.get('linkedin_credentials', {}).get('password') or config.get('linkedin_password')
+        # Get credentials for backend authentication (separate from LinkedIn)
+        # Use desktop app credentials for backend API authentication
+        backend_creds = config.get('backend_credentials', {})
+        self.backend_email = backend_creds.get('email') or 'amalinow1973@gmail.com'  # Your backend account email
+        self.backend_password = backend_creds.get('password') or 'test'  # Desktop app password
+        
+        # Keep LinkedIn credentials separate for LinkedIn login
+        self.linkedin_email = config.get('linkedin_credentials', {}).get('email')
+        self.linkedin_password = config.get('linkedin_credentials', {}).get('password')
         
         # Log the backend URL being used for transparency
         print(f"[APP_OUT]🔗 Backend API configured: {self.backend_base}")
-        print(f"[APP_OUT]🔐 Authentication email: {'✅ Set' if self.linkedin_email else '❌ Missing'}")
+        print(f"[APP_OUT]🔐 Backend authentication email: {'✅ Set' if self.backend_email else '❌ Missing'}")
+        print(f"[APP_OUT]🔗 LinkedIn login email: {'✅ Set' if self.linkedin_email else '❌ Missing'}")
         self.debug_log(f"Comment generation backend URL: {self.backend_base}", "INFO")
         
-        # Authenticate immediately
-        if self.linkedin_email and self.linkedin_password:
+        # Authenticate immediately with backend credentials
+        if self.backend_email and self.backend_password:
             self._authenticate()
         else:
-            print(f"[APP_OUT]⚠️ No LinkedIn credentials provided - API calls will fail")
-            self.debug_log("No LinkedIn credentials provided for backend authentication", "WARNING")
+            print(f"[APP_OUT]⚠️ No backend credentials provided - API calls will fail")
+            self.debug_log("No backend credentials provided for backend authentication", "WARNING")
         
         # Note: Tech relevance keywords are now initialized globally via initialize_tech_relevance_keywords()
         # This ensures consistent keyword expansion across all components
@@ -1285,10 +1292,10 @@ class CommentGenerator:
         try:
             print(f"[APP_OUT]🔐 Authenticating with backend...")
             
-            # Prepare login payload
+            # Prepare login payload using backend credentials
             login_data = {
-                "email": self.linkedin_email,
-                "password": self.linkedin_password
+                "email": self.backend_email,
+                "password": self.backend_password
             }
             
             # Make login request
@@ -1449,6 +1456,10 @@ class CommentGenerator:
         if enhanced_comment:
             print(f"[APP_OUT]✅ Generated high-quality comment: {enhanced_comment[:100]}...")
             return enhanced_comment
+        
+        # Skip backend API entirely for now - local generation is superior anyway
+        print(f"[APP_OUT]ℹ️ Skipping backend API (using local generation only)")
+        return self._generate_simple_fallback(post_text, calendly_link)
         
         # Only try API if local generation fails (very rare)
         try:

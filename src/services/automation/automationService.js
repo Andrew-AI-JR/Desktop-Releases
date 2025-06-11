@@ -382,11 +382,11 @@ const automationService = {
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
       };
 
-      // Run system Python
+      // Run system Python with unbuffered output for immediate GUI updates
       const pythonExecutable = pythonBundleService.getFallbackPython();
       const pythonProcess = spawn(
         pythonExecutable,
-        [scriptPath, '--config', configPath],
+        ['-u', scriptPath, '--config', configPath], // -u flag for unbuffered output
         { env }
       );
 

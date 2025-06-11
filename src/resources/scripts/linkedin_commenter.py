@@ -35,6 +35,20 @@ import shutil
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 
+# Configure stdout for immediate flushing (critical for GUI updates)
+sys.stdout.reconfigure(line_buffering=True)
+
+# =====================
+# CRITICAL FIX: APP_OUT Helper Function
+# =====================
+def app_out(message):
+    """
+    Print message with [APP_OUT] prefix and immediate flush.
+    This ensures the Electron GUI receives updates immediately.
+    """
+    print(f"[APP_OUT]{message}")
+    sys.stdout.flush()  # CRITICAL: Force immediate flush to Electron process
+
 # Load environment variables from .env file (for production builds)
 try:
     from dotenv import load_dotenv
@@ -2669,16 +2683,16 @@ def main():
                         
                         # Check for login issues
                         if any(issue_keyword in page_source_snippet for issue_keyword in ['sign in', 'log in', 'join linkedin']):
-                            print("[APP_OUT]🔐 DETECTED: Login required")
+                            app_out("🔐 DETECTED: Login required")
                             debug_log("Login required - authentication issue", "WARNING")
                         
                         # Check for rate limiting/blocking
                         if any(issue_keyword in page_source_snippet for issue_keyword in ['blocked', 'rate limit', 'too many requests', 'captcha']):
-                            print("[APP_OUT]🚫 DETECTED: Possible rate limiting or blocking")
+                            app_out("🚫 DETECTED: Possible rate limiting or blocking")
                             debug_log("Rate limiting or blocking detected", "WARNING")
                         
                         # Look for search results with flexible selectors
-                        print("[APP_OUT]⏳ Waiting for search results...")
+                        app_out("⏳ Waiting for search results...")
                         try:
                             # Try multiple selectors for search results
                             result_selectors = [
@@ -2695,14 +2709,14 @@ def main():
                                     WebDriverWait(driver, 10).until(
                                         EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                                     )
-                                    print(f"[APP_OUT]✅ Search results found with selector: {selector}")
+                                    app_out(f"✅ Search results found with selector: {selector}")
                                     search_results_found = True
                                     break
                                 except:
                                     continue
                             
                             if not search_results_found:
-                                print("[APP_OUT]⚠️ No standard search results container found")
+                                app_out("⚠️ No standard search results container found")
                                 debug_log("No standard search results container found", "WARNING")
                                 
                         except Exception as results_error:
@@ -2719,9 +2733,9 @@ def main():
                         search_tracker.record_url_performance(dummy_url, success=False, comments_made=0, error=True)
                         continue # Move to the next keyword
 
-                    try:
-                        print("[APP_OUT]🔍 Starting post analysis and commenting...")
-                        print("[APP_OUT]🚀 CALLING process_posts() function...")
+                                            try:
+                        app_out("🔍 Starting post analysis and commenting...")
+                        app_out("🚀 CALLING process_posts() function...")
                         debug_log("About to call process_posts() function", "DEBUG")
                         # Process posts on the current page
                         posts_processed, hiring_posts_found = process_posts(driver)
@@ -2901,9 +2915,9 @@ def find_posts(driver):
     Returns:
         list: List of WebElement objects representing posts
     """
-    print("[APP_OUT]🔥 FIND_POSTS FUNCTION CALLED - STARTING SEARCH...")
+    app_out("🔥 FIND_POSTS FUNCTION CALLED - STARTING SEARCH...")
     debug_log("Starting post search on current page...", "SEARCH")
-    print("[APP_OUT]🔍 Searching for posts on page...")
+    app_out("🔍 Searching for posts on page...")
     posts = []
     
     # Wait for the page to load and any spinners to disappear
@@ -3124,9 +3138,9 @@ def is_element_visible(driver, element):
 
 def process_posts(driver):
     """Process visible posts on the current page with continuous scrolling."""
-    print("[APP_OUT]🔥 PROCESS_POSTS FUNCTION CALLED - STARTING...")
+    app_out("🔥 PROCESS_POSTS FUNCTION CALLED - STARTING...")
     debug_log("Starting post processing with continuous scrolling", "PROCESS")
-    print("[APP_OUT]🔍 Processing LinkedIn posts...")
+    app_out("🔍 Processing LinkedIn posts...")
     posts_processed = 0
     hiring_posts_found = 0
     posts_commented = 0
@@ -3150,7 +3164,7 @@ def process_posts(driver):
             except Exception as e:
                 debug_log(f"Error extracting time filter from URL: {e}", "WARNING")
         
-        print("[APP_OUT]🔄 Starting continuous scroll and post discovery...")
+        app_out("🔄 Starting continuous scroll and post discovery...")
         
         # Continuous scrolling and post processing with better logic
         processed_posts_this_session = set()
@@ -3159,13 +3173,13 @@ def process_posts(driver):
         posts_found_last_cycle = 0
         
         while scroll_attempts < max_scroll_attempts:
-            print(f"[APP_OUT]🔄 SCROLL LOOP ITERATION {scroll_attempts + 1}/{max_scroll_attempts}")
+            app_out(f"🔄 SCROLL LOOP ITERATION {scroll_attempts + 1}/{max_scroll_attempts}")
             debug_log(f"Scroll attempt {scroll_attempts + 1}/{max_scroll_attempts}", "SCROLL")
             
             # Find posts with retry logic
-            print(f"[APP_OUT]🔍 Calling find_posts() in scroll loop...")
+            app_out(f"🔍 Calling find_posts() in scroll loop...")
             posts = find_posts(driver)
-            print(f"[APP_OUT]📊 find_posts() returned {len(posts)} posts")
+            app_out(f"📊 find_posts() returned {len(posts)} posts")
             current_post_count = len(posts)
             
             print(f"[APP_OUT]📋 Found {current_post_count} posts on current page (scroll {scroll_attempts + 1}/{max_scroll_attempts})")

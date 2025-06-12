@@ -1269,6 +1269,10 @@ class CommentGenerator:
         self.warmup_week = None
         self.warmup_percentage = None
         self.has_subscription = None
+
+        # Check for access token first (provided by Electron app)
+        self.access_token = config.get('access_token')
+        
         
         # Get credentials for backend authentication (separate from LinkedIn)
         # Use desktop app credentials for backend API authentication
@@ -1286,16 +1290,23 @@ class CommentGenerator:
         print(f"[APP_OUT]🔗 LinkedIn login email: {'✅ Set' if self.linkedin_email else '❌ Missing'}")
         self.debug_log(f"Comment generation backend URL: {self.backend_base}", "INFO")
         
-        # Authenticate immediately with backend credentials
-        if self.backend_email and self.backend_password:
+        # Check authentication status
+        if self.access_token:
+            print(f"[APP_OUT]🔐 Backend authentication: ✅ Access token provided")
+            self.debug_log("Using provided access token for backend authentication", "INFO")
+            # Verify the token works
+            self._verify_authentication()
+        elif self.backend_email and self.backend_password:
+            print(f"[APP_OUT]🔐 Backend authentication email: ✅ Set")
+            print(f"[APP_OUT]🔐 Authenticating with email/password...")
             self._authenticate()
         else:
-            print(f"[APP_OUT]⚠️ No backend credentials provided - API calls will fail")
-            self.debug_log("No backend credentials provided for backend authentication", "WARNING")
+            print(f"[APP_OUT]🔐 Backend authentication: ❌ No access token or credentials provided")
+            print(f"[APP_OUT]⚠️ API calls will fail without authentication")
+            self.debug_log("No access token or backend credentials provided for backend authentication", "WARNING")
         
-        # Note: Tech relevance keywords are now initialized globally via initialize_tech_relevance_keywords()
-        # This ensures consistent keyword expansion across all components
-        self.debug_log(f"CommentGenerator initialized with job keywords: {job_keywords}", "DEBUG")
+        print(f"[APP_OUT]🔗 LinkedIn login email: {'✅ Set' if self.linkedin_email else '❌ Missing'}")
+        self.debug_log(f"Comment generation backend URL: {self.backend_base}", "INFO")
 
     def debug_log(self, message, level="INFO"):
         if 'debug_log' in globals():
@@ -4877,21 +4888,26 @@ def save_log(processed_posts):
         debug_log(f"Error saving processed posts log: {e}", "ERROR")
 
 def get_comment_history_path():
-    """Get comment history path using EXACTLY the same logic as get_default_log_path()."""
+    """Get comment history path in the SAME directory as linkedin_commenter.log (OneDrive-aware)."""
     try:
-        # Always try to use the user's home directory first, regardless of PyInstaller
-        home_dir = os.path.expanduser("~")
-        if home_dir and home_dir != "~":  # Make sure expansion worked
-            log_dir = os.path.join(home_dir, "Documents", "JuniorAI", "logs")
-            os.makedirs(log_dir, exist_ok=True)
-            return os.path.join(log_dir, "comment_history.json")
-        else:
-            # Home directory expansion failed, use current directory
-            return os.path.join(os.getcwd(), "comment_history.json")
-            
+        # CRITICAL: Use the exact same directory where linkedin_commenter.log is actually saved
+        # This handles OneDrive folder redirection automatically
+        linkedin_log_path = get_default_log_path()
+        log_dir = os.path.dirname(linkedin_log_path)
+        
+        # Ensure the directory exists (it should, since linkedin_commenter.log works)
+        os.makedirs(log_dir, exist_ok=True)
+        
+        comment_history_path = os.path.join(log_dir, "comment_history.json")
+        debug_log(f"🔗 Using SAME directory as linkedin_commenter.log: {log_dir}", "INIT")
+        print(f"[APP_OUT]🔗 Comment history will be saved alongside linkedin_commenter.log in: {log_dir}")
+        
+        return comment_history_path
+        
     except Exception as e:
         # Absolute fallback to current directory
-        print(f"Warning: Could not create log directory, using current directory: {e}")
+        print(f"Warning: Could not determine log directory, using current directory: {e}")
+        debug_log(f"Error determining comment history path: {e}", "ERROR")
         return "comment_history.json"
 
 def load_comment_history():

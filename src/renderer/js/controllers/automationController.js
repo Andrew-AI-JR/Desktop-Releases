@@ -64,11 +64,7 @@ export class AutomationController {
       // Get other configuration values
       const calendlyLink = this.calendlyUrlInput.value.trim();
       const userBio = this.userBioInput.value.trim();
-      const jobKeywordsRaw = this.keywordsInput.value.trim();
-      // Convert comma-separated string to array for Python script
-      const jobKeywords = jobKeywordsRaw 
-        ? jobKeywordsRaw.split(',').map(keyword => keyword.trim()).filter(keyword => keyword.length > 0)
-        : [];
+      const jobKeywords = this.keywordsInput.value.trim();
       const rememberCredentials = this.rememberCredentialsInput.checked;
 
       // Update UI state
@@ -77,12 +73,27 @@ export class AutomationController {
 
       // Create configuration object
       const config = {
-        linkedin_email: email,
-        linkedin_password: password,
-        remember_credentials: rememberCredentials,
-        calendly_link: calendlyLink,
-        user_bio: userBio,
-        job_keywords: jobKeywords,
+        credentials: {
+          email,
+          password,
+        },
+        rememberCredentials: rememberCredentials,
+        userInfo: {
+          calendlyLink,
+          bio: userBio,
+          jobKeywords,
+        },
+        limits: {
+          dailyComments: 50, // Using hardcoded values as requested
+          sessionComments: 10,
+          commentsPerCycle: 3,
+        },
+        timing: {
+          scrollPauseTime: 5,
+          shortSleepSeconds: 180,
+        },
+        debugMode: true,
+        searchUrls: [], // The Python script will generate these based on keywords
       };
 
       // Start automation through the API
@@ -141,33 +152,43 @@ export class AutomationController {
   async stopAutomation() {
     try {
       this.log('Stopping automation...');
+      this.stopButton.disabled = true; // Disable button while processing
 
       // Call API to stop automation
       const result = await window.api.automation.stopAutomation();
+
+      // Log the raw result for debugging
+      console.log('[stopAutomation] Raw result:', result);
 
       // Check for error property first
       if (result && result.error) {
         const errorMessage = result.message || 'Failed to stop automation';
         this.log(`Error stopping automation: ${errorMessage}`);
-        this.setRunningState(false);
         return;
       }
 
+      // Handle all success cases
       if (result && result.success) {
-        this.log('Automation stopped successfully.');
+        // Log the specific message from the backend
+        this.log(result.message || 'Automation stopped successfully.');
+        
+        // Log warning if present
+        if (result.warning) {
+          this.log(`Warning: ${result.warning}`);
+        }
       } else {
         const errorMessage = result.message || 'Failed to stop automation';
         this.log(`Error stopping automation: ${errorMessage}`);
       }
     } catch (error) {
-      // Only handles actual exceptions now
+      // Handle unexpected errors
       console.error('[stopAutomation] Exception stopping automation:', error);
-      const errorMessage =
-        error?.message || 'Unexpected error stopping automation';
+      const errorMessage = error?.message || 'Unexpected error stopping automation';
       this.log(`Exception stopping automation: ${errorMessage}`);
     } finally {
-      // Reset UI state
+      // Always reset UI state
       this.setRunningState(false);
+      this.stopButton.disabled = false; // Re-enable button
     }
   }
 

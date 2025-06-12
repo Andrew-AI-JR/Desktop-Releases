@@ -2,24 +2,14 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow } = require('electron');
-
-// Persistent file logger for debugging Python process events
-const logToFile = (msg) => {
-  try {
-    const logPath = path.join(app.getPath('userData'), 'main.log');
-    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
-  } catch (e) {
-    // Ignore logging errors
-  }
-};
 const pythonDependencyService = require('./pythonDependencyService');
 const pythonBundleService = require('./pythonBundleService');
 const errorCodes = require('./errorCodes');
-const apiClient = require('../api/apiClient');
 const tokenManager = require('../auth/tokenManager');
-// Track the running process - use global variables to ensure consistency across app lifecycle
-global.pythonProcess = global.pythonProcess || null;
+
+// Initialize global automation state
 global.isAutomationRunning = global.isAutomationRunning || false;
+global.pythonProcess = global.pythonProcess || null;
 
 // Persistent configuration path
 const getPersistentConfigPath = () => {
@@ -37,22 +27,9 @@ const automationService = {
    * @returns {string} Path to writable log file
    */
   getLogFilePath() {
-    // Try to use the user's Documents folder first
-    const userDocumentsPath = app.getPath('documents');
-    const defaultLogPath = path.join(userDocumentsPath, 'JuniorAI', 'logs', 'linkedin_commenter.log');
-    
-    try {
-      // Create the logs directory
-      const logDir = path.dirname(defaultLogPath);
-      fs.mkdirSync(logDir, { recursive: true });
-      return defaultLogPath;
-    } catch (e) {
-      console.error(`[getLogFilePath] Error creating directory ${logDir}:`, e);
-      // Fallback to userData if creating desired path fails
-      const fallbackDir = path.join(app.getPath('userData'), 'JuniorAI', 'logs');
-      fs.mkdirSync(fallbackDir, { recursive: true });
-      return path.join(fallbackDir, 'linkedin_commenter.log');
-    }
+    const juniorDir = path.join(app.getPath('userData'), 'JuniorAI');
+    fs.mkdirSync(juniorDir, { recursive: true });
+    return path.join(juniorDir, 'linkedin_commenter.log');
   },
 
   /**
@@ -68,82 +45,15 @@ const automationService = {
   },
 
   /**
-   * Check subscription status and limits before running automation.
-   * @private
-   */
-  async _checkSubscriptionLimits() {
-    try {
-      // First check if we have a valid token
-      const accessToken = await tokenManager.getAccessToken();
-      if (!accessToken) {
-        throw {
-          message: 'Please log in to use the automation feature',
-          status: errorCodes.UNAUTHORIZED,
-        };
-      }
-
-      const response = await apiClient.get('/api/users/me');
-      const userData = response.data;
-
-      // Check for an active subscription using is_active field
-      if (!userData || !userData.is_active) {
-        throw {
-          message: 'No active subscription found',
-          status: errorCodes.NO_SUBSCRIPTION,
-        };
-      }
-
-      return true; // All checks passed.
-    } catch (error) {
-      // Handle specific error cases
-      if (error.response?.status === 401) {
-        throw {
-          message: 'Please log in to use the automation feature',
-          status: errorCodes.UNAUTHORIZED,
-        };
-      }
-
-      // If the error already has a message, re-throw it
-      if (error.message) {
-        throw error;
-      }
-
-      console.error(
-        '[_checkSubscriptionLimits] Error checking subscription status:',
-        error
-      );
-      throw {
-        message: 'Could not verify subscription status. Please try again later.',
-        status: 500,
-      };
-    }
-  },
-
-  /**
    * Run LinkedIn automation to post comments
    * @param {Object} config - Automation configuration
    * @returns {Promise<Object>} Result of the automation
    */
   async runLinkedInAutomation(config) {
-  logToFile(`[AutomationService] runLinkedInAutomation called with config: ${JSON.stringify(config)}`);
     await this._cleanupStaleProcess();
 
     if (global.isAutomationRunning) {
       throw new Error('Automation is already running');
-    }
-
-    // First, verify subscription and limits.
-    try {
-      await this._checkSubscriptionLimits();
-    } catch (error) {
-      console.error('[runLinkedInAutomation] Subscription check failed:', error);
-      // Reject the promise to send the error back to the controller.
-      return Promise.reject({
-        message:
-          error.message ||
-          'An error occurred while verifying your subscription.',
-        status: error.status || 500,
-      });
     }
 
     // Save configuration for future use if remember credentials is checked
@@ -171,12 +81,6 @@ const automationService = {
             return;
           }
 
-          // Fetch access token for backend authentication
-          const accessToken = await tokenManager.getAccessToken();
-          if (!accessToken) {
-            logToFile('[AutomationService] Backend access token not found. Automation may fail.');
-          }
-
           // Create a temporary config file to pass to the Python script
           configPath = await this.createConfigFile(config);
 
@@ -199,17 +103,11 @@ const automationService = {
             }
           };
 
-          // Append access token to config for Python script execution
-          const executionConfig = {
-            ...config,
-            accessToken, // Add token for backend auth
-          };
-
           // Clear separation: Development vs Production mode
           if (app.isPackaged) {
             // PRODUCTION MODE: Only use bundled Python and bundled script
             await this._runProductionMode(
-              executionConfig,
+              config,
               configPath,
               sendLogMessage,
               resolve,
@@ -218,7 +116,7 @@ const automationService = {
           } else {
             // DEVELOPMENT MODE: Use system Python and development script
             await this._runDevelopmentMode(
-              executionConfig,
+              config,
               configPath,
               sendLogMessage,
               resolve,
@@ -307,34 +205,28 @@ const automationService = {
       // Get writable paths for logs and Chrome profile
       const logFilePath = this.getLogFilePath();
       const chromeProfilePath = this.getChromeProfilePath();
-      const chromePath = this.getBundledChromePath();
 
       // Create environment with writable paths
       const env = {
         ...process.env,
         LINKEDIN_LOG_FILE: logFilePath,
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
-        CHROME_PATH: chromePath || '', // Pass Chrome path to Python script
       };
 
-      // Construct arguments for Python script
-      const scriptArgs = this._buildScriptArguments(config, configPath, true);
-      logToFile(`[Production] Executing with args: ${JSON.stringify(scriptArgs)}`);
-
-      // Run bundled Python with config
+      // Run bundled executable directly (no script path needed - it's compiled in)
       const pythonProcess = pythonBundleService.runBundledPython(
-        scriptArgs.slice(1), // Remove the script path itself, as runBundledPython prepends it
+        ['--config', configPath], // Only pass the config, not the script path
         { env }
       );
 
-      // Get script path for handlers
-      const scriptPath = pythonBundleService.getScriptPath();
+      // For the handlers, we'll use the executable path as the "script path"
+      const executablePath = pythonBundleService.getBundledPythonPath();
 
       this._setupProcessHandlers(
         pythonProcess,
         configPath,
         true,
-        scriptPath,
+        executablePath, // Use executable path instead of script path
         sendLogMessage,
         resolve,
         reject
@@ -398,15 +290,11 @@ const automationService = {
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
       };
 
-      // Construct arguments for Python script
-      const scriptArgs = this._buildScriptArguments(config, configPath, false);
-      logToFile(`[Development] Executing: ${pythonExecutable} with args: ${JSON.stringify(scriptArgs)}`);
-
       // Run system Python with unbuffered output for immediate GUI updates
       const pythonExecutable = pythonBundleService.getFallbackPython();
       const pythonProcess = spawn(
         pythonExecutable,
-        ['-u', ...scriptArgs], // -u flag for unbuffered output
+        ['-u', scriptPath, '--config', configPath], // -u flag for unbuffered output
         { env }
       );
 
@@ -453,7 +341,6 @@ const automationService = {
       const output = data.toString();
       stdoutData += output;
       console.log('[Python] stdout:', output);
-      logToFile('[Python] stdout: ' + output);
       const trimmedOutput = data.toString().trim();
       if (trimmedOutput.startsWith('[APP_OUT]')) {
         const appMessage = trimmedOutput.substring('[APP_OUT]'.length).trim();
@@ -467,7 +354,6 @@ const automationService = {
       const output = data.toString();
       stderrData += output;
       console.error('[Python] stderr:', output);
-      logToFile('[Python] stderr: ' + output);
 
       if (global.mainWindow) {
         global.mainWindow.webContents.send('automation-log', {
@@ -478,120 +364,57 @@ const automationService = {
     });
 
     pythonProcess.on('close', code => {
-      try {
-        global.isAutomationRunning = false;
-        global.pythonProcess = null;
-        this.cleanupConfigFile(configPath);
-        
-        // Check for errors even if exit code is 0
-        logToFile(`[Python] process exited with code: ${code}`);
-        console.log(`[_setupProcessHandlers] Python process closed with code: ${code}`);
-        
-        if (code === 0) {
-          resolve({
-            success: true,
-            message: errorCodes[code] || 'Process completed successfully',
-            output: stdoutData,
-          });
-        } else {
-          const errorDetails = {
-            message: errorCodes[code] || 'Unknown error occurred',
-            exitCode: code,
-            stdout: stdoutData,
-            stderr: stderrData,
-            usedBundled: useBundled,
-            scriptPath,
-          };
-
-          console.error(
-            '[_setupProcessHandlers] Python process exit error:',
-            errorDetails
-          );
-          
-          try {
-            logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails));
-            logToFile('[Python] process exit error: ' + JSON.stringify(errorDetails), 'main.log');
-          } catch (logError) {
-            console.warn('[_setupProcessHandlers] Logging error during close event:', logError.message);
-          }
-          
-          reject(errorDetails);
-        }
-      } catch (closeError) {
-        console.error('[_setupProcessHandlers] Error in close handler:', closeError);
-        // Force reset state to prevent stuck conditions
-        global.isAutomationRunning = false;
-        global.pythonProcess = null;
-        
-        // Always try to cleanup config file
-        try {
-          this.cleanupConfigFile(configPath);
-        } catch (cleanupError) {
-          console.warn('[_setupProcessHandlers] Config cleanup error:', cleanupError.message);
-        }
-        
-        // Reject with safe error details
-        reject({
-          message: 'Process handler error during cleanup',
-          originalError: closeError.message,
-          exitCode: code || -1,
-          status: 500,
+      global.isAutomationRunning = false;
+      global.pythonProcess = null;
+      this.cleanupConfigFile(configPath);
+      // Check for errors even if exit code is 0
+      if (code === 0) {
+        resolve({
+          success: true,
+          message: errorCodes[code],
+          output: stdoutData,
         });
+      } else {
+        const errorDetails = {
+          message: errorCodes[code] || 'Unknown error occurred',
+          exitCode: code,
+          stdout: stdoutData,
+          stderr: stderrData,
+          usedBundled: useBundled,
+          scriptPath,
+        };
+
+        console.error(
+          '[_setupProcessHandlers] Python process exit error:',
+          errorDetails
+        );
+        reject(errorDetails);
       }
     });
 
     pythonProcess.on('error', error => {
-      try {
-        global.isAutomationRunning = false;
-        global.pythonProcess = null;
-        this.cleanupConfigFile(configPath);
+      global.isAutomationRunning = false;
+      global.pythonProcess = null;
+      this.cleanupConfigFile(configPath);
 
-        const errorDetails = {
-          message: 'Failed to start LinkedIn automation process',
-          originalError: error.message,
-          exitCode: error.code,
-          errorType: error.name,
-          usedBundled: useBundled,
-          scriptPath,
-          platform: process.platform,
-          arch: process.arch,
-          status: 500,
-        };
+      const errorDetails = {
+        message: 'Faile to start LinkedIn automation process',
+        originalError: error.message,
+        exitCode: error.code,
+        errorType: error.name,
+        usedBundled: useBundled,
+        scriptPath,
+        platform: process.platform,
+        arch: process.arch,
+        status: 500,
+      };
 
-        console.error(
-          '[_setupProcessHandlers] Python process error:',
-          errorDetails
-        );
-        
-        try {
-          logToFile('[Python] process error: ' + JSON.stringify(errorDetails));
-          sendLogMessage(`Process error: ${error.message}`);
-        } catch (logError) {
-          console.warn('[_setupProcessHandlers] Logging error during error event:', logError.message);
-        }
-        
-        reject(errorDetails);
-      } catch (errorHandlerError) {
-        console.error('[_setupProcessHandlers] Error in error handler:', errorHandlerError);
-        // Force reset state to prevent stuck conditions
-        global.isAutomationRunning = false;
-        global.pythonProcess = null;
-        
-        // Always try to cleanup config file
-        try {
-          this.cleanupConfigFile(configPath);
-        } catch (cleanupError) {
-          console.warn('[_setupProcessHandlers] Config cleanup error in error handler:', cleanupError.message);
-        }
-        
-        // Reject with safe error details
-        reject({
-          message: 'Critical error in process error handler',
-          originalError: errorHandlerError.message,
-          processError: error.message,
-          status: 500,
-        });
-      }
+      console.error(
+        '[_setupProcessHandlers] Python process error:',
+        errorDetails
+      );
+      sendLogMessage(`Process error: ${error.message}`);
+      reject(errorDetails);
     });
   },
 
@@ -696,139 +519,79 @@ const automationService = {
    * @returns {Promise<Object>} Result of the stop operation
    */
   async stopAutomation() {
-    if (!global.isAutomationRunning || !global.pythonProcess) {
-      return {
-        success: true,
-        message: 'No automation running',
-      };
-    }
-
     return new Promise((resolve) => {
       try {
-        console.log('[stopAutomation] Attempting to stop automation process...');
-        
-        const processToKill = global.pythonProcess;
-        const pidToKill = processToKill?.pid;
-        
-        if (!pidToKill) {
-          console.log('[stopAutomation] No valid PID found, resetting state');
-          global.pythonProcess = null;
-          global.isAutomationRunning = false;
-          resolve({
+        console.log('[stopAutomation] Current state:', {
+          isRunning: global.isAutomationRunning,
+          hasPythonProcess: !!global.pythonProcess,
+          pythonPid: global.pythonProcess?.pid
+        });
+
+        // Case 1: Nothing is running
+        if (!global.isAutomationRunning && !global.pythonProcess) {
+          console.log('[stopAutomation] No automation running');
+          return resolve({
             success: true,
-            message: 'No valid process found, state reset',
+            message: 'No automation running'
           });
-          return;
         }
 
-        // Set a timeout to force cleanup if process doesn't terminate
-        const forceCleanupTimeout = setTimeout(() => {
-          console.log('[stopAutomation] Force cleanup timeout reached');
-          global.pythonProcess = null;
+        // Case 2: State says running but no process (inconsistent state)
+        if (global.isAutomationRunning && !global.pythonProcess) {
+          console.log('[stopAutomation] Inconsistent state - running but no process');
           global.isAutomationRunning = false;
-          resolve({
+          return resolve({
             success: true,
-            message: 'Automation stopped (forced cleanup after timeout)',
+            message: 'State reset - no process was running'
           });
-        }, 5000); // 5 second timeout
-
-        // Handle process termination event
-        const onProcessExit = () => {
-          try {
-            clearTimeout(forceCleanupTimeout);
-            global.pythonProcess = null;
-            global.isAutomationRunning = false;
-            console.log('[stopAutomation] Process terminated successfully');
-            resolve({
-              success: true,
-              message: 'Automation stopped successfully',
-            });
-          } catch (exitError) {
-            console.error('[stopAutomation] Error in onProcessExit:', exitError);
-            // Still resolve successfully to prevent unhandled rejection
-            global.pythonProcess = null;
-            global.isAutomationRunning = false;
-            resolve({
-              success: true,
-              message: 'Automation stopped (with cleanup warning)',
-              warning: exitError.message,
-            });
-          }
-        };
-
-        // Listen for process exit (only if process still exists)
-        if (processToKill && !processToKill.killed) {
-          processToKill.once('exit', onProcessExit);
-          processToKill.once('close', onProcessExit);
         }
 
-        // Kill the Python process using the correct method per platform
-        if (process.platform === 'win32') {
-          // On Windows - use taskkill to terminate process tree
-          console.log(`[stopAutomation] Killing Windows process tree for PID: ${pidToKill}`);
+        // Case 3: Process exists but state says not running (another inconsistent state)
+        if (!global.isAutomationRunning && global.pythonProcess) {
+          console.log('[stopAutomation] Inconsistent state - process exists but marked as not running');
+          global.isAutomationRunning = true; // Temporarily set to true so we handle it in the next block
+        }
+
+        // Case 4: Actually running with a process
+        if (global.isAutomationRunning && global.pythonProcess) {
+          console.log(`[stopAutomation] Stopping running process (PID: ${global.pythonProcess.pid})`);
           
-          const killProcess = spawn('taskkill', ['/pid', pidToKill.toString(), '/f', '/t'], {
-            detached: true,
-            stdio: 'ignore'
-          });
-
-          killProcess.on('error', (error) => {
-            console.warn('[stopAutomation] Taskkill error (non-critical):', error.message);
-            // Don't fail, continue with cleanup
-          });
-
-          killProcess.on('exit', (code) => {
-            console.log(`[stopAutomation] Taskkill exited with code: ${code}`);
-            // Code 0 = success, 128 = process not found (already dead)
-            if (code === 0 || code === 128) {
-              // Success or process already dead
-              if (!global.pythonProcess) {
-                // Already cleaned up by onProcessExit
-                return;
-              }
-              // Trigger cleanup manually if process didn't emit exit event
-              setTimeout(onProcessExit, 1000);
+          try {
+            // First check if process is actually running
+            process.kill(global.pythonProcess.pid, 0);
+            
+            // Process exists, kill it
+            if (process.platform === 'win32') {
+              spawn('taskkill', ['/pid', global.pythonProcess.pid, '/f', '/t']);
+            } else {
+              process.kill(global.pythonProcess.pid, 'SIGTERM');
             }
-          });
-
-        } else {
-          // On macOS/Linux - use process.kill
-          console.log(`[stopAutomation] Killing process for PID: ${pidToKill}`);
-          
-          try {
-            process.kill(pidToKill, 'SIGTERM');
             
-            // If SIGTERM doesn't work after 3 seconds, use SIGKILL
-            setTimeout(() => {
-              if (global.pythonProcess && global.pythonProcess.pid === pidToKill) {
-                console.log('[stopAutomation] SIGTERM timeout, using SIGKILL');
-                try {
-                  process.kill(pidToKill, 'SIGKILL');
-                } catch (killError) {
-                  console.warn('[stopAutomation] SIGKILL error:', killError.message);
-                }
-              }
-            }, 3000);
-            
+            console.log('[stopAutomation] Process terminated successfully');
           } catch (killError) {
-            console.warn('[stopAutomation] Process kill error:', killError.message);
-            // Process might already be dead, trigger cleanup
-            onProcessExit();
+            // Process doesn't exist or permission error
+            console.log('[stopAutomation] Process already terminated or inaccessible:', killError.message);
           }
         }
 
+        // Always clean up state
+        global.pythonProcess = null;
+        global.isAutomationRunning = false;
+
+        return resolve({
+          success: true,
+          message: 'Automation stopped successfully'
+        });
       } catch (error) {
-        console.error('[stopAutomation] Critical error during stop:', error);
-        
-        // Force reset state to prevent stuck states
+        // Unexpected error - still clean up state
+        console.error('[stopAutomation] Unexpected error:', error);
         global.pythonProcess = null;
         global.isAutomationRunning = false;
         
-        // Always resolve successfully to prevent unhandled rejections
-        resolve({
+        return resolve({
           success: true,
-          message: 'Automation process terminated (with error recovery)',
-          warning: error.message,
+          message: 'Automation stopped (with cleanup)',
+          warning: error.message
         });
       }
     });
@@ -836,69 +599,126 @@ const automationService = {
 
   /**
    * Create a temporary configuration file for the Python script
-   * @param {Object} config - Automation configuration
+   * @param {Object} config - Configuration options
    * @returns {Promise<string>} Path to the created config file
    */
   async createConfigFile(config) {
-  logToFile(`[AutomationService] createConfigFile received config: ${JSON.stringify(config)}`);
+    try {
+      let accessToken = '';
+      try {
+        console.log('[createConfigFile] Starting token retrieval...');
+        
+        // Try to get access token
+        accessToken = await tokenManager.getAccessToken();
+        
+        // FALLBACK: If tokenManager fails, try direct store access
+        if (!accessToken) {
+          console.log('[createConfigFile] tokenManager.getAccessToken() returned null, trying direct store access...');
+          try {
+            const Store = require('electron-store');
+            const directTokenStore = new Store({
+              name: 'auth-tokens',
+              encryptionKey: 'junior-secure-app-token-encryption',
+            });
+            const directTokens = directTokenStore.get('tokens');
+            if (directTokens && directTokens.access_token) {
+              accessToken = directTokens.access_token;
+              console.log('[createConfigFile] ✅ Successfully retrieved access token via direct store access');
+            } else {
+              console.log('[createConfigFile] ❌ No tokens found in direct store access either');
+            }
+          } catch (directError) {
+            console.error('[createConfigFile] ❌ Direct store access failed:', directError.message);
+          }
+        }
+        console.log(
+          '[createConfigFile] Retrieved access token for config:',
+          accessToken ? `Token found (${accessToken.substring(0, 20)}...)` : 'No token'
+        );
+        
+        // Additional debugging - check raw token store
+        const Store = require('electron-store');
+        const tokenStore = new Store({
+          name: 'auth-tokens',
+          encryptionKey: 'junior-secure-app-token-encryption',
+        });
+        const rawTokens = tokenStore.get('tokens');
+        console.log('[createConfigFile] Raw tokens from store:', rawTokens ? 'Found' : 'NULL');
+        if (rawTokens) {
+          console.log('[createConfigFile] Token keys available:', Object.keys(rawTokens));
+          console.log('[createConfigFile] Access token in raw:', !!rawTokens.access_token);
+        }
+        
+        if (accessToken) {
+          console.log('[createConfigFile] ✅ Access token will be added to Python config');
+        } else {
+          console.warn('[createConfigFile] ⚠️ WARNING: No access token available - Python script will fail to authenticate with backend');
+        }
+      } catch (error) {
+        console.error(
+          '[createConfigFile] ❌ ERROR retrieving access token:',
+          error.message
+        );
+        console.error('[createConfigFile] Stack trace:', error.stack);
+      }
 
-  // --- PATCH: Ensure config is in correct format for Python script ---
-  // Set backend_url
-  config.backend_url = 'https://junior-api-915940312680.us-west1.run.app';
+      // Create JuniorAI directory in platform-appropriate user data location
+      const juniorDir = path.join(app.getPath('userData'), 'JuniorAI');
 
-  // Move credentials under linkedin_credentials
-  if (config.linkedin_email || config.linkedin_password) {
-    config.linkedin_credentials = config.linkedin_credentials || {};
-    // Force log level to debug for GUI rendering
-    config.log_level = 'debug';
+      // Create configs subdirectory
+      const configDir = path.join(juniorDir, 'configs');
+      fs.mkdirSync(configDir, { recursive: true });
 
-    // Set Chrome path based on environment
-    if (app.isPackaged) {
-      // In production, use bundled Chromium from resources
-      config.chrome_path = path.join(process.resourcesPath, 'chrome-win', 'chrome.exe');
-    } else {
-      // In development, use system Chrome
-      config.chrome_path = null; // Let the Python script find system Chrome
+      const configPath = path.join(
+        configDir,
+        `linkedin_config_${Date.now()}.json`
+      );
+
+      // Transform the config object to match the Python script's expectations
+      // Process keywords from string to the format the Python script expects
+      const keywords = config.userInfo?.jobKeywords || '';
+
+      // Get a platform-appropriate Chrome profile path
+      const chromeProfilePath = this.getChromeProfilePath();
+
+      const pythonConfig = {
+        linkedin_credentials: {
+          email: config.credentials?.email || '',
+          password: config.credentials?.password || '',
+        },
+        backend_url: process.env.API_URL || 'https://junior-api-915940312680.us-west1.run.app',
+        browser_config: {
+          chrome_profile_path: chromeProfilePath,
+          headless: false,
+        },
+        access_token: accessToken,
+        chrome_profile_path: chromeProfilePath, // Additional field for the Python script
+        debug_mode: config.debugMode !== undefined ? config.debugMode : true,
+        max_daily_comments: config.limits?.dailyComments || 50,
+        max_session_comments: config.limits?.sessionComments || 10,
+        calendly_url: config.userInfo?.calendlyLink || '',
+        keywords: keywords, // Pass keywords as a string - the script will split it
+        user_bio: config.userInfo?.bio || '',
+        scroll_pause_time: config.timing?.scrollPauseTime || 5,
+        short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
+        max_comments: config.limits?.commentsPerCycle || 3,
+      };
+      
+      // Debug: Log what's being written to config
+      console.log('[createConfigFile] Writing config to:', configPath);
+      console.log('[createConfigFile] Config contains access_token:', !!pythonConfig.access_token);
+      if (pythonConfig.access_token) {
+        console.log('[createConfigFile] Access token preview:', pythonConfig.access_token.substring(0, 30) + '...');
+      }
+      
+      fs.writeFileSync(configPath, JSON.stringify(pythonConfig, null, 2));
+      console.log('[createConfigFile] Config file written successfully');
+      return configPath;
+    } catch (error) {
+      console.error('Error creating config file:', error);
+      throw new Error('Failed to create configuration file');
     }
-    console.log('[DEBUG] Chrome path for Python automation:', config.chrome_path);
-    if (config.linkedin_email) {
-      config.linkedin_credentials.email = config.linkedin_email;
-      delete config.linkedin_email;
-    }
-    if (config.linkedin_password) {
-      config.linkedin_credentials.password = config.linkedin_password;
-      delete config.linkedin_password;
-    }
-  }
-  // --- END PATCH ---
-
-  // Add paths that the Python script will need
-  config.log_file_path = this.getLogFilePath();
-  config.chrome_profile_path = this.getChromeProfilePath();
-
-  // CRITICAL: Add the base directory path so Python script can resolve paths correctly
-  config.base_dir = path.resolve(__dirname, '../../..');  // Go up from src/services/automation to junior-desktop root
-  
-  // Add access token to config if available
-  if (config.accessToken) {
-    config.access_token = config.accessToken;  // Convert to snake_case for Python
-    delete config.accessToken;  // Remove camelCase version
-  }
-
-  logToFile(`[AutomationService] Config before writing to file: ${JSON.stringify(config, null, 2)}`);
-
-  const tempDir = path.join(app.getPath('userData'), 'temp');
-  fs.mkdirSync(tempDir, { recursive: true });
-  const configPath = path.join(tempDir, `config-${Date.now()}.json`);
-
-  try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    return configPath;
-  } catch (error) {
-    console.error('[createConfigFile] Error creating temp config file:', error);
-    throw new Error('Failed to create automation configuration.');
-  }
-},
+  },
 
   /**
    * Clean up temporary config file
@@ -906,34 +726,11 @@ const automationService = {
    */
   cleanupConfigFile(configPath) {
     try {
-      if (!configPath) {
-        console.log('[cleanupConfigFile] No config path provided, skipping cleanup');
-        return;
-      }
-
-      if (typeof configPath !== 'string') {
-        console.warn('[cleanupConfigFile] Invalid config path type:', typeof configPath);
-        return;
-      }
-
-      if (fs.existsSync(configPath)) {
-        try {
-          fs.unlinkSync(configPath);
-          console.log(`[cleanupConfigFile] Config file cleaned up: ${configPath}`);
-        } catch (unlinkError) {
-          console.warn(
-            `[cleanupConfigFile] Failed to delete config file ${configPath}:`,
-            unlinkError.message
-          );
-        }
-      } else {
-        console.log(`[cleanupConfigFile] Config file not found (already cleaned?): ${configPath}`);
+      if (configPath && fs.existsSync(configPath)) {
+        fs.unlinkSync(configPath);
       }
     } catch (error) {
-      console.warn(
-        `[cleanupConfigFile] Error during config cleanup for ${configPath}:`,
-        error.message
-      );
+      console.error('Error cleaning up config file:', error);
     }
   },
 
@@ -943,28 +740,45 @@ const automationService = {
    * @returns {boolean} Success status
    */
   savePersistentConfig(config) {
-    const configPath = getPersistentConfigPath();
     try {
-      // Only store credentials and user info, not the whole config
-      const persistentData = {
-        linkedin_email: config.linkedin_email,
-        linkedin_password: config.linkedin_password,
-        calendly_link: config.calendly_link,
-        user_bio: config.user_bio,
-        job_keywords: config.job_keywords,
+      const configPath = getPersistentConfigPath();
+
+      // Prepare configuration for persistent storage
+      const persistentConfig = {
+        credentials: config.rememberCredentials
+          ? {
+              email: config.credentials?.email || '',
+              password: config.credentials?.password || '',
+            }
+          : {
+              email: config.credentials?.email || '',
+              password: '', // Don't save password if not requested
+            },
+        rememberCredentials: !!config.rememberCredentials,
+        userInfo: {
+          calendlyLink: config.userInfo?.calendlyLink || '',
+          bio: config.userInfo?.bio || '',
+          jobKeywords: config.userInfo?.jobKeywords || '',
+        },
+        limits: {
+          dailyComments: config.limits?.dailyComments || 50,
+          sessionComments: config.limits?.sessionComments || 10,
+          commentsPerCycle: config.limits?.commentsPerCycle || 3,
+        },
+        timing: {
+          scrollPauseTime: config.timing?.scrollPauseTime || 5,
+          shortSleepSeconds: config.timing?.shortSleepSeconds || 180,
+        },
+        debugMode: config.debugMode !== undefined ? config.debugMode : true,
+        lastUpdated: new Date().toISOString(),
       };
 
-      // Only save if remember credentials is true
-      if (config.remember_credentials) {
-        fs.writeFileSync(configPath, JSON.stringify(persistentData, null, 2));
-      } else {
-        // If not checked, remove any existing saved config
-        if (fs.existsSync(configPath)) {
-          fs.unlinkSync(configPath);
-        }
-      }
+      fs.writeFileSync(configPath, JSON.stringify(persistentConfig, null, 2));
+      console.log(`Configuration saved to ${configPath}`);
+      return true;
     } catch (error) {
-      console.error('[savePersistentConfig] Error saving config:', error);
+      console.error('Error saving persistent configuration:', error);
+      return false;
     }
   },
 
@@ -1019,62 +833,13 @@ const automationService = {
   },
 
   /**
-   * Get the path to bundled Chromium
-   * @returns {string|null} Path to bundled Chromium or null if not found
-   */
-  getBundledChromePath() {
-    if (!app.isPackaged) {
-      return null;
-    }
-
-    if (process.platform === 'win32') {
-      const chromePath = path.join(process.resourcesPath, 'chrome-win', 'chrome.exe');
-      if (fs.existsSync(chromePath)) {
-        console.log(`Bundled Chrome found at: ${chromePath}`);
-        return chromePath;
-      }
-    }
-
-    const chromePaths = [];
-    if (process.platform === 'darwin') {
-      chromePaths.push(
-        path.join(process.resourcesPath, 'chrome', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome'),
-        path.join(process.resourcesPath, 'chrome-mac', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome')
-      );
-    } else {
-      chromePaths.push(
-        path.join(process.resourcesPath, 'chrome', 'chrome'),
-        path.join(process.resourcesPath, 'chrome-linux', 'chrome')
-      );
-    }
-
-    for (const chromePath of chromePaths) {
-      if (fs.existsSync(chromePath)) {
-        console.log(`Bundled Chrome found at: ${chromePath}`);
-        return chromePath;
-      }
-    }
-
-    console.log('Bundled Chrome not found');
-    return null;
-  },
-
-  /**
    * Check if Chrome is available on the system
    * @returns {Promise<boolean>} True if Chrome is found
    */
   async checkChromeAvailability() {
-    return new Promise(resolve => {
-      // First check for bundled Chrome in production mode
-      if (app.isPackaged) {
-        const bundledChromePath = this.getBundledChromePath();
-        if (bundledChromePath) {
-          resolve(true);
-          return;
-        }
-      }
+    const fs = require('fs');
 
-      // Then check for system Chrome
+    return new Promise(resolve => {
       let chromePaths = [];
 
       if (process.platform === 'win32') {
@@ -1109,11 +874,11 @@ const automationService = {
         return;
       }
 
-      // For Windows and macOS, check if the file exists
+      // For Windows and macOS, just check if the file exists
       for (const chromePath of chromePaths) {
         try {
           if (fs.existsSync(chromePath)) {
-            console.log(`System Chrome found at: ${chromePath}`);
+            console.log(`Chrome found at: ${chromePath}`);
             resolve(true);
             return;
           }
@@ -1122,52 +887,9 @@ const automationService = {
         }
       }
 
-      console.log('No Chrome installation found');
+      console.log('Chrome not found in any expected locations');
       resolve(false);
     });
-  },
-
-  /**
-   * Builds the command-line arguments for the Python script.
-   * @param {Object} config - The automation configuration.
-   * @param {string} configPath - The path to the temporary config file.
-   * @param {boolean} isProduction - Flag to determine which script path to use.
-   * @returns {string[]} An array of command-line arguments.
-   * @private
-   */
-  _buildScriptArguments(config, configPath, isProduction) {
-    const scriptPath = isProduction
-      ? this._findProductionScript()
-      : this._findDevelopmentScript();
-
-    const scriptArgs = [
-      scriptPath, // Script path is the first arg
-      '--config',
-      configPath,
-    ];
-
-    // Add LinkedIn credentials if available from the config object
-    if (config.linkedinUser) {
-      scriptArgs.push('--email', config.linkedinUser);
-    }
-    if (config.linkedinPass) {
-      scriptArgs.push('--password', config.linkedinPass);
-    }
-
-    // Add backend authentication credentials from the config object
-    if (config.accessToken) {
-      scriptArgs.push('--access-token', config.accessToken);
-    } else if (config.backendUser && config.backendPass) {
-      // Fallback to email/password if no token
-      scriptArgs.push('--backend-email', config.backendUser);
-      scriptArgs.push('--backend-password', config.backendPass);
-    }
-
-    if (config.debugMode) {
-      scriptArgs.push('--debug');
-    }
-
-    return scriptArgs;
   },
 };
 
@@ -1177,65 +899,33 @@ const automationService = {
  */
 automationService.forceResetState = function() {
   const wasRunning = global.isAutomationRunning;
-  let killAttempted = false;
   
   // Force kill any process if it exists
   if (global.pythonProcess) {
     try {
-      const pidToKill = global.pythonProcess.pid;
-      
-      if (pidToKill) {
-        killAttempted = true;
-        console.log(`[forceResetState] Force killing process PID: ${pidToKill}`);
-        
-        if (process.platform === 'win32') {
-          // On Windows - use taskkill with error handling
-          const killProcess = spawn('taskkill', ['/pid', pidToKill.toString(), '/f', '/t'], {
-            detached: true,
-            stdio: 'ignore'
-          });
-          
-          killProcess.on('error', (error) => {
-            console.warn('[forceResetState] Taskkill error (ignored):', error.message);
-          });
-          
-        } else {
-          // On macOS/Linux - use process.kill with SIGKILL for force kill
-          try {
-            process.kill(pidToKill, 'SIGKILL');
-          } catch (killError) {
-            console.warn('[forceResetState] SIGKILL error (ignored):', killError.message);
-          }
-        }
+      if (process.platform === 'win32') {
+        // On Windows
+        spawn('taskkill', ['/pid', global.pythonProcess.pid, '/f', '/t']);
+      } else {
+        // On macOS/Linux
+        process.kill(global.pythonProcess.pid);
       }
     } catch (e) {
-      // Ignore all errors during forced kill
-      console.warn('[forceResetState] Error during force kill (ignored):', e.message);
+      // Ignore errors during forced kill
+      console.log('[forceResetState] Error killing process:', e.message);
     }
   }
   
-  // Always reset state variables regardless of kill success
+  // Reset state variables
   global.pythonProcess = null;
   global.isAutomationRunning = false;
   
-  const resultMessage = killAttempted 
-    ? 'Automation state forcibly reset with process termination'
-    : 'Automation state forcibly reset (no active process found)';
-  
-  console.log(`[forceResetState] ${resultMessage}. Was running: ${wasRunning}`);
-  
-  try {
-    logToFile(`Forced reset of automation state. Was running: ${wasRunning}, Kill attempted: ${killAttempted}`);
-  } catch (logError) {
-    // Don't let logging errors affect the reset operation
-    console.warn('[forceResetState] Logging error (ignored):', logError.message);
-  }
+  console.log(`Forced reset of automation state. Was running: ${wasRunning}`);
   
   return {
     success: true,
     wasRunning,
-    killAttempted,
-    message: resultMessage
+    message: 'Automation state has been forcibly reset'
   };
 };
 

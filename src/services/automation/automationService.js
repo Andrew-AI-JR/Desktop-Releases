@@ -171,6 +171,12 @@ const automationService = {
             return;
           }
 
+          // Fetch access token for backend authentication
+          const accessToken = await tokenManager.getAccessToken();
+          if (!accessToken) {
+            logToFile('[AutomationService] Backend access token not found. Automation may fail.');
+          }
+
           // Create a temporary config file to pass to the Python script
           configPath = await this.createConfigFile(config);
 
@@ -193,11 +199,17 @@ const automationService = {
             }
           };
 
+          // Append access token to config for Python script execution
+          const executionConfig = {
+            ...config,
+            accessToken, // Add token for backend auth
+          };
+
           // Clear separation: Development vs Production mode
           if (app.isPackaged) {
             // PRODUCTION MODE: Only use bundled Python and bundled script
             await this._runProductionMode(
-              config,
+              executionConfig,
               configPath,
               sendLogMessage,
               resolve,
@@ -206,7 +218,7 @@ const automationService = {
           } else {
             // DEVELOPMENT MODE: Use system Python and development script
             await this._runDevelopmentMode(
-              config,
+              executionConfig,
               configPath,
               sendLogMessage,
               resolve,
@@ -305,9 +317,13 @@ const automationService = {
         CHROME_PATH: chromePath || '', // Pass Chrome path to Python script
       };
 
+      // Construct arguments for Python script
+      const scriptArgs = this._buildScriptArguments(config, configPath, true);
+      logToFile(`[Production] Executing with args: ${JSON.stringify(scriptArgs)}`);
+
       // Run bundled Python with config
       const pythonProcess = pythonBundleService.runBundledPython(
-        ['--config', configPath],
+        scriptArgs.slice(1), // Remove the script path itself, as runBundledPython prepends it
         { env }
       );
 
@@ -382,11 +398,15 @@ const automationService = {
         LINKEDIN_CHROME_PROFILE_PATH: chromeProfilePath,
       };
 
+      // Construct arguments for Python script
+      const scriptArgs = this._buildScriptArguments(config, configPath, false);
+      logToFile(`[Development] Executing: ${pythonExecutable} with args: ${JSON.stringify(scriptArgs)}`);
+
       // Run system Python with unbuffered output for immediate GUI updates
       const pythonExecutable = pythonBundleService.getFallbackPython();
       const pythonProcess = spawn(
         pythonExecutable,
-        ['-u', scriptPath, '--config', configPath], // -u flag for unbuffered output
+        ['-u', ...scriptArgs], // -u flag for unbuffered output
         { env }
       );
 
@@ -851,23 +871,34 @@ const automationService = {
     }
   }
   // --- END PATCH ---
-    // Add paths that the Python script will need
-    config.log_file_path = this.getLogFilePath();
+
+  // Add paths that the Python script will need
+  config.log_file_path = this.getLogFilePath();
   config.chrome_profile_path = this.getChromeProfilePath();
+
+  // CRITICAL: Add the base directory path so Python script can resolve paths correctly
+  config.base_dir = path.resolve(__dirname, '../../..');  // Go up from src/services/automation to junior-desktop root
+  
+  // Add access token to config if available
+  if (config.accessToken) {
+    config.access_token = config.accessToken;  // Convert to snake_case for Python
+    delete config.accessToken;  // Remove camelCase version
+  }
+
   logToFile(`[AutomationService] Config before writing to file: ${JSON.stringify(config, null, 2)}`);
 
-    const tempDir = path.join(app.getPath('userData'), 'temp');
-    fs.mkdirSync(tempDir, { recursive: true });
-    const configPath = path.join(tempDir, `config-${Date.now()}.json`);
+  const tempDir = path.join(app.getPath('userData'), 'temp');
+  fs.mkdirSync(tempDir, { recursive: true });
+  const configPath = path.join(tempDir, `config-${Date.now()}.json`);
 
-    try {
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      return configPath;
-    } catch (error) {
-      console.error('[createConfigFile] Error creating temp config file:', error);
-      throw new Error('Failed to create automation configuration.');
-    }
-  },
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    return configPath;
+  } catch (error) {
+    console.error('[createConfigFile] Error creating temp config file:', error);
+    throw new Error('Failed to create automation configuration.');
+  }
+},
 
   /**
    * Clean up temporary config file
@@ -1094,6 +1125,49 @@ const automationService = {
       console.log('No Chrome installation found');
       resolve(false);
     });
+  },
+
+  /**
+   * Builds the command-line arguments for the Python script.
+   * @param {Object} config - The automation configuration.
+   * @param {string} configPath - The path to the temporary config file.
+   * @param {boolean} isProduction - Flag to determine which script path to use.
+   * @returns {string[]} An array of command-line arguments.
+   * @private
+   */
+  _buildScriptArguments(config, configPath, isProduction) {
+    const scriptPath = isProduction
+      ? this._findProductionScript()
+      : this._findDevelopmentScript();
+
+    const scriptArgs = [
+      scriptPath, // Script path is the first arg
+      '--config',
+      configPath,
+    ];
+
+    // Add LinkedIn credentials if available from the config object
+    if (config.linkedinUser) {
+      scriptArgs.push('--email', config.linkedinUser);
+    }
+    if (config.linkedinPass) {
+      scriptArgs.push('--password', config.linkedinPass);
+    }
+
+    // Add backend authentication credentials from the config object
+    if (config.accessToken) {
+      scriptArgs.push('--access-token', config.accessToken);
+    } else if (config.backendUser && config.backendPass) {
+      // Fallback to email/password if no token
+      scriptArgs.push('--backend-email', config.backendUser);
+      scriptArgs.push('--backend-password', config.backendPass);
+    }
+
+    if (config.debugMode) {
+      scriptArgs.push('--debug');
+    }
+
+    return scriptArgs;
   },
 };
 

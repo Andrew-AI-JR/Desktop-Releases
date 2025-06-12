@@ -83,8 +83,17 @@ def load_config_from_args():
     """Load configuration from command line arguments, environment variables, and config file."""
     parser = argparse.ArgumentParser(description='LinkedIn Commenter')
     parser.add_argument('--config', type=str, help='Path to configuration file')
+    
+    # LinkedIn credentials
     parser.add_argument('--email', type=str, help='LinkedIn account email (overrides config file and env vars)')
     parser.add_argument('--password', type=str, help='LinkedIn account password (overrides config file and env vars)')
+    
+    # Backend authentication credentials
+    parser.add_argument('--access-token', type=str, help='Backend API access token (highest priority)')
+    parser.add_argument('--backend-email', type=str, help='Backend API email for authentication')
+    parser.add_argument('--backend-password', type=str, help='Backend API password for authentication')
+
+    # Other settings
     parser.add_argument('--log_level', type=str, choices=['debug', 'info', 'warning', 'error'], help='Override log level from config/env')
     parser.add_argument('--debug', action='store_true', help='Enable full debug mode (overrides log_level from config/env)')
     parser.add_argument('--chrome-path', type=str, help='Path to custom Chrome/Chromium binary (overrides config file and system Chrome)')
@@ -97,7 +106,20 @@ def load_config_from_args():
             print(f"[DEBUG] Attempting to load config from file: {args.config}")
             file_config = load_config_from_file(args.config)
             if file_config:
-                config.update(file_config) # This will load linkedin_credentials if present from file
+                config.update(file_config) # This will load all credentials if present from file
+                
+                # CRITICAL: Handle base directory for path resolution
+                if 'base_dir' in file_config:
+                    # Convert all relative paths to absolute using the base_dir
+                    if 'chrome_path' in config and config['chrome_path']:
+                        config['chrome_path'] = os.path.join(file_config['base_dir'], config['chrome_path'])
+                    if 'log_file_path' in config and config['log_file_path']:
+                        config['log_file_path'] = os.path.join(file_config['base_dir'], config['log_file_path'])
+                    if 'chrome_profile_path' in config and config['chrome_profile_path']:
+                        config['chrome_profile_path'] = os.path.join(file_config['base_dir'], config['chrome_profile_path'])
+                    
+                    app_out(f"🔍 Using base directory for path resolution: {file_config['base_dir']}")
+                    debug_log(f"Base directory for path resolution: {file_config['base_dir']}", "CONFIG")
             else:
                 print(f"[WARN] Failed to load or parse configuration from {args.config}. File might be empty or malformed. Continuing with other sources.")
         else:
@@ -105,13 +127,18 @@ def load_config_from_args():
     else:
         print("[INFO] No --config argument provided. Relying on CLI args or environment variables for settings.")
 
-    # Ensure linkedin_credentials structure exists for overrides, even if not in file
+    # Ensure credential structures exist for overrides, even if not in file
     if 'linkedin_credentials' not in config:
         config['linkedin_credentials'] = {}
+    if 'backend_credentials' not in config:
+        config['backend_credentials'] = {}
 
     # Environment variable overrides (middle priority)
     env_email = os.getenv('LINKEDIN_EMAIL')
     env_pass = os.getenv('LINKEDIN_PASSWORD')
+    env_backend_email = os.getenv('BACKEND_EMAIL')
+    env_backend_pass = os.getenv('BACKEND_PASSWORD')
+    env_access_token = os.getenv('ACCESS_TOKEN')
     env_log_level = os.getenv('LOG_LEVEL')
     env_chrome_path = os.getenv('CHROME_PATH')
 
@@ -119,29 +146,48 @@ def load_config_from_args():
     if env_email and not config['linkedin_credentials'].get('email'):
         config['linkedin_credentials']['email'] = env_email
     if env_pass and not config['linkedin_credentials'].get('password'):
-        config['linkedin_credentials']['password'] = env_pass 
+        config['linkedin_credentials']['password'] = env_pass
+        
+    # Populate backend_credentials from environment if not set by file
+    if env_backend_email and not config['backend_credentials'].get('email'):
+        config['backend_credentials']['email'] = env_backend_email
+    if env_backend_pass and not config['backend_credentials'].get('password'):
+        config['backend_credentials']['password'] = env_backend_pass
+    if env_access_token and not config.get('access_token'):
+        config['access_token'] = env_access_token
+
     # Top-level keys from env if not set by file
     if env_log_level and not config.get('log_level'): 
         config['log_level'] = env_log_level
     if env_chrome_path and not config.get('chrome_path'):
         config['chrome_path'] = env_chrome_path
+        
     # Try to load backend URL from environment if not in config (dotenv already loaded at top)
     if not config.get('backend_url'):
         backend_url = os.getenv('BACKEND_URL')
         if backend_url:
             config['backend_url'] = backend_url
-    # Backend URL is only loaded from config file
     
     # CLI overrides (highest priority)
-    if args.email: # This will overwrite file/env values in linkedin_credentials
+    # LinkedIn creds
+    if args.email:
         config['linkedin_credentials']['email'] = args.email
-    if args.password: # This will overwrite file/env values in linkedin_credentials
+    if args.password:
         config['linkedin_credentials']['password'] = args.password
-    if args.chrome_path: # Top-level key
+        
+    # Backend creds
+    if args.backend_email:
+        config['backend_credentials']['email'] = args.backend_email
+    if args.backend_password:
+        config['backend_credentials']['password'] = args.backend_password
+    if args.access_token: # Access token is top-level and overrides email/pass
+        config['access_token'] = args.access_token
+        
+    # Other settings
+    if args.chrome_path:
         config['chrome_path'] = args.chrome_path
-    # Backend URL is only loaded from config file
-    
-    global LOG_LEVEL_OVERRIDE # Top-level keys for logging
+        
+    global LOG_LEVEL_OVERRIDE
     if args.debug:
         config['log_level'] = 'debug'
         config['debug_mode'] = True
@@ -149,17 +195,15 @@ def load_config_from_args():
     elif args.log_level:
         config['log_level'] = args.log_level
         LOG_LEVEL_OVERRIDE = args.log_level.upper()
-    elif config.get('log_level'): # From file or env
+    elif config.get('log_level'):
         LOG_LEVEL_OVERRIDE = config['log_level'].upper()
-    else: # Default
+    else:
         config['log_level'] = 'info'
         LOG_LEVEL_OVERRIDE = 'INFO'
 
-    # Ensure debug_mode reflects log_level if not explicitly set by --debug or in config file
     if 'debug_mode' not in config: 
         config['debug_mode'] = config.get('log_level', 'info').lower() == 'debug'
     
-    # Warning if credentials are still missing after all loading stages
     creds_check = config.get('linkedin_credentials', {})
     if not args.config and not (creds_check.get('email') and creds_check.get('password')):
          print("[WARN] No config file specified, and LinkedIn credentials are not fully provided by CLI or environment variables. Ensure credentials are set for login if not in a config file.")

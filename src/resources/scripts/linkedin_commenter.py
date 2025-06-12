@@ -1564,7 +1564,8 @@ class CommentGenerator:
                 'post_text': cleaned_post_text,
                 'source_linkedin_url': post_url or '',
                 'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-                'calendly_link': calendly_link  # Pass Calendly link to API
+                'calendly_link': calendly_link,  # Pass Calendly link to API
+                'user_bio': self.user_bio  # Pass user bio for personalized comments
             }
             
             self.debug_log(f"Making primary API call for comment generation", "DEBUG")

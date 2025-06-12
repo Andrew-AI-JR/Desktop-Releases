@@ -355,7 +355,6 @@ POST_SCORING_CONFIG = {
             'adding to my team',
             'building out my team',
             'expanding my organization'
-            # Note: Role-specific keywords will be added dynamically
         ]
     },
     'direct_hiring': {
@@ -379,6 +378,31 @@ POST_SCORING_CONFIG = {
             'looking for',  # Common hiring phrase
             'seeking',      # Another common hiring phrase
             'filling a position'
+        ]
+    },
+    'negative_context': {
+        'weight': -4.0,  # Negative weight to penalize discussion/informational posts
+        'keywords': [
+            'era of',
+            'future of',
+            'transforming',
+            'automation',
+            'discussing',
+            'article',
+            'thoughts on',
+            'insights',
+            'trends',
+            'industry update',
+            'announcement',
+            'introducing',
+            'launching',
+            'webinar',
+            'conference',
+            'event',
+            'research',
+            'study shows',
+            'report',
+            'analysis'
         ]
     },
     'decision_maker_titles': {
@@ -2090,6 +2114,7 @@ class CommentGenerator:
 def get_time_based_score(time_filter):
     """
     Calculate a score multiplier based on the time filter used in the URL.
+    More aggressively penalizes older posts.
     
     Args:
         time_filter (str): The time filter from the URL ('past-24h', 'past-week', 'past-month')
@@ -2099,10 +2124,10 @@ def get_time_based_score(time_filter):
     """
     time_weights = {
         'past-24h': 2.0,    # Highest weight for most recent posts
-        'past-week': 1.5,   # Medium weight for recent posts
-        'past-month': 1.0   # Base weight for older posts
+        'past-week': 1.2,   # Reduced from 1.5 to 1.2 to penalize week-old posts
+        'past-month': 0.7   # Reduced from 1.0 to 0.7 to penalize old posts
     }
-    return time_weights.get(time_filter, 1.0)  # Default to 1.0 if unknown filter
+    return time_weights.get(time_filter, 0.7)  # Default to low score if unknown filter
 
 # === CRITICAL MISSING FUNCTIONS FOR POST EVALUATION ===
 def calculate_post_score(post_text, author_name=None, time_filter=None):
@@ -2179,14 +2204,14 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
             'search_target': 'author_name' if search_author else 'post_content'
         }
     
-    # Add length bonus (not penalty)
+    # Reduced length bonus to avoid over-scoring long but irrelevant posts
     words = len(cleaned_post_text.split())
     if words >= 50:
-        total_score += 5  # Bonus for substantial posts
+        total_score += 2  # Reduced bonus from 5 to 2
     
     score_breakdown['length'] = {
         'words': words,
-        'score': 5 if words >= 50 else 0
+        'score': 2 if words >= 50 else 0
     }
     
     # Apply time-based scoring multiplier
@@ -2217,10 +2242,37 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
     return final_score
 
 def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=55, time_filter=None):
-    """Determine if a post is worth commenting on based on score."""
+    """
+    Determine if a post is worth commenting on based on score and hiring intent.
+    Implements stricter checks for actual hiring signals vs discussion posts.
+    """
+    # Calculate initial score
     score = calculate_post_score(post_text, author_name, time_filter)
+    
+    # Strong hiring intent indicators that must be present
+    hiring_indicators = [
+        'hiring', 'job opening', 'position available', 'join our team',
+        'looking to hire', 'seeking candidates', 'open role', 'open position',
+        'job opportunity', 'career opportunity'
+    ]
+    
+    # Check for clear hiring intent
+    post_text_lower = post_text.lower()
+    has_hiring_intent = any(indicator in post_text_lower for indicator in hiring_indicators)
+    
+    # Heavily penalize posts without clear hiring intent
+    if not has_hiring_intent:
+        score *= 0.5  # 50% penalty
+        debug_log("No clear hiring intent found - applying 50% score penalty", "SCORE")
+    
+    # Additional time-based penalty for older posts
+    if hours_ago > 48:  # More than 2 days old
+        score *= 0.8  # 20% penalty
+        debug_log(f"Post age penalty applied: {hours_ago} hours old", "SCORE")
+    
     print(f"[APP_OUT]⚖️ Post scored: {score}/100 (min required: {min_score})")
-    debug_log(f"Post score: {score} (min required: {min_score})", "SCORE")
+    debug_log(f"Post score: {score} (min required: {min_score}, has_hiring_intent: {has_hiring_intent})", "SCORE")
+    
     return score >= min_score, score
 
 def extract_time_posted(post):

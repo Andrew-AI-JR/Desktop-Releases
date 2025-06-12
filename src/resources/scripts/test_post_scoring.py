@@ -1,131 +1,70 @@
 """
 Test script for LinkedIn post scoring.
-Run this script and paste LinkedIn post text to see its score breakdown.
+Run this script to verify scoring changes with example posts.
 """
 
 import json
-from linkedin_commenter import CommentGenerator, POST_SCORING_CONFIG
+from linkedin_commenter import calculate_post_score, should_comment_on_post, get_time_based_score
 
-def get_time_filter():
-    """Prompt user to select a time filter."""
-    print("\nSelect time filter (affects scoring):")
-    print("1. Past 24 hours (2.0x multiplier)")
-    print("2. Past week (1.5x multiplier)")
-    print("3. Past month (1.0x multiplier)")
-    print("4. No time filter (1.0x multiplier)")
-    
-    while True:
-        choice = input("Enter your choice (1-4): ").strip()
-        if choice == '1':
-            return 'past-24h'
-        elif choice == '2':
-            return 'past-week'
-        elif choice in ('3', '4'):
-            return 'past-month'
-        print("Invalid choice. Please enter 1-4.")
+def test_post():
+    # Example post that shouldn't have triggered a comment
+    test_post = """🚀 We're entering the era of touchless recruiting, where AI-driven automation is transforming how talent acquisition operates. At one of our customer sites, we've begun embedding Generative AI and agentic tools within Oracle Recruiting Cloud (ORC) to eliminate repetitive tasks and streamline the end-to-end hiring journey.
 
-def get_job_keywords():
-    """Prompt user for job keywords."""
-    print("\nEnter job keywords (comma-separated, or press Enter to skip):")
-    keywords_input = input("> ").strip()
-    if not keywords_input:
-        return []
-    return [k.strip().lower() for k in keywords_input.split(',') if k.strip()]
+From auto-generating job descriptions and emails to screening candidates, these smart tools are helping recruiters reclaim their time for more strategic, human-centric work.
 
-def print_score_breakdown(score_breakdown):
-    """Print the score breakdown in a readable format."""
-    print("\n" + "="*50)
-    print("SCORE BREAKDOWN")
-    print("="*50)
-    
-    # Print category scores
-    for category, data in score_breakdown.items():
-        if category == 'final_score':
-            continue
-        if isinstance(data, dict):
-            score = data.get('score', 0)
-            if score > 0 or 'multiplier' in data:  # Only show categories with positive score or explicit multiplier
-                print(f"{category.upper()}: {score:.2f}")
-    
-    # Print final score breakdown
-    if 'final_score' in score_breakdown:
-        final = score_breakdown['final_score']
-        print("\n" + "-"*50)
-        print(f"BASE SCORE: {final.get('base_score', 0):.2f}")
-        print(f"TIME MULTIPLIER: {final.get('time_multiplier', 1.0)}x")
-        print(f"FINAL SCORE: {final.get('final_score', 0):.2f}")
-        print("="*50)
+Generative AI isn't replacing recruiters - it's amplifying them.
 
-def main():
-    print("LinkedIn Post Scoring Test")
-    print("="*50)
+Next Up: leveraging AI Agent Studio to develop more tailored and personalized solutions.
+
+If you're working with ORC or leading a TA transformation, now's the time to explore what embedded AI + SaaS-native platforms can do. The tools are ready-and the results are real."""
+
+    author_name = "Manoj Gupta"
+    time_filter = "past-week"  # Post is 6 days old
+    hours_ago = 6 * 24  # 6 days in hours
+
+    # Calculate raw score
+    raw_score = calculate_post_score(test_post, author_name, time_filter)
     
-    # Get user input
-    job_keywords = get_job_keywords()
-    time_filter = get_time_filter()
-    
-    # Initialize comment generator with job keywords
-    comment_generator = CommentGenerator(
-        user_bio="Test bio",  # Not used in scoring
-        config=POST_SCORING_CONFIG,
-        job_keywords=job_keywords
+    # Check if we should comment
+    should_comment, final_score = should_comment_on_post(
+        test_post, 
+        author_name=author_name,
+        hours_ago=hours_ago,
+        min_score=55,
+        time_filter=time_filter
     )
+
+    print("\n=== Post Analysis ===")
+    print(f"Raw Score: {raw_score:.1f}")
+    print(f"Final Score: {final_score:.1f}")
+    print(f"Should Comment: {'Yes' if should_comment else 'No'}")
+    print("\nScore Breakdown:")
     
-    print("\nPaste the LinkedIn post text (press Enter twice when done):")
-    post_lines = []
-    while True:
-        line = input()
-        if not line.strip() and post_lines and not post_lines[-1].strip():
-            break
-        post_lines.append(line)
+    # Check for negative context matches
+    negative_matches = []
+    for keyword in ['era of', 'transforming', 'automation', 'future']:
+        if keyword in test_post.lower():
+            negative_matches.append(keyword)
     
-    post_text = '\n'.join(post_lines).strip()
-    if not post_text:
-        print("No post text provided. Exiting.")
-        return
+    if negative_matches:
+        print(f"⚠️ Negative Context Keywords Found: {', '.join(negative_matches)}")
     
-    # Calculate score with detailed breakdown
-    score_breakdown = {}
+    # Check for hiring intent
+    hiring_indicators = ['hiring', 'job opening', 'position available', 'join our team']
+    hiring_matches = []
+    for keyword in hiring_indicators:
+        if keyword in test_post.lower():
+            hiring_matches.append(keyword)
     
-    def debug_log(message, level=None):
-        if level == "SCORE" and message.startswith("Post scoring breakdown:"):
-            # Extract the JSON part of the message
-            try:
-                json_str = message.split("Post scoring breakdown: ", 1)[1]
-                score_breakdown.update(json.loads(json_str))
-            except (IndexError, json.JSONDecodeError) as e:
-                print(f"Error parsing score breakdown: {e}")
+    if not hiring_matches:
+        print("❌ No Clear Hiring Intent Found")
     
-    # Monkey patch debug_log to capture the score breakdown
-    import sys
-    original_debug_log = sys.modules[__name__].debug_log if 'debug_log' in sys.modules[__name__].__dict__ else None
-    sys.modules[__name__].debug_log = debug_log
-    
-    # Calculate the score
-    score = comment_generator.calculate_post_score(post_text, time_filter=time_filter)
-    
-    # Restore original debug_log if it existed
-    if original_debug_log:
-        sys.modules[__name__].debug_log = original_debug_log
-    
-    # Print results
-    print("\n" + "="*50)
-    print(f"POST SCORE: {score:.2f}")
-    print("="*50)
-    
-    if score_breakdown:
-        print_score_breakdown(score_breakdown)
-    
-    # Print interpretation
-    print("\nSCORE INTERPRETATION:")
-    if score >= 55:
-        print("✅ Excellent match - This post is highly relevant and worth commenting on")
-    elif score >= 40:
-        print("👍 Good match - This post is relevant")
-    elif score >= 20:
-        print("🤔 Moderate match - This post might be relevant")
-    else:
-        print("⏭️  Low relevance - Consider skipping this post")
+    # Time-based analysis
+    time_multiplier = get_time_based_score(time_filter)
+    print(f"\nTime Analysis:")
+    print(f"Time Filter: {time_filter}")
+    print(f"Hours Ago: {hours_ago}")
+    print(f"Time Multiplier: {time_multiplier:.2f}")
 
 if __name__ == "__main__":
-    main()
+    test_post()

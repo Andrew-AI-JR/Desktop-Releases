@@ -3414,6 +3414,10 @@ def process_posts(driver):
                     print(f"[APP_OUT]✍️ Comment generated: {custom_message[:50]}...")
                     debug_log(f"Generated comment: {custom_message[:100]}...", "DATA")
                     
+                    # Log post & comment previews to the Electron activity log so the dashboard can display them
+                    app_out(f"📄 Post preview: {post_text[:120].replace('\n',' ') }")
+                    app_out(f"💬 Comment preview: {custom_message[:120].replace('\n',' ')}")
+                    
                     # ========== STEALTH COMMENT POSTING ==========
                     print("[APP_OUT]📤 Posting comment with STEALTH measures...")
                     debug_log("STEALTH: Initiating advanced comment posting sequence", "COMMENT")
@@ -3452,9 +3456,11 @@ def process_posts(driver):
                             comment_history[post_id] = {
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "message": custom_message,
-                                "score": final_score
+                                "score": final_score,
+                                "post_preview": post_text[:500]
                             }
                             save_comment_history(comment_history)
+                            app_out(f"💾 Comment history size: {len(comment_history)}")
                             
                             # 4. Extended post-comment human behavior
                             print(f"[APP_OUT]🎭 Simulating post-comment human behavior...")

@@ -3464,7 +3464,7 @@ def process_posts(driver):
                         success = post_comment(driver, post, custom_message)
                         
                         if success:
-                            app_out("✅ Comment posted")
+                            app_out("✅ Comment posted successfully!")
                             print("[APP_OUT]✅ Comment posted successfully!")
                             debug_log("STEALTH: Comment posted successfully", "SUCCESS")
                             posts_commented += 1

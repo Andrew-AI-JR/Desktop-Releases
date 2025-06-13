@@ -18,7 +18,7 @@
     "build:mac": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --mac --publish=never",
     "build:linux": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --linux --publish=never",
     "release": "npm run build:python && NODE_OPTIONS='--max-old-space-size=4096' electron-builder --publish=always",
-    "clean": "rm -rf dist build resources/python-executables node_modules/.cache",
+    "clean": "rm -rf dist dist-build build resources/python-executables node_modules/.cache",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
@@ -46,7 +46,7 @@
     "appId": "com.junior.desktop",
     "productName": "Junior",
     "directories": {
-      "output": "dist",
+      "output": "dist-build",
       "buildResources": "assets"
     },
     "buildDependenciesFromSource": false,

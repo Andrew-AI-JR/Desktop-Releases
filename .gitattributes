@@ -1,3 +1,10 @@
-*.exe filter=lfs diff=lfs merge=lfs -text
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.7z filter=lfs diff=lfs merge=lfs -text
+# Track specific executables with LFS
+resources/python-executables/**/*.exe filter=lfs diff=lfs merge=lfs -text
+dist-build/**/*.exe filter=lfs diff=lfs merge=lfs -text
+
+# Track specific archives with LFS
+chromium-win64/*.7z filter=lfs diff=lfs merge=lfs -text
+chromium-win64/*.zip filter=lfs diff=lfs merge=lfs -text
+
+# Don't track node_modules with LFS
+node_modules/**/* filter= !lfs diff= !lfs merge= !lfs -text

@@ -360,7 +360,7 @@ POST_SCORING_CONFIG = {
     'direct_hiring': {
         'weight': 6.0,  # Very high weight - direct hiring signals from decision makers
         'keywords': [
-            'hiring',  # CRITICAL: Basic word that should catch most hiring posts
+            # 'hiring',  # Removed generic keyword to avoid false positives
             "i'm hiring",
             "we're hiring",
             'hiring for',
@@ -2252,9 +2252,10 @@ def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score
     
     # Strong hiring intent indicators that must be present
     hiring_indicators = [
-        'hiring', 'job opening', 'position available', 'join our team',
-        'looking to hire', 'seeking candidates', 'open role', 'open position',
-        'job opportunity', 'career opportunity'
+        "we're hiring", "i'm hiring", "my team is hiring", "our team is hiring",
+        'join our team', 'hiring for', 'looking to hire', 'seeking candidates',
+        'open position', 'open role', 'position available', 'role available',
+        'job opening', 'apply now', 'career opportunity'
     ]
     
     # Check for clear hiring intent

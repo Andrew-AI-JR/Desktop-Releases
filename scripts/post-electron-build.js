@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const fse = require('fs-extra');
 
-const srcDir = path.join(__dirname, '..', 'chromium-stable-win64', 'chrome-win64');
-const chromedriver = path.join(__dirname, '..', 'chromium-stable-win64', 'chromedriver-win64', 'chromedriver.exe');
+const srcDir = path.join(__dirname, '..', 'chromium-win64', 'chrome-win');
+const chromedriver = path.join(__dirname, '..', 'chromium-win64', 'chromedriver-win64', 'chromedriver-win64', 'chromedriver.exe');
 const destDir = path.join(__dirname, '..', 'dist', 'win-unpacked', 'resources', 'chrome-win');
 
 // Copy all Chromium 137 files

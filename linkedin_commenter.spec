@@ -5,7 +5,7 @@ a = Analysis(
     ['src\\resources\\scripts\\linkedin_commenter.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\asust\\OneDrive\\Documentos\\GitHub\\junior\\junior-desktop\\.env', '.')],
+    datas=[('C:\\Users\\asust\\OneDrive\\Documentos\\GitHub\\junior-desktop-clean\\.env', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

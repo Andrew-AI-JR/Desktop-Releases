@@ -367,29 +367,27 @@ const automationService = {
       global.isAutomationRunning = false;
       global.pythonProcess = null;
       this.cleanupConfigFile(configPath);
-      // Check for errors even if exit code is 0
-      if (code === 0) {
-        resolve({
-          success: true,
-          message: errorCodes[code],
-          output: stdoutData,
-        });
-      } else {
-        const errorDetails = {
-          message: errorCodes[code] || 'Unknown error occurred',
-          exitCode: code,
-          stdout: stdoutData,
-          stderr: stderrData,
-          usedBundled: useBundled,
-          scriptPath,
-        };
+      
+      const resultObj = {
+        exitCode: code,
+        stdout: stdoutData,
+        stderr: stderrData,
+        usedBundled: useBundled,
+        scriptPath
+      };
 
-        console.error(
-          '[_setupProcessHandlers] Python process exit error:',
-          errorDetails
-        );
-        reject(errorDetails);
+      if (global.automationStoppedByUser) {
+        resolve({ success: true, stopped: true, ...resultObj });
+      } else if (code === 0) {
+        resolve({ success: true, ...resultObj });
+      } else {
+        resultObj.error = true;
+        resultObj.message = errorCodes[code] || 'Process exited with errors';
+        resolve(resultObj);
       }
+
+      // Reset flag after handling
+      global.automationStoppedByUser = false;
     });
 
     pythonProcess.on('error', error => {
@@ -398,7 +396,9 @@ const automationService = {
       this.cleanupConfigFile(configPath);
 
       const errorDetails = {
-        message: 'Faile to start LinkedIn automation process',
+        ...(global.automationStoppedByUser ? { success: true } : { error: true }),
+        stopped: !!global.automationStoppedByUser,
+        message: 'Process start/stopped with error',
         originalError: error.message,
         exitCode: error.code,
         errorType: error.name,
@@ -406,15 +406,13 @@ const automationService = {
         scriptPath,
         platform: process.platform,
         arch: process.arch,
-        status: 500,
+        status: 500
       };
 
-      console.error(
-        '[_setupProcessHandlers] Python process error:',
-        errorDetails
-      );
+      console.error('[_setupProcessHandlers] Python process error:', errorDetails);
       sendLogMessage(`Process error: ${error.message}`);
-      reject(errorDetails);
+      resolve(errorDetails);
+      global.automationStoppedByUser = false;
     });
   },
 
@@ -572,6 +570,9 @@ const automationService = {
             // Process doesn't exist or permission error
             console.log('[stopAutomation] Process already terminated or inaccessible:', killError.message);
           }
+
+          // Mark flag so process handlers know this was user-initiated
+          global.automationStoppedByUser = true;
         }
 
         // Always clean up state
@@ -696,8 +697,8 @@ const automationService = {
         debug_mode: config.debugMode !== undefined ? config.debugMode : true,
         max_daily_comments: config.limits?.dailyComments || 50,
         max_session_comments: config.limits?.sessionComments || 10,
-        calendly_url: config.userInfo?.calendlyLink || '',
-        keywords: keywords, // Pass keywords as a string - the script will split it
+        calendly_link: config.userInfo?.calendlyLink || '',
+        job_keywords: keywords, // Pass keywords as a string - the script will split it
         user_bio: config.userInfo?.bio || '',
         scroll_pause_time: config.timing?.scrollPauseTime || 5,
         short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
@@ -710,6 +711,8 @@ const automationService = {
       if (pythonConfig.access_token) {
         console.log('[createConfigFile] Access token preview:', pythonConfig.access_token.substring(0, 30) + '...');
       }
+      
+      console.log('[createConfigFile] Keywords value:', keywords);
       
       fs.writeFileSync(configPath, JSON.stringify(pythonConfig, null, 2));
       console.log('[createConfigFile] Config file written successfully');

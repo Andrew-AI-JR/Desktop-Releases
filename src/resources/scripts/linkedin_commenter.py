@@ -2271,7 +2271,7 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
     
     return final_score
 
-def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=55, time_filter=None):
+def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=40, time_filter=None):
     """
     Determine if a post is worth commenting on based on score and hiring intent.
     Implements stricter checks for actual hiring signals vs discussion posts.
@@ -3402,7 +3402,7 @@ def process_posts(driver):
                         continue
                     
                     # Use the standalone should_comment_on_post function
-                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=55, time_filter=time_filter)
+                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=40, time_filter=time_filter)
                     
                     if not should_comment:
                         print(f"[APP_OUT]⏭️ Skipping post - score {final_score:.1f} below threshold")
@@ -4368,13 +4368,25 @@ def get_default_log_path():
 
 def load_log():
     """
-    Load processed post IDs from a JSON file in the default log directory.
-    Returns an empty list if the file does not exist.
+    Load processed post IDs from a JSON file that lives **next to** the main
+    log file (not *inside* it).  Prior implementation mistakenly treated the
+    full log-file path as a directory which causes `OSError: [Errno 22] Invalid
+    argument` on Windows.
+
+    Returns an empty list if the file does not exist or cannot be parsed.
     """
     try:
-        log_file = os.path.join(get_default_log_path(), "processed_log.json")
-        if os.path.exists(log_file):
-            with open(log_file, "r", encoding="utf-8") as f:
+        # The main log file path (e.g. C:\Users\<user>\Documents\JuniorAI\logs\linkedin_commenter.log)
+        main_log_path = get_default_log_path()
+
+        # Use the *directory* that contains the log file, then append the JSON file name
+        log_dir = os.path.dirname(main_log_path)
+        os.makedirs(log_dir, exist_ok=True)
+
+        processed_path = os.path.join(log_dir, "processed_log.json")
+
+        if os.path.exists(processed_path):
+            with open(processed_path, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         debug_log(f"Error loading processed log: {e}", level="ERROR")

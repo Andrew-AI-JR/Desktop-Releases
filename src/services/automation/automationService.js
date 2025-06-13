@@ -700,6 +700,7 @@ const automationService = {
         calendly_link: config.userInfo?.calendlyLink || '',
         job_keywords: keywords, // Pass keywords as a string - the script will split it
         user_bio: config.userInfo?.bio || '',
+        log_file_path: this.getLogFilePath(),
         scroll_pause_time: config.timing?.scrollPauseTime || 5,
         short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
         max_comments: config.limits?.commentsPerCycle || 3,

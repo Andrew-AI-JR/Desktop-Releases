@@ -1354,7 +1354,8 @@ class CommentGenerator:
         
         # Log the backend URL being used for transparency
         print(f"[APP_OUT]🔗 Backend API configured: {self.backend_base}")
-        print(f"[APP_OUT]🔐 Backend authentication email: {'✅ Set' if self.backend_email else '❌ Missing'}")
+        if not self.access_token:
+            print(f"[APP_OUT]🔐 Backend authentication email: {'✅ Set' if self.backend_email else '❌ Missing'}")
         print(f"[APP_OUT]🔗 LinkedIn login email: {'✅ Set' if self.linkedin_email else '❌ Missing'}")
         self.debug_log(f"Comment generation backend URL: {self.backend_base}", "INFO")
         

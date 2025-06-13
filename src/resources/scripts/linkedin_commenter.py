@@ -1564,7 +1564,8 @@ class CommentGenerator:
             prompt_context = (
                 f"You are commenting on LinkedIn on my behalf. Here is my professional bio:\n"
                 f"{self.user_bio}\n\n"
-                f"Please reference relevant aspects of this bio where appropriate and keep a professional, helpful tone.\n\n"
+                f"My Calendly scheduling link (include it in the comment if appropriate): {calendly_link}\n\n"
+                f"Please reference relevant parts of the bio and feel free to invite the reader to book time using the link above.\n\n"
                 f"POST_CONTENT:\n{cleaned_post_text}"
             )
 

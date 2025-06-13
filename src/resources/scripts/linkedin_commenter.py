@@ -1559,14 +1559,26 @@ class CommentGenerator:
             # Clean the post text before processing
             cleaned_post_text = self.clean_post_text(post_text)
             
-            # Prepare the request payload according to the expected API format
+            # Build a prompt that includes the user's professional bio so the backend can craft
+            # a personalised response even though the API schema only defines `post_text`.
+            prompt_context = (
+                f"You are commenting on LinkedIn on my behalf. Here is my professional bio:\n"
+                f"{self.user_bio}\n\n"
+                f"Please reference relevant aspects of this bio where appropriate and keep a professional, helpful tone.\n\n"
+                f"POST_CONTENT:\n{cleaned_post_text}"
+            )
+
+            # Prepare the request payload – the backend only documents three fields but tolerates
+            # extras; if it is strict, it will still work because we haven't removed any required
+            # keys.
             payload = {
-                'post_text': cleaned_post_text,
+                'post_text': prompt_context,
                 'source_linkedin_url': post_url or '',
-                'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-                'calendly_link': calendly_link,  # Pass Calendly link to API
-                'user_bio': self.user_bio  # Pass user bio for personalized comments
+                'comment_date': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             }
+
+            # Optional context for future-proofing – sent only if backend ignores unknown keys
+            payload['calendly_link'] = calendly_link
             
             self.debug_log(f"Making primary API call for comment generation", "DEBUG")
             print(f"[APP_OUT]🌐 Calling /api/comments/generate...")

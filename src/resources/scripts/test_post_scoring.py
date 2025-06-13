@@ -7,20 +7,23 @@ import json
 from linkedin_commenter import calculate_post_score, should_comment_on_post, get_time_based_score
 
 def test_post():
-    # Example post that shouldn't have triggered a comment
-    test_post = """🚀 We're entering the era of touchless recruiting, where AI-driven automation is transforming how talent acquisition operates. At one of our customer sites, we've begun embedding Generative AI and agentic tools within Oracle Recruiting Cloud (ORC) to eliminate repetitive tasks and streamline the end-to-end hiring journey.
+    # New sample post from Emilio Arias (3 weeks old)
+    test_post = """I'm eager to share that I'm starting a new position as Senior Technical Recruiter at Rad AI!
 
-From auto-generating job descriptions and emails to screening candidates, these smart tools are helping recruiters reclaim their time for more strategic, human-centric work.
+Over the past few years, I've realized how deeply motivated I am by mission-driven work—especially at the intersection of health, technology, and social impact.
+My time at Rula reaffirmed that conviction. Helping expand access to mental health care showed me just how powerful it can be to build teams around meaningful, purpose-led work.
 
-Generative AI isn't replacing recruiters - it's amplifying them.
+Continuing in that spirit, I'm excited to share that I've joined Rad AI as a Senior Recruiter!
 
-Next Up: leveraging AI Agent Studio to develop more tailored and personalized solutions.
+Rad AI is using generative AI to help radiologists work more efficiently, reduce burnout, and ultimately deliver better patient care. It's thoughtful, high-impact work—and I'm honored to be part of the team helping to scale it.
+We're growing fast, and I'm hiring for:
+🧠 Senior ML Research Scientists
+💻 Software Engineering Interns (Summer 2025)
+If you're excited about building at the intersection of healthcare and AI, let's connect."""
 
-If you're working with ORC or leading a TA transformation, now's the time to explore what embedded AI + SaaS-native platforms can do. The tools are ready-and the results are real."""
-
-    author_name = "Manoj Gupta"
-    time_filter = "past-week"  # Post is 6 days old
-    hours_ago = 6 * 24  # 6 days in hours
+    author_name = "Emilio Arias"
+    time_filter = "past-month"  # Post is 3 weeks old
+    hours_ago = 21 * 24  # 3 weeks in hours
 
     # Calculate raw score
     raw_score = calculate_post_score(test_post, author_name, time_filter)

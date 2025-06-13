@@ -4906,25 +4906,44 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
 def extract_author_name(post):
     """Extract the author name from a post."""
     try:
-        # Try different selectors for author name
-        selectors = [
-            ".//span[contains(@class, 'feed-shared-actor__name')]",
-            ".//span[contains(@class, 'update-components-actor__name')]",
-            ".//a[contains(@class, 'feed-shared-actor__container-link')]//span",
-            ".//a[contains(@class, 'update-components-actor__container-link')]//span"
+        # Ordered list of selector strategies (XPATH or CSS)
+        selector_strategies = [
+            # 1. Common LinkedIn actor name spans
+            (By.XPATH, ".//span[contains(@class, 'feed-shared-actor__name')]"),
+            (By.XPATH, ".//span[contains(@class, 'update-components-actor__name')]"),
+            # 2. Anchor within actor container
+            (By.XPATH, ".//a[contains(@class, 'feed-shared-actor__container-link')]//span"),
+            (By.XPATH, ".//a[contains(@class, 'update-components-actor__container-link')]//span"),
+            # 3. Newer layout: span with data-field="actor-name"
+            (By.XPATH, ".//span[@data-field='actor-name']"),
+            # 4. CSS: app-aware-link to profile inside actor header
+            (By.CSS_SELECTOR, "a.app-aware-link[href*='/in/'] span"),
         ]
-        
-        for selector in selectors:
+
+        for by, sel in selector_strategies:
             try:
-                element = post.find_element(By.XPATH, selector)
-                if element:
-                    name = element.text.strip()
-                    if name:
-                        debug_log(f"Found author name: {name}", "DATA")
-                        return name
+                elements = post.find_elements(by, sel)
+                for el in elements:
+                    if el and el.is_displayed():
+                        name = el.text.strip()
+                        if name:
+                            debug_log(f"Found author name using {sel}: {name}", "DATA")
+                            return name
             except Exception:
                 continue
-                
+
+        # 5. JavaScript fallback: search anchor tags containing "/in/" profile links
+        try:
+            js_name = post.parent.execute_script(
+                "var p=arguments[0]; var links=p.querySelectorAll('a[href*=\'/in/\']');"
+                "for(var i=0;i<links.length;i++){if(links[i].innerText.trim().length>0){return links[i].innerText.trim();}} return '';",
+                post)
+            if js_name:
+                debug_log(f"Found author name via JS fallback: {js_name}", "DATA")
+                return js_name
+        except Exception:
+            pass
+
         debug_log("Could not find author name", "WARNING")
         return ""
     except Exception as e:

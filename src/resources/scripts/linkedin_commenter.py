@@ -2486,12 +2486,12 @@ def main():
     
     # Add restart counter to prevent infinite restart loops
     restart_count = 0
-    max_restarts = 10
+    max_restarts = float('inf')  # Run indefinitely until externally stopped
     
     # Define cycle_break to control the sleep duration between cycles
     cycle_break = 1  # Default value, adjust as needed
     
-    while restart_count < max_restarts:  # Outer loop for automatic restarts with limit
+    while True:  # Outer loop runs continuously until process is killed by desktop app
         restart_count += 1
         print(f"[APP_OUT]🔄 Session {restart_count}/{max_restarts}")
         debug_log(f"Restart attempt {restart_count}/{max_restarts}", "INFO")

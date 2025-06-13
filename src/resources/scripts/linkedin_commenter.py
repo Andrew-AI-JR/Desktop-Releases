@@ -2304,7 +2304,21 @@ def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score
     print(f"[APP_OUT]⚖️ Post scored: {score}/100 (min required: {min_score})")
     debug_log(f"Post score: {score} (min required: {min_score}, has_hiring_intent: {has_hiring_intent})", "SCORE")
     
-    return score >= min_score, score
+    if score >= min_score:
+        app_out("✅ qualifies")
+        return True, score
+    else:
+        # Determine skip reason for logging
+        if not has_hiring_intent:
+            reason = "no_hiring_intent"
+        elif hours_ago > 48:
+            reason = "aged_post"
+        else:
+            reason = "below_threshold"
+
+        app_out(f"⏭️ Skipped – {reason}")
+        debug_log(f"Post skipped – {reason}", "SCORE")
+        return False, score
 
 def extract_time_posted(post):
     """Extract when the post was made and convert to hours ago."""

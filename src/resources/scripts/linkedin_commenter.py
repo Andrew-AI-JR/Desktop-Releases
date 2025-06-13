@@ -5392,6 +5392,34 @@ def natural_job_search(driver, keywords, time_filter="past-24h", max_retries=2):
 
 # ========== ENHANCED BEHAVIORAL PATTERNS ==========
 
+# Helper that can be called from anywhere (e.g., during scrolling loops) to sprinkle
+# additional micro-behaviours without cluttering the main logic.
+
+def apply_behavioral_patterns(driver, manager: BehavioralPatternManager):
+    """Invoke a random behavioural micro-interaction.
+
+    This keeps the main loops clean while still allowing easy expansion of
+    human-like behaviours. Call this occasionally (every few scrolls or after
+    network waits).
+    """
+
+    try:
+        # 25 % chance to do an ambient mouse move
+        if random.random() < 0.25:
+            manager.generate_ambient_mouse_movement(driver)
+
+        # 20 % chance to do a momentum scroll up/down (small)
+        if random.random() < 0.20:
+            direction = 'down' if random.random() < 0.5 else 'up'
+            manager.momentum_based_scroll(driver, scroll_direction=direction)
+
+        # Occasional hesitation before the next action
+        if random.random() < 0.15:
+            manager.pre_action_hesitation('scroll')
+
+    except Exception as e:
+        debug_log(f"BEHAVIORAL helper error: {e}", "WARNING")
+
 if __name__ == "__main__":
     driver = None
     try:

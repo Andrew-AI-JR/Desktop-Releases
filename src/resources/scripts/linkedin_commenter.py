@@ -1612,10 +1612,25 @@ class CommentGenerator:
                 self.debug_log(f"API subscription required for user {getattr(self, 'user_email', 'unknown')}: {error_detail}", "INFO")
                 return self._generate_fallback_comment(post_text, calendly_link)
             
-            # Handle authentication errors
+            # Handle authentication errors – attempt one refresh then retry once
             if response.status_code in [401, 403]:
-                print(f"[APP_OUT]🔄 Authentication error, falling back to local generation")
-                return self._generate_fallback_comment(post_text, calendly_link)
+                print(f"[APP_OUT]🔑 Access token rejected (status {response.status_code}). Attempting re-auth…")
+                if self._handle_auth_error(response):
+                    # Rebuild headers with new token and retry the request once
+                    headers = self._get_auth_headers()
+                    if headers:
+                        try:
+                            retry_resp = requests.post(self.comments_url, json=payload, headers=headers, timeout=30)
+                            print(f"[APP_OUT]📝 Retry response: {retry_resp.status_code}")
+                            response = retry_resp  # continue normal handling below
+                        except Exception as re_err:
+                            print(f"[APP_OUT]⚠️ Retry failed: {re_err}")
+                    else:
+                        print(f"[APP_OUT]⚠️ Re-auth failed, using local generation")
+                        return self._generate_fallback_comment(post_text, calendly_link)
+                else:
+                    print(f"[APP_OUT]🔄 Re-auth not possible, falling back to local generation")
+                    return self._generate_fallback_comment(post_text, calendly_link)
             
             # Check if the request was successful
             if response.status_code == 200:
@@ -4943,6 +4958,7 @@ def extract_author_name(post):
             (By.XPATH, ".//span[contains(@class,'update-components-actor__title')]"),
             # 6. Generic ltr span inside header
             (By.XPATH, ".//header//span[@dir='ltr']"),
+            # 7. Placeholder to allow insertion below
         ]
 
         for by, sel in selector_strategies:
@@ -4978,6 +4994,27 @@ def extract_author_name(post):
             if js_outer:
                 debug_log(f"Found author via header sibling: {js_outer}","DATA")
                 return js_outer
+        except Exception:
+            pass
+
+        # Parent header fallback: climb ancestors to locate a header with author span
+        try:
+            header_name = post.parent.execute_script(
+                "var el = arguments[0];\n"
+                "for(var i=0;i<4 && el; i++){\n"
+                "  el = el.parentElement;\n"
+                "  if(!el) break;\n"
+                "  var hdr = el.querySelector('header');\n"
+                "  if(hdr){\n"
+                "    var sp = hdr.querySelector('span[dir=\\'ltr\\']');\n"
+                "    if(sp && sp.innerText.trim().length>0){return sp.innerText.trim();}\n"
+                "  }\n"
+                "}\n"
+                "return '';",
+                post)
+            if header_name:
+                debug_log(f"Found author via ancestor header: {header_name}", "DATA")
+                return header_name
         except Exception:
             pass
 

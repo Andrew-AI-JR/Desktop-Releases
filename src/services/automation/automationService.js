@@ -701,6 +701,7 @@ const automationService = {
         job_keywords: keywords, // Pass keywords as a string - the script will split it
         user_bio: config.userInfo?.bio || '',
         log_file_path: this.getLogFilePath(),
+        log_level: 'debug',
         scroll_pause_time: config.timing?.scrollPauseTime || 5,
         short_sleep_seconds: config.timing?.shortSleepSeconds || 180,
         max_comments: config.limits?.commentsPerCycle || 3,

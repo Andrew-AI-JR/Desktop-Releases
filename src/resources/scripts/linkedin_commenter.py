@@ -30,6 +30,7 @@ from selenium.common.exceptions import (
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import shutil
+import threading
 
 # Set default encoding to UTF-8
 if sys.stdout is not None and hasattr(sys.stdout, 'encoding') and sys.stdout.encoding != 'utf-8':
@@ -1497,7 +1498,7 @@ class CommentGenerator:
     
     def _handle_auth_error(self, response):
         """Handle authentication errors by attempting to re-authenticate."""
-        if response.status_code in [401, 403]:
+        if response.status_code in [401, 403, 422]:
             print(f"[APP_OUT]🔄 Authentication expired, attempting to re-authenticate...")
             self.debug_log("Authentication expired, attempting to re-authenticate", "INFO")
             
@@ -1614,7 +1615,7 @@ class CommentGenerator:
                 return self._generate_fallback_comment(post_text, calendly_link)
             
             # Handle authentication errors – attempt one refresh then retry once
-            if response.status_code in [401, 403]:
+            if response.status_code in [401, 403, 422]:
                 print(f"[APP_OUT]🔑 Access token rejected (status {response.status_code}). Attempting re-auth…")
                 if self._handle_auth_error(response):
                     # Rebuild headers with new token and retry the request once
@@ -2271,7 +2272,7 @@ def calculate_post_score(post_text, author_name=None, time_filter=None):
     
     return final_score
 
-def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=40, time_filter=None):
+def should_comment_on_post(post_text, author_name=None, hours_ago=999, min_score=30, time_filter=None):
     """
     Determine if a post is worth commenting on based on score and hiring intent.
     Implements stricter checks for actual hiring signals vs discussion posts.
@@ -2634,6 +2635,12 @@ def main():
                         
                 debug_log("Login verified successfully", "LOGIN")
                 print("[APP_OUT]✅ Login successful, beginning advanced session warming...")
+
+                # Start background keep-alive tab to keep session cookies fresh
+                try:
+                    start_keepalive_tab(driver)
+                except Exception as ka_err:
+                    debug_log(f"KEEPALIVE: Could not start refresher: {ka_err}", "WARNING")
 
                 # ========== LEVEL 5: ADVANCED SESSION WARMING ==========
                 print("[APP_OUT]🔥 Starting comprehensive session warming sequence...")
@@ -3402,7 +3409,7 @@ def process_posts(driver):
                         continue
                     
                     # Use the standalone should_comment_on_post function
-                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=40, time_filter=time_filter)
+                    should_comment, final_score = should_comment_on_post(post_text, author_name, hours_ago, min_score=30, time_filter=time_filter)
                     
                     if not should_comment:
                         print(f"[APP_OUT]⏭️ Skipping post - score {final_score:.1f} below threshold")
@@ -5287,49 +5294,32 @@ def advanced_session_warming(driver):
     debug_log("🔥 SIMPLIFIED: Beginning lightweight session warming")
     
     try:
-        # Step 1: Simple LinkedIn landing page visit
-        debug_log("Step 1: Basic LinkedIn navigation")
+        # Visit a shuffled set of LinkedIn surfaces to avoid deterministic pattern
+        pages = [
+            "https://www.linkedin.com/feed/",
+            "https://www.linkedin.com/mynetwork/",
+            "https://www.linkedin.com/notifications/",
+            "https://www.linkedin.com/jobs/"
+        ]
+        random.shuffle(pages)
+
+        # Always start with a root navigation so cookies are scoped correctly
         driver.get("https://www.linkedin.com")
-        time.sleep(random.uniform(3, 6))
-        
-        # Step 2: Visit feed page (most common user behavior)
-        debug_log("Step 2: Feed page visit")
-        try:
-            driver.get("https://www.linkedin.com/feed/")
-            time.sleep(random.uniform(4, 8))
-            
-            # Simple scroll simulation (reduced complexity)
-            for i in range(random.randint(1, 2)):
-                driver.execute_script(f"window.scrollBy(0, {random.randint(300, 600)});")
-                time.sleep(random.uniform(2, 4))
-                
-        except Exception as e:
-            debug_log(f"Feed visit error (non-critical): {e}")
-        
-        # Step 3: Brief visit to one more section (simplified)
-        debug_log("Step 3: Brief secondary page visit")
-        try:
-            secondary_pages = [
-                "https://www.linkedin.com/mynetwork/",
-                "https://www.linkedin.com/notifications/"
-            ]
-            
-            selected_page = random.choice(secondary_pages)
-            driver.get(selected_page)
-            time.sleep(random.uniform(3, 6))
-            
-        except Exception as e:
-            debug_log(f"Secondary page error (non-critical): {e}")
-        
-        # Step 4: Return to feed and final warming
-        debug_log("Step 4: Final warming phase")
-        try:
-            driver.get("https://www.linkedin.com/feed/")
-            time.sleep(random.uniform(5, 10))
-            
-        except Exception as e:
-            debug_log(f"Final warming error (non-critical): {e}")
-        
+        time.sleep(random.uniform(2, 4))
+
+        for page in pages:
+            try:
+                debug_log(f"WARMING: visiting {page}")
+                driver.get(page)
+                time.sleep(random.uniform(4, 8))
+
+                # Light scroll to simulate reading
+                for _ in range(random.randint(1, 2)):
+                    driver.execute_script(f"window.scrollBy(0, {random.randint(250, 600)});")
+                    time.sleep(random.uniform(1, 3))
+            except Exception as warm_err:
+                debug_log(f"WARMING page error (non-critical): {warm_err}")
+ 
         debug_log("✅ Simplified session warming completed successfully")
         return True
         
@@ -5368,6 +5358,12 @@ def natural_job_search(driver, keywords, time_filter="past-24h", max_retries=2):
             driver.get(direct_url)
             time.sleep(random.uniform(4, 8))
             
+            # Soft-block early detector
+            if got_soft_block(driver):
+                debug_log("STEALTH: soft block detected – backing off and aborting search", "WARNING")
+                time.sleep(random.uniform(300, 600))  # 5-10 min cool-down
+                return False
+ 
             # Check if we successfully reached search results (simple validation)
             current_url = driver.current_url.lower()
             page_title = driver.title.lower()
@@ -5483,6 +5479,51 @@ def apply_behavioral_patterns(driver, manager: BehavioralPatternManager):
 
     except Exception as e:
         debug_log(f"BEHAVIORAL helper error: {e}", "WARNING")
+
+# === NEW: SOFT-BLOCK DETECTOR & KEEP-ALIVE TAB ====================================
+
+def got_soft_block(driver):
+    """Return True if LinkedIn soft-challenge traffic is detected via the Performance API."""
+    try:
+        entries = driver.execute_script("return performance.getEntries() || []")
+        for e in entries:
+            name = e.get("name") if isinstance(e, dict) else None
+            if name and "checkpoint" in name:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def start_keepalive_tab(driver, min_interval: int = 120, max_interval: int = 240):
+    """Open a hidden feed tab and refresh it every few minutes to keep session warm."""
+    import threading, time, random
+
+    try:
+        # open background tab
+        driver.execute_script("window.open('about:blank','_blank');")
+        keep_handle = driver.window_handles[-1]
+        driver.switch_to.window(keep_handle)
+        driver.get("https://www.linkedin.com/feed/")
+        driver.switch_to.window(driver.window_handles[0])
+    except Exception as e:
+        debug_log(f"KEEPALIVE: failed to create tab – {e}", "WARNING")
+        return None
+
+    def refresher():
+        while True:
+            try:
+                driver.switch_to.window(keep_handle)
+                driver.execute_script("location.reload();")
+                driver.switch_to.window(driver.window_handles[0])
+            except Exception:
+                pass
+            time.sleep(random.uniform(min_interval, max_interval))
+
+    t = threading.Thread(target=refresher, daemon=True)
+    t.start()
+    debug_log("KEEPALIVE: background refresher started", "INFO")
+    return t
 
 if __name__ == "__main__":
     driver = None

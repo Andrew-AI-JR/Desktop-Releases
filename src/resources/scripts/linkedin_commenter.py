@@ -3448,6 +3448,7 @@ def process_posts(driver):
                         success = post_comment(driver, post, custom_message)
                         
                         if success:
+                            app_out("✅ Comment posted")
                             print("[APP_OUT]✅ Comment posted successfully!")
                             debug_log("STEALTH: Comment posted successfully", "SUCCESS")
                             posts_commented += 1
@@ -4937,6 +4938,11 @@ def extract_author_name(post):
             (By.XPATH, ".//span[@data-field='actor-name']"),
             # 4. CSS: app-aware-link to profile inside actor header
             (By.CSS_SELECTOR, "a.app-aware-link[href*='/in/'] span"),
+            # 5. Span with title class often contains author name text
+            (By.XPATH, ".//span[contains(@class,'feed-shared-actor__title')]"),
+            (By.XPATH, ".//span[contains(@class,'update-components-actor__title')]"),
+            # 6. Generic ltr span inside header
+            (By.XPATH, ".//header//span[@dir='ltr']"),
         ]
 
         for by, sel in selector_strategies:
@@ -4960,6 +4966,18 @@ def extract_author_name(post):
             if js_name:
                 debug_log(f"Found author name via JS fallback: {js_name}", "DATA")
                 return js_name
+        except Exception:
+            pass
+
+        # Second-pass: sometimes actor header sits just before the post element (sibling)
+        try:
+            js_outer = post.parent.execute_script(
+                "var el=arguments[0];var header=el.querySelector('header')||el.previousElementSibling;"
+                "if(header){var sp=header.querySelector('span[dir=ltr]'); if(sp) return sp.innerText.trim();} return '';",
+                post)
+            if js_outer:
+                debug_log(f"Found author via header sibling: {js_outer}","DATA")
+                return js_outer
         except Exception:
             pass
 

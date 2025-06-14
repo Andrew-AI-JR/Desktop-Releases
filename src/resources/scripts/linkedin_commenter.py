@@ -5547,6 +5547,33 @@ def start_keepalive_tab(driver, min_interval: int = 120, max_interval: int = 240
     debug_log("KEEPALIVE: background refresher started", "INFO")
     return t
 
+# ========= GLOBAL TIMING JITTER =========
+# Per Chiapponi §5, constant 50/100 ms sleep patterns are fingerprintable.
+# We monkey-patch time.sleep with a jittered version (±15 %) unless disabled.
+
+_orig_sleep = time.sleep
+
+
+def human_sleep(seconds: float, jitter: float = 0.15):
+    """Sleep with small random jitter to avoid deterministic timings."""
+    try:
+        span = seconds * jitter
+        delay = seconds + random.uniform(-span, span)
+        _orig_sleep(max(0.05, delay))  # never less than 50 ms
+    except Exception:
+        _orig_sleep(seconds)
+
+
+# Activate automatically unless explicitly turned off
+if os.getenv("DISABLE_JITTER", "0") not in ("1", "true", "True"):
+    time.sleep = human_sleep
+    debug_msg = "Timing jitter enabled: global time.sleep wrapped"
+else:
+    debug_msg = "Timing jitter disabled via DISABLE_JITTER env"
+
+# We cannot call debug_log before it is defined; print early note.
+print(f"[APP_OUT]{debug_msg}")
+
 if __name__ == "__main__":
     driver = None
     try:

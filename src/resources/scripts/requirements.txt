@@ -6,3 +6,5 @@ regex
 python-dotenv
 pyinstaller
 beautifulsoup4
+undetected-chromedriver
+tls-client

@@ -4522,20 +4522,32 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             ]
             selected_ua = random.choice(user_agents)
             
-            # Configure headless mode with stealth - ALWAYS HEADLESS FOR PRODUCTION
-            # Force headless mode regardless of debug_mode to prevent manual intervention
-            chrome_options.add_argument('--headless=new')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-software-rasterizer')
-            debug_log("Running Chrome in ULTRA-STEALTH headless mode (production mode)")
+            # Decide headless vs visible mode
+            headless_mode = True
+            # When we can use undetected_chromedriver we prefer visible mode – lower fingerprint risk
+            try:
+                import undetected_chromedriver as uc  # noqa: F401
+                headless_mode = False  # uc works best non-headless for fingerprint parity
+            except ImportError:
+                pass
+
+            if headless_mode:
+                chrome_options.add_argument('--headless=new')
+                chrome_options.add_argument('--disable-gpu')
+                chrome_options.add_argument('--disable-software-rasterizer')
+                debug_log("Running Chrome in headless mode (fallback)")
+            else:
+                debug_log("Running Chrome in visible mode via undetected_chromedriver")
             
             # CRITICAL: Essential stealth arguments (tested and working)
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-plugins")
-            chrome_options.add_argument("--disable-images")
+            # Only disable heavy components in headless mode
+            if headless_mode:
+                chrome_options.add_argument("--disable-extensions")
+                chrome_options.add_argument("--disable-plugins")
+                chrome_options.add_argument("--disable-images")
             chrome_options.add_argument("--disable-background-timer-throttling")
             chrome_options.add_argument("--disable-renderer-backgrounding")
             chrome_options.add_argument("--disable-backgrounding-occluded-windows")
@@ -4641,7 +4653,18 @@ def setup_chrome_driver(max_retries=3, retry_delay=5):
             debug_log("Initializing Chrome WebDriver...")
             
             try:
-                driver = webdriver.Chrome(service=service, options=chrome_options)
+                # Attempt to use undetected_chromedriver first for better fingerprint evasion
+                driver = None
+                if not headless_mode:
+                    try:
+                        import undetected_chromedriver as uc
+                        driver = uc.Chrome(options=chrome_options, version_main=121)
+                        debug_log("Initialized browser with undetected_chromedriver", "INFO")
+                    except Exception as uc_err:
+                        debug_log(f"undetected_chromedriver failed: {uc_err}. Falling back to Selenium", "WARNING")
+
+                if driver is None:
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
                 
                 # ========== POST-INITIALIZATION ULTRA-STEALTH MEASURES ==========
                 

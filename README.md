@@ -30,33 +30,12 @@ After installation you'll find a **Junior AI** shortcut in your Start menu / Lau
    Status turns ✅ *Authenticated*.
 
 5. **Configure Settings**  
-   Choose keywords, daily caps, work hours, etc. and click **Save**.
+   Choose job search keywords and enter your bio (you can copy/paste a resume if you like).
 
 6. **Start Automation**  
    Click **Start Session**. Junior opens an undetected Chrome window, warms up, then begins commenting.  
    You can minimise the window; Junior continues in the tray / menu-bar.
 
----
-
-## 3 · Tray / Menu-Bar Controls
-
-| Action | What it does |
-|--------|--------------|
-| **Pause** | Immediately stops actions, keeps Chrome open |
-| **Resume** | Continues from where it paused |
-| **Force New Session** | Closes current Chrome, opens a fresh one |
-| **View Logs** | Opens `linkedin_commenter.log` |
-| **Quit** | Shuts down Junior & Chrome |
-
----
-
-## 4 · How Junior Works
-
-1. Searches LinkedIn for posts matching your niche and freshness rules.  
-2. Scores each post and requests a comment from `/api/comments/generate`.  
-3. Types the comment with human-like speed & hesitation.  
-4. Posts it, tracks history, and moves on.  
-5. Uses undetected-chromedriver, JA3 / HTTP-2 randomisation, pre-page JS patching, timing jitter and realistic mouse/scroll patterns.
 
 ---
 
@@ -74,55 +53,7 @@ Junior keeps local & cloud history and will skip posts already commented on.
 **Will LinkedIn detect me as a bot?**  
 Nothing is 100 %, but Junior applies current best practice stealth techniques.
 
-**Do I need proxies?**  
-No. Junior works fine from your residential IP. Proxies are optional in **Settings → Network**.
 
-**How many comments per day can I set?**  
-Go to **Settings → Limits** and adjust daily, hourly, and session caps.
-
-**Where are log files?**  
-Windows: `%APPDATA%\junior-desktop\linkedin_commenter.log`  
-macOS: `~/Library/Logs/Junior/linkedin_commenter.log`  
-Linux: `~/.config/junior-desktop/linkedin_commenter.log`
-
-**How do I change or cancel my plan?**  
-Use the Stripe customer-portal link in your receipt or **Settings → Billing**.
-
----
-
-## 6 · For Developers / Power Users
-
-### Clone & Run
-
-```bash
-git clone https://github.com/your-org/junior-desktop.git
-cd junior-desktop
-npm install                 # Electron deps
-pip install -r src/resources/scripts/requirements.txt
-npm run dev                 # Launch dev build
-```
-
-### API Integration Test
-
-```bash
-# Using env token
-env ACCESS_TOKEN=xyz python integration_test_generate_comment.py
-
-# Or credentials
-python integration_test_generate_comment.py \
-       --email you@example.com --password Secret123
-```
-
-### Build Installers
-
-```bash
-npm run clean      # remove old artefacts
-npm run build:win  # Windows
-npm run build:mac  # macOS
-npm run build:linux
-```
-
-Installers land in `dist-build/`; standalone Python executables in `resources/python-executables/`.
 
 ---
 

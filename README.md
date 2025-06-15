@@ -4,19 +4,8 @@ Junior Desktop helps you stay active on LinkedIn without living there.  It searc
 
 ---
 
-## 1 · Download & Install
 
-| OS | Package | Install Steps |
-|----|---------|--------------|
-| **Windows 10/11** | `Junior Setup x.y.z.exe` | 1. Download from the **Releases** page.<br>2. Double-click the installer.<br>3. Follow the wizard. |
-| **macOS 12 +** | `Junior-x.y.z.dmg` | 1. Open the DMG.<br>2. Drag **Junior** into **Applications**. |
-| **Linux (Ubuntu / Debian)** | `.AppImage` or `.deb` | • AppImage → `chmod +x` then double-click.<br>• `.deb` → `sudo dpkg -i junior-x.y.z.deb`. |
-
-After installation you'll find a **Junior AI** shortcut in your Start menu / Launchpad.
-
----
-
-## 2 · First-Time Setup
+## 1 · First-Time Setup
 
 1. **Purchase & Download**  
    • Go to [heyjunior.ai](https://heyjunior.ai) and pick your plan.  

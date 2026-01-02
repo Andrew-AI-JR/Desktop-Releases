@@ -1,11 +1,11 @@
 {
-  "version": "1.0.13-beta",
-  "tag": "v1.0.13-beta",
-  "release_date": "2026-01-02T19:12:29Z",
+  "version": "1.0.14-beta",
+  "tag": "v1.0.14-beta",
+  "release_date": "2026-01-02T19:22:10Z",
   "downloads": {
-    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.13-beta/Junior%20Setup%201.0.13-beta.exe",
-    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.13-beta/Junior-1.0.13-beta.dmg",
-    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.13-beta/Junior-1.0.13-beta-arm64.dmg"
+    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.14-beta/Junior%20Setup%201.0.14-beta.exe",
+    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.14-beta/Junior-1.0.14-beta.dmg",
+    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.14-beta/Junior-1.0.14-beta-arm64.dmg"
   },
-  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v1.0.13-beta"
+  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v1.0.14-beta"
 }

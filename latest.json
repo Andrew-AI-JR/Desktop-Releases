@@ -1,11 +1,11 @@
 {
-  "version": "1.0.55",
-  "tag": "v1.0.55",
-  "release_date": "2026-01-21T22:33:58Z",
+  "version": "1.0.56",
+  "tag": "v1.0.56",
+  "release_date": "2026-01-21T23:32:58Z",
   "downloads": {
-    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.55/Junior%20Setup%201.0.55.exe",
-    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.55/Junior-1.0.55.dmg",
-    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.55/Junior-1.0.55-arm64.dmg"
+    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.56/Junior%20Setup%201.0.56.exe",
+    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.56/Junior-1.0.56.dmg",
+    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v1.0.56/Junior-1.0.56-arm64.dmg"
   },
-  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v1.0.55"
+  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v1.0.56"
 }

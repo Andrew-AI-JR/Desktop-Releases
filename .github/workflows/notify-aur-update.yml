@@ -1,0 +1,18 @@
+name: Notify AUR mirror
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AUR sync workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.AUR_SYNC_TOKEN }}
+          repository: Andrew-AI-JR/junior-desktop-aur
+          event-type: desktop-release
+          client-payload: |
+            {"tag": "${{ github.event.release.tag_name }}"}

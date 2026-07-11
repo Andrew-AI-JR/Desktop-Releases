@@ -1,13 +1,13 @@
 {
-  "version": "2.0.48",
-  "tag": "v2.0.48",
-  "release_date": "2026-07-11T01:33:12Z",
+  "version": "2.0.49",
+  "tag": "v2.0.49",
+  "release_date": "2026-07-11T01:51:50Z",
   "downloads": {
-    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.48/Junior%20Setup%202.0.48.exe",
-    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.48/Junior-2.0.48.dmg",
-    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.48/Junior-2.0.48-arm64.dmg",
-    "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.48/Junior-2.0.48.AppImage",
-    "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.48/junior-desktop_2.0.48_amd64.deb"
+    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.49/Junior%20Setup%202.0.49.exe",
+    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.49/Junior-2.0.49.dmg",
+    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.49/Junior-2.0.49-arm64.dmg",
+    "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.49/Junior-2.0.49.AppImage",
+    "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.0.49/junior-desktop_2.0.49_amd64.deb"
   },
-  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v2.0.48"
+  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v2.0.49"
 }

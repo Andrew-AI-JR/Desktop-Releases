@@ -1,13 +1,13 @@
 {
-  "version": "2.6.1",
-  "tag": "v2.6.1",
-  "release_date": "2026-07-13T21:27:05Z",
+  "version": "2.6.2",
+  "tag": "v2.6.2",
+  "release_date": "2026-07-13T21:35:32Z",
   "downloads": {
-    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.1/Junior%20Setup%202.6.1.exe",
-    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.1/Junior-2.6.1.dmg",
-    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.1/Junior-2.6.1-arm64.dmg",
-    "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.1/Junior-2.6.1.AppImage",
-    "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.1/junior-desktop_2.6.1_amd64.deb"
+    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.2/Junior%20Setup%202.6.2.exe",
+    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.2/Junior-2.6.2.dmg",
+    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.2/Junior-2.6.2-arm64.dmg",
+    "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.2/Junior-2.6.2.AppImage",
+    "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v2.6.2/junior-desktop_2.6.2_amd64.deb"
   },
-  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v2.6.1"
+  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v2.6.2"
 }

@@ -1,14 +1,14 @@
 {
-  "version": "3.0.28",
-  "tag": "v3.0.28",
+  "version": "3.0.29",
+  "tag": "v3.0.29",
   "channel": "production",
-  "release_date": "2026-09-10T19:42:08Z",
+  "release_date": "2026-09-11T15:48:03Z",
   "downloads": {
-    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.28/Junior%20Setup%203.0.28.exe",
-    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.28/Junior-3.0.28.dmg",
-    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.28/Junior-3.0.28-arm64.dmg",
-    "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.28/Junior-3.0.28.AppImage",
-    "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.28/junior-desktop_3.0.28_amd64.deb"
+    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.29/Junior%20Setup%203.0.29.exe",
+    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.29/Junior-3.0.29.dmg",
+    "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.29/Junior-3.0.29-arm64.dmg",
+    "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.29/Junior-3.0.29.AppImage",
+    "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.0.29/junior-desktop_3.0.29_amd64.deb"
   },
-  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v3.0.28"
+  "release_url": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/tag/v3.0.29"
 }

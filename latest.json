@@ -4,8 +4,8 @@
   "channel": "production",
   "release_date": "2026-11-21T01:34:41Z",
   "downloads": {
-    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/Junior%20Setup%203.2.60.exe",
-    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/Junior-3.2.60.dmg",
+    "windows": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/Junior-Setup-3.2.60.exe",
+    "macos_intel": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/Junior-3.2.60-x64.dmg",
     "macos_arm": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/Junior-3.2.60-arm64.dmg",
     "linux_appimage": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/Junior-3.2.60.AppImage",
     "linux_deb": "https://github.com/Andrew-AI-JR/Desktop-Releases/releases/download/v3.2.60/junior-desktop_3.2.60_amd64.deb"
